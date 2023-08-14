@@ -1,0 +1,61 @@
+[
+  {
+    "chainType": "testnet",
+    "pythAPIEndpoint": "https://web-api.pyth.network/history",
+    "priceServiceWSEndpoints": ["wss://xc-testnet.pyth.network/ws"],
+    "cluster": "testnet",
+    "candleMaxAbsReturnForOutlier": 0.4,
+    "priceFeeds": [
+      {
+        "symbol": "btc-usd",
+        "symbolPyth": "Crypto.BTC/USD",
+        "id": "0xf9c0172ba10dfa4d19088d94f5bf61d3b54d5bd7483a322a982e1373ee8ea31b"
+      },
+      {
+        "symbol": "usdc-usd",
+        "symbolPyth": "Crypto.USDC/USD",
+        "id": "0x41f3625971ca2ed2263e78573fe5ce23e13d2558ed3f2e47ab0f84fb9e7ae722"
+      },
+      {
+        "symbol": "eth-usd",
+        "symbolPyth": "Crypto.ETH/USD",
+        "id": "0xca80ba6dc32e08d06f1aa886011eed1d77c77be9eb761cc10d72b7d0a2fd57a6"
+      },
+      {
+        "symbol": "matic-usd",
+        "symbolPyth": "Crypto.MATIC/USD",
+        "id": "0xd2c2c1f2bba8e0964f9589e060c2ee97f5e19057267ac3284caef3bd50bd2cb5"
+      },
+      {
+        "symbol": "usd-chf",
+        "symbolPyth": "FX.USD/CHF",
+        "id": "0x796d24444ff50728b58e94b1f53dc3a406b2f1ba9d0d0b91d4406c37491a6feb"
+      },
+      {
+        "symbol": "xau-usd",
+        "symbolPyth": "Metal.XAU/USD",
+        "id": "0x30a19158f5a54c0adf8fb7560627343f22a1bc852b89d56be1accdc5dbf96d0e"
+      },
+      {
+        "symbol": "gbp-usd",
+        "symbolPyth": "FX.GBP/USD",
+        "id": "0xbcbdc2755bd74a2065f9d3283c2b8acbd898e473bdb90a6764b3dbd467c56ecd"
+      }
+    ],
+    "triangulations": [
+      { "target": "btc-usdc", "path": ["*", "btc-usd", "/", "usdc-usd"] },
+      { "target": "eth-usdc", "path": ["*", "eth-usd", "/", "usdc-usd"] },
+      { "target": "matic-usdc", "path": ["*", "matic-usd", "/", "usdc-usd"] },
+      { "target": "xau-usdc", "path": ["*", "xau-usd", "/", "usdc-usd"] },
+      { "target": "gbp-usdc", "path": ["*", "gbp-usd", "/", "usdc-usd"] },
+      { "target": "chf-usdc", "path": ["/", "usd-chf", "/", "usdc-usd"] }
+    ],
+    "supportedCandlePeriods": [
+      { "period": "1m", "timeMs": 60000, "displayRangeMs": 86400000 },
+      { "period": "5m", "timeMs": 300000, "displayRangeMs": 86400000 },
+      { "period": "15m", "timeMs": 900000, "displayRangeMs": 86400000 },
+      { "period": "1h", "timeMs": 3600000, "displayRangeMs": 2592000000 },
+      { "period": "1d", "timeMs": 86400000, "displayRangeMs": 2592000000 }
+    ]
+  }
+]
