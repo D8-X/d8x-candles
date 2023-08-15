@@ -24,6 +24,13 @@ func (s *SymbolPyth) New(symbol string) error {
 	if len(parts) != 2 {
 		return fmt.Errorf("Symbol must contain '.'. E.g. Crypto.ETH/USD")
 	}
+	parts[0] = strings.ToLower(parts[0])
+	switch parts[0] {
+	case `crypto`, `equity`, `fx`, `metal`, `rates`:
+	default:
+		return fmt.Errorf("Invalid asset type. Possible values are `crypto`, `equity`, `fx`, `metal`, `rates`.")
+	}
+
 	s.AssetType = parts[0]
 	parts2 := strings.Split(parts[1], "/")
 	if len(parts2) != 2 {
