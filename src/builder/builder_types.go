@@ -1,4 +1,4 @@
-package init
+package builder
 
 type PythHistoryAPI struct {
 	BaseUrl string

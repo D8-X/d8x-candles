@@ -1,1 +1,4 @@
 PYTH_API_BASE_URL=https://benchmarks.pyth.network/
+REDISCLOUD_URL="redis://redis:6379"
+#local: REDISCLOUD_URL="localhost:6379"
+REDIS_PASSWORD=thisismypassword

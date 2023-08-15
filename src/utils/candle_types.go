@@ -18,6 +18,10 @@ func (s *SymbolPyth) ToString() string {
 	return s.AssetType + "." + s.Base + "/" + s.Quote
 }
 
+func (s *SymbolPyth) PairString() string {
+	return s.Base + "-" + s.Quote
+}
+
 // Create a new Pyth symbol from a string such as Crypto.ETH/USD
 func (s *SymbolPyth) New(symbol string) error {
 	parts := strings.Split(symbol, ".")
@@ -31,13 +35,13 @@ func (s *SymbolPyth) New(symbol string) error {
 		return fmt.Errorf("Invalid asset type. Possible values are `crypto`, `equity`, `fx`, `metal`, `rates`.")
 	}
 
-	s.AssetType = parts[0]
+	s.AssetType = strings.ToLower(parts[0])
 	parts2 := strings.Split(parts[1], "/")
 	if len(parts2) != 2 {
 		return fmt.Errorf("Symbol must contain '/'. E.g. Crypto.ETH/USD")
 	}
-	s.Base = parts2[0]
-	s.Quote = parts2[1]
+	s.Base = strings.ToLower(parts2[0])
+	s.Quote = strings.ToLower(parts2[1])
 	return nil
 }
 

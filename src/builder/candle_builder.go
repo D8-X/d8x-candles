@@ -1,4 +1,4 @@
-package init
+package builder
 
 import (
 	"d8x-candles/src/utils"

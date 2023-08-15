@@ -1,4 +1,4 @@
-package init
+package builder
 
 import (
 	"d8x-candles/src/utils"
@@ -41,7 +41,8 @@ func TestConcatCandles(t *testing.T) {
 	toTs, _ := timestampFromTimeString("2023-08-14 08:35")
 	api := PythHistoryAPI{BaseUrl: "https://benchmarks.pyth.network/"}
 	var sym utils.SymbolPyth
-	sym.New("Crypto.ETH/USD")
+	//sym.New("Crypto.ETH/USD")
+	sym.New("Fx.USD/CHF")
 	var resol utils.PythCandleResolution
 	_ = resol.New(1, utils.MinuteCandle)
 	candles1min, err := api.RetrieveCandles(sym, resol, fromTs, toTs)

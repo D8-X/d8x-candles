@@ -8,6 +8,11 @@ import (
 	"github.com/spf13/viper"
 )
 
+type CandleManager struct {
+	RedisHost string
+	RedisPwd  string
+}
+
 func RunCandleCharts() {
 	err := loadEnv()
 	if err != nil {
