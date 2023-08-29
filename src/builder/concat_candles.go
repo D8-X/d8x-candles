@@ -9,10 +9,11 @@ Process
 */
 
 // Concatenate overlapping candles that have different resolutions
+// and construct price observations
 // (For example 2 months of 1 day candles and 2 weeks of 1h candles)
 // The function requires that the candles are sorted according to
 // decreasing resolution (e.g., 1 minute first, 5 minute next, 1h next, 1 day next)
-func ConcatCandles(candles []PythHistoryAPIResponse) (PriceObservations, error) {
+func CandlesToPriceObs(candles []PythHistoryAPIResponse) (PriceObservations, error) {
 	var px PriceObservations
 	var stopAtTs = uint32(0)
 	var nextLow = float64(0)

@@ -90,7 +90,7 @@ func (c *PythCandleResolution) New(timeNumber uint16, timeUnit PythCandleResolut
 }
 
 // Display candle resolution as per Pyth API
-func (c *PythCandleResolution) ToString() string {
+func (c *PythCandleResolution) ToPythString() string {
 	switch c.Unit {
 	case MinuteCandle:
 		sNum := strconv.Itoa(int(c.Resolution))

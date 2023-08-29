@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"testing"
 	"time"
+
+	redistimeseries "github.com/RedisTimeSeries/redistimeseries-go"
 )
 
 func TestRetrieveCandle(t *testing.T) {
@@ -28,7 +30,7 @@ func TestRetrieveCandle(t *testing.T) {
 		t.Errorf("Error parsing date:%v", err)
 		return
 	}
-	res, err := api.RetrieveCandles(sym, resol, fromTs, toTs)
+	res, err := api.RetrieveCandlesFromPyth(sym, resol, fromTs, toTs)
 	if err != nil {
 		t.Errorf("Error parsing date:%v", err)
 		return
@@ -45,24 +47,42 @@ func TestConcatCandles(t *testing.T) {
 	sym.New("Fx.USD/CHF")
 	var resol utils.PythCandleResolution
 	_ = resol.New(1, utils.MinuteCandle)
-	candles1min, err := api.RetrieveCandles(sym, resol, fromTs, toTs)
+	candles1min, err := api.RetrieveCandlesFromPyth(sym, resol, fromTs, toTs)
 	if err != nil {
 		t.Errorf("Error retrieving candles:%v", err)
 		return
 	}
 	_ = resol.New(60, utils.MinuteCandle)
-	candles1h, err := api.RetrieveCandles(sym, resol, fromTs, toTs)
+	candles1h, err := api.RetrieveCandlesFromPyth(sym, resol, fromTs, toTs)
 	if err != nil {
 		t.Errorf("Error retrieving candles:%v", err)
 		return
 	}
 	var candles = []PythHistoryAPIResponse{candles1min, candles1h}
-	p, err := ConcatCandles(candles)
+	p, err := CandlesToPriceObs(candles)
 	if err != nil {
 		t.Errorf("Error parsing date:%v", err)
 		return
 	}
 	fmt.Print(p)
+}
+
+func TestPythDataToRedisPriceObs(t *testing.T) {
+	host := "localhost:6379"
+	//password := ""
+	var client = redistimeseries.NewClient(host, "client", nil)
+	api := PythHistoryAPI{BaseUrl: "https://benchmarks.pyth.network/", RedisClient: client}
+	var sym1, sym2 utils.SymbolPyth
+	sym1.New("Crypto.ETH/USD")
+	sym2.New("Fx.USD/CHF")
+	symbols := []utils.SymbolPyth{sym1, sym2}
+	api.PythDataToRedisPriceObs(symbols)
+	vlast, err := client.Get(sym1.PairString())
+	if err != nil {
+		t.Errorf("Error parsing date:%v", err)
+		return
+	}
+	fmt.Print(vlast)
 }
 
 func timestampFromTimeString(timestr string) (uint32, error) {

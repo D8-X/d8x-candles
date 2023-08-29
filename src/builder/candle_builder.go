@@ -22,9 +22,9 @@ Process
 1h -> 1 month OK
 1 day -> all history
 */
-func (p *PythHistoryAPI) RetrieveCandles(sym utils.SymbolPyth, candleRes utils.PythCandleResolution, fromTSSec uint32, toTsSec uint32) (PythHistoryAPIResponse, error) {
+func (p *PythHistoryAPI) RetrieveCandlesFromPyth(sym utils.SymbolPyth, candleRes utils.PythCandleResolution, fromTSSec uint32, toTsSec uint32) (PythHistoryAPIResponse, error) {
 	const endpoint = "/v1/shims/tradingview/history"
-	query := "?symbol=" + sym.ToString() + "&resolution=" + candleRes.ToString() + "&from=" + strconv.Itoa(int(fromTSSec)) + "&to=" + strconv.Itoa(int(toTsSec))
+	query := "?symbol=" + sym.ToString() + "&resolution=" + candleRes.ToPythString() + "&from=" + strconv.Itoa(int(fromTSSec)) + "&to=" + strconv.Itoa(int(toTsSec))
 
 	url := strings.TrimSuffix(p.BaseUrl, "/") + endpoint + query
 	// Send a GET request
@@ -49,35 +49,63 @@ func (p *PythHistoryAPI) RetrieveCandles(sym utils.SymbolPyth, candleRes utils.P
 	return apiResponse, nil
 }
 
-// Query specific candle resolutions and time ranges from the API
+// Query Pyth Candle API and construct artificial price data which
+// is stored to Redis
+func (p *PythHistoryAPI) PythDataToRedisPriceObs(symbols []utils.SymbolPyth) error {
+	var obs []PriceObservations
+	var processedSym []utils.SymbolPyth
+	for _, sym := range symbols {
+		o, err := p.ConstructPriceObsFromPythCandles(sym)
+		if err != nil {
+			fmt.Printf("error for " + sym.ToString() + ":" + err.Error())
+			continue
+		}
+		obs = append(obs, o)
+		processedSym = append(processedSym, sym)
+	}
+	for k := 0; k < len(obs); k++ {
+		p.PricesToRedis(processedSym[k], obs[k])
+	}
+	return nil
+}
+
+func (p *PythHistoryAPI) PricesToRedis(sym utils.SymbolPyth, obs PriceObservations) {
+	CreateTimeSeries(p.RedisClient, sym)
+	for k := 0; k < len(obs.P); k++ {
+		AddPriceObs(p.RedisClient, sym, int64(obs.T[k]), obs.P[k])
+	}
+}
+
+// Query specific candle resolutions and time ranges from the Pyth-API
 // and construct artificial data
-func (p *PythHistoryAPI) ProcessCandle(sym utils.SymbolPyth) error {
+func (p *PythHistoryAPI) ConstructPriceObsFromPythCandles(sym utils.SymbolPyth) (PriceObservations, error) {
 	var candleRes utils.PythCandleResolution
 	candleRes.New(1, utils.MinuteCandle)
 	currentTime := uint32(time.Now().Unix())
-	oneDayResolutionMinute, err := p.RetrieveCandles(sym, candleRes, currentTime-86400, currentTime)
+	oneDayResolutionMinute, err := p.RetrieveCandlesFromPyth(sym, candleRes, currentTime-86400, currentTime)
 	if err != nil {
-		return err
+		return PriceObservations{}, err
 	}
 	candleRes.New(5, utils.MinuteCandle)
-	twoDayResolution5Minute, err := p.RetrieveCandles(sym, candleRes, currentTime-86400*2, currentTime)
+	twoDayResolution5Minute, err := p.RetrieveCandlesFromPyth(sym, candleRes, currentTime-86400*2, currentTime)
 	if err != nil {
-		return err
+		return PriceObservations{}, err
 	}
 	candleRes.New(60, utils.MinuteCandle)
-	oneMonthResolution1h, err := p.RetrieveCandles(sym, candleRes, currentTime-86400*2, currentTime)
+	oneMonthResolution1h, err := p.RetrieveCandlesFromPyth(sym, candleRes, currentTime-86400*2, currentTime)
 	if err != nil {
-		return err
+		return PriceObservations{}, err
 	}
 	candleRes.New(1, utils.DayCandle)
 	// jan1 2022: 1640995200
-	allTimeResolution1D, err := p.RetrieveCandles(sym, candleRes, 1640995200, currentTime)
+	allTimeResolution1D, err := p.RetrieveCandlesFromPyth(sym, candleRes, 1640995200, currentTime)
 	if err != nil {
-		return err
+		return PriceObservations{}, err
 	}
 	var candles = []PythHistoryAPIResponse{oneDayResolutionMinute, twoDayResolution5Minute, oneMonthResolution1h, allTimeResolution1D}
-	// TODO
-	_, err = ConcatCandles(candles)
+	// concatenate candles into price observations
+	var obs PriceObservations
+	obs, err = CandlesToPriceObs(candles)
 
-	return nil
+	return obs, nil
 }

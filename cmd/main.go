@@ -1,7 +1,7 @@
 package main
 
 import (
-	"github.com/D8-X/d8x-candle/src/svc"
+	"d8x-candles/src/svc"
 )
 
 func main() {

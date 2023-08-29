@@ -1,4 +1,4 @@
-package aggregator
+package builder
 
 import (
 	"fmt"
@@ -18,6 +18,11 @@ func TestNewRedisClient(t *testing.T) {
 	}
 
 	client.Add(keyname, 1, 30.1)
+	_, haveit2 := client.Info(keyname)
+	if haveit2 != nil {
+		t.Error(haveit2)
+		return
+	}
 	client.Add(keyname, 2, 31.0)
 	client.Add(keyname, 3, 32.0)
 	client.Add(keyname, 4, 33.0)
