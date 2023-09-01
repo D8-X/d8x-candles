@@ -1,29 +1,33 @@
 package utils
 
 import (
+	"encoding/json"
 	"fmt"
+	"os"
 	"strconv"
 	"strings"
 )
 
 type SymbolPyth struct {
-	AssetType string
-	Base      string
-	Quote     string
+	AssetType  string
+	PythSymbol string
+	Symbol     string
+	id         string
 }
 
 // display the pyth symbol per pyth convention
 // E.g., Crypto.BTC/USD
 func (s *SymbolPyth) ToString() string {
-	return s.AssetType + "." + s.Base + "/" + s.Quote
+	return s.PythSymbol
 }
 
 func (s *SymbolPyth) PairString() string {
-	return s.Base + "-" + s.Quote
+	return s.Symbol
 }
 
 // Create a new Pyth symbol from a string such as Crypto.ETH/USD
-func (s *SymbolPyth) New(symbol string) error {
+// and the id
+func (s *SymbolPyth) New(symbol string, id string) error {
 	parts := strings.Split(symbol, ".")
 	if len(parts) != 2 {
 		return fmt.Errorf("Symbol must contain '.'. E.g. Crypto.ETH/USD")
@@ -40,8 +44,8 @@ func (s *SymbolPyth) New(symbol string) error {
 	if len(parts2) != 2 {
 		return fmt.Errorf("Symbol must contain '/'. E.g. Crypto.ETH/USD")
 	}
-	s.Base = strings.ToLower(parts2[0])
-	s.Quote = strings.ToLower(parts2[1])
+	s.Symbol = strings.ToLower(parts2[0]) + "-" + strings.ToLower(parts2[1])
+	s.id = id
 	return nil
 }
 
@@ -102,4 +106,44 @@ func (c *PythCandleResolution) ToPythString() string {
 	default: // MonthCandle:
 		return "1M"
 	}
+}
+
+type PriceConfig struct {
+	PythAPIEndpoint     string `json:"pythAPIEndpoint"`
+	PythPriceWSEndpoint string `json:"priceServiceWSEndpoint"`
+	PriceFeeds          []struct {
+		Symbol     string `json:"symbol"`
+		SymbolPyth string `json:"symbolPyth"`
+		Id         string `json:"id"`
+	} `json:"priceFeeds"`
+	Triangulations []struct {
+		Target string   `json:"target"`
+		Path   []string `json:"path"`
+	} `json:"triangulations"`
+	SupportedCandlePeriods []struct {
+		Period         string `json:"period"`
+		TimeMs         int    `json:"timeMs"`
+		DisplayRangeMs int    `json:"displayRangeMs"`
+	} `json:"supportedCandlePeriods"`
+}
+
+func (c *PriceConfig) LoadPriceConfig(fileName string) error {
+	data, err := os.ReadFile(fileName)
+	if err != nil {
+		return err
+	}
+	err = json.Unmarshal(data, c)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (c *PriceConfig) ExtractPythIdToSymbolMap() map[string]string {
+	m := make(map[string]string, len(c.PriceFeeds))
+	for _, el := range c.PriceFeeds {
+		idTrim, _ := strings.CutPrefix(el.Id, "0x")
+		m[idTrim] = el.Symbol
+	}
+	return m
 }

@@ -2,6 +2,8 @@ package svc
 
 import (
 	"d8x-candles/env"
+	"d8x-candles/src/pythclient"
+	"d8x-candles/src/utils"
 	"d8x-candles/src/wscandle"
 	"fmt"
 	"log/slog"
@@ -16,6 +18,37 @@ func RunCandleCharts() {
 		return
 	}
 	wscandle.StartWSServer()
+}
+
+func StreamPyth() {
+	//wss://hermes-beta.pyth.network/ws
+	err := loadEnv()
+	if err != nil {
+		fmt.Println("Error:", err.Error())
+		return
+	}
+	c, err := loadConfig()
+	if err != nil {
+		fmt.Println("Error:", err.Error())
+		return
+	}
+	sym := c.ExtractPythIdToSymbolMap()
+	wsUrl := c.PythPriceWSEndpoint
+	slog.Info("Using wsUrl=" + wsUrl)
+	err = pythclient.StreamWs(wsUrl, sym)
+	if err != nil {
+		slog.Error(err.Error())
+	}
+}
+
+func loadConfig() (utils.PriceConfig, error) {
+	fileName := viper.GetString(env.CONFIG_PATH)
+	var c utils.PriceConfig
+	err := c.LoadPriceConfig(fileName)
+	if err != nil {
+		return utils.PriceConfig{}, err
+	}
+	return c, nil
 }
 
 func loadEnv() error {

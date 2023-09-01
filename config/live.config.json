@@ -1,10 +1,7 @@
-[
-  {
-    "chainType": "testnet",
-    "pythAPIEndpoint": "https://web-api.pyth.network/history",
-    "priceServiceWSEndpoints": ["wss://xc-testnet.pyth.network/ws"],
-    "cluster": "testnet",
-    "candleMaxAbsReturnForOutlier": 0.4,
+
+{
+    "pythAPIEndpoint": "https://benchmarks.pyth.network/",
+    "priceServiceWSEndpoint": "wss://hermes-beta.pyth.network/ws",
     "priceFeeds": [
       {
         "symbol": "btc-usd",
@@ -58,4 +55,4 @@
       { "period": "1d", "timeMs": 86400000, "displayRangeMs": 2592000000 }
     ]
   }
-]
+

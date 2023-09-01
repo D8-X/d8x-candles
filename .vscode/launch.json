@@ -5,11 +5,19 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Launch Main",
+            "name": "Launch Pyth Client",
             "type": "go",
             "request": "launch",
             "mode": "auto",
-            "program": "${workspaceFolder}/cmd/main.go",
+            "program": "${workspaceFolder}/cmd/pyth-client/main.go",
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "name": "Launch WS Server",
+            "type": "go",
+            "request": "launch",
+            "mode": "auto",
+            "program": "${workspaceFolder}/cmd/ws-server/main.go",
             "cwd": "${workspaceFolder}"
         }
     ]
