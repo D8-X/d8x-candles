@@ -33,7 +33,7 @@ func StreamPyth() {
 		return
 	}
 
-	err = pythclient.StreamWs(c)
+	err = pythclient.StreamWs(c, viper.GetString(env.REDIS_ADDR), viper.GetString(env.REDIS_PW))
 	if err != nil {
 		slog.Error(err.Error())
 	}
@@ -57,7 +57,7 @@ func loadEnv() error {
 	}
 
 	viper.SetDefault(env.PYTH_API_BASE_URL, "https://benchmarks.pyth.network/")
-
+	viper.SetDefault(env.REDIS_ADDR, "localhost:6379")
 	requiredEnvs := []string{}
 
 	for _, e := range requiredEnvs {

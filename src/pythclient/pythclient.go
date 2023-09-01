@@ -1,6 +1,7 @@
 package pythclient
 
 import (
+	"context"
 	"d8x-candles/src/utils"
 	"encoding/json"
 	"fmt"
@@ -10,7 +11,9 @@ import (
 	"strconv"
 	"strings"
 
+	redistimeseries "github.com/RedisTimeSeries/redistimeseries-go"
 	"github.com/gorilla/websocket"
+	"github.com/redis/go-redis/v9"
 )
 
 type PythStream struct {
@@ -45,16 +48,31 @@ type PriceUpdateResponse struct {
 	} `json:"price_feed"`
 }
 
+type PriceMeta struct {
+	AffectedTriang map[string][]string
+	Triangulations map[string][]string
+	RedisClient    *redis.Client
+	RedisTSClient  *redistimeseries.Client
+	Ctx            context.Context
+}
+
 // symMap maps pyth ids to internal symbol (btc-usd)
-func StreamWs(config utils.PriceConfig) error {
+func StreamWs(config utils.PriceConfig, REDIS_ADDR string, REDIS_PW string) error {
 	symMap := config.ExtractPythIdToSymbolMap()
 	wsUrl := config.PythPriceWSEndpoint
 	slog.Info("Using wsUrl=" + wsUrl)
 	// keep track of latest price
 	var lastPx = make(map[string]float64, len(symMap))
-	// cascade to triangulations on price update
-	var affectedTriang map[string][]string = config.ExtractSymbolToTriangTarget()
-	var triangulations map[string][]string = config.ExtractTriangulationMap()
+	var meta PriceMeta
+	meta.AffectedTriang = config.ExtractSymbolToTriangTarget()
+	meta.Triangulations = config.ExtractTriangulationMap()
+	meta.RedisClient = redis.NewClient(&redis.Options{
+		Addr:     REDIS_ADDR,
+		Password: REDIS_PW,
+		DB:       0,
+	})
+	meta.RedisTSClient = redistimeseries.NewClient(REDIS_ADDR, "client", &REDIS_PW)
+	meta.Ctx = context.Background()
 	var ids = make([]string, len(symMap))
 	k := 0
 	for id, _ := range symMap {
@@ -113,12 +131,12 @@ func StreamWs(config utils.PriceConfig) error {
 
 		if pxResp.Type == "price_update" {
 			// Handle price update response
-			onPriceUpdate(pxResp, symMap[pxResp.PriceFeed.ID], lastPx, affectedTriang, triangulations)
+			onPriceUpdate(pxResp, symMap[pxResp.PriceFeed.ID], lastPx, meta)
 		}
 	}
 }
 
-func onPriceUpdate(pxResp PriceUpdateResponse, sym string, lastPx map[string]float64, affectedTriang map[string][]string, triangulations map[string][]string) {
+func onPriceUpdate(pxResp PriceUpdateResponse, sym string, lastPx map[string]float64, meta PriceMeta) {
 	if sym == "" {
 		return
 	}
@@ -128,15 +146,27 @@ func onPriceUpdate(pxResp PriceUpdateResponse, sym string, lastPx map[string]flo
 		return
 	}
 	lastPx[sym] = px
+	meta.RedisTSClient.Add(sym, pxResp.PriceFeed.Price.PublishTime, px)
+
 	slog.Info("Received price update: " + sym + " price=" + fmt.Sprint(px) + fmt.Sprint(pxResp.PriceFeed))
+
+	pubMsg := sym
 	// triangulations
-	targetSymbols := affectedTriang[sym]
+	targetSymbols := meta.AffectedTriang[sym]
 	for _, tsym := range targetSymbols {
-		pxTriang := utils.Triangulate(triangulations[tsym], lastPx)
+		// TODO: if market closed for any of the items in the triangulation,
+		// we should not publish an update
+		pxTriang := utils.Triangulate(meta.Triangulations[tsym], lastPx)
 		lastPx[tsym] = pxTriang
+		pubMsg += ";" + tsym
+		meta.RedisTSClient.Add(tsym, pxResp.PriceFeed.Price.PublishTime, pxTriang)
 		slog.Info("-- triangulation price update: " + tsym + " price=" + fmt.Sprint(pxTriang))
 	}
-
+	// publish updates to listeners
+	err := meta.RedisClient.Publish(meta.Ctx, "px_update", pubMsg).Err()
+	if err != nil {
+		slog.Error("Redis Pub" + err.Error())
+	}
 }
 
 // calculate floating point price from 'price' and 'expo'
