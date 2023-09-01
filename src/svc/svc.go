@@ -32,10 +32,8 @@ func StreamPyth() {
 		fmt.Println("Error:", err.Error())
 		return
 	}
-	sym := c.ExtractPythIdToSymbolMap()
-	wsUrl := c.PythPriceWSEndpoint
-	slog.Info("Using wsUrl=" + wsUrl)
-	err = pythclient.StreamWs(wsUrl, sym)
+
+	err = pythclient.StreamWs(c)
 	if err != nil {
 		slog.Error(err.Error())
 	}

@@ -147,3 +147,28 @@ func (c *PriceConfig) ExtractPythIdToSymbolMap() map[string]string {
 	}
 	return m
 }
+
+// From the data of the form { "target": "btc-usdc", "path": ["*", "btc-usd", "/", "usdc-usd"] },
+// we create a mapping of the underlying symbols to the target.
+// This is to quickly find all affected triangulations on a price change
+func (c *PriceConfig) ExtractSymbolToTriangTarget() map[string][]string {
+	m := make(map[string][]string)
+	for k := 0; k < len(c.Triangulations); k++ {
+		path := c.Triangulations[k].Path
+		for j := 1; j < len(path); j = j + 2 {
+			m[path[j]] = append(m[path[j]], c.Triangulations[k].Target)
+		}
+	}
+	return m
+}
+
+// get map for { "target": "btc-usdc", "path": ["*", "btc-usd", "/", "usdc-usd"] }
+// from target -> path
+func (c *PriceConfig) ExtractTriangulationMap() map[string][]string {
+	m := make(map[string][]string)
+	for k := 0; k < len(c.Triangulations); k++ {
+		t := c.Triangulations[k].Target
+		m[t] = c.Triangulations[k].Path
+	}
+	return m
+}

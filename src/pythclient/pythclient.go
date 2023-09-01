@@ -1,6 +1,7 @@
 package pythclient
 
 import (
+	"d8x-candles/src/utils"
 	"encoding/json"
 	"fmt"
 	"log/slog"
@@ -45,7 +46,15 @@ type PriceUpdateResponse struct {
 }
 
 // symMap maps pyth ids to internal symbol (btc-usd)
-func StreamWs(wsUrl string, symMap map[string]string) error {
+func StreamWs(config utils.PriceConfig) error {
+	symMap := config.ExtractPythIdToSymbolMap()
+	wsUrl := config.PythPriceWSEndpoint
+	slog.Info("Using wsUrl=" + wsUrl)
+	// keep track of latest price
+	var lastPx = make(map[string]float64, len(symMap))
+	// cascade to triangulations on price update
+	var affectedTriang map[string][]string = config.ExtractSymbolToTriangTarget()
+	var triangulations map[string][]string = config.ExtractTriangulationMap()
 	var ids = make([]string, len(symMap))
 	k := 0
 	for id, _ := range symMap {
@@ -72,8 +81,6 @@ func StreamWs(wsUrl string, symMap map[string]string) error {
 		slog.Error("WriteJSON:" + err.Error())
 	}
 
-	// keep track of latest price
-	var lastPx = make(map[string]float64, len(symMap))
 	for {
 		_, message, err := c.ReadMessage()
 		if err != nil {
@@ -106,12 +113,12 @@ func StreamWs(wsUrl string, symMap map[string]string) error {
 
 		if pxResp.Type == "price_update" {
 			// Handle price update response
-			onPriceUpdate(pxResp, symMap[pxResp.PriceFeed.ID], lastPx)
+			onPriceUpdate(pxResp, symMap[pxResp.PriceFeed.ID], lastPx, affectedTriang, triangulations)
 		}
 	}
 }
 
-func onPriceUpdate(pxResp PriceUpdateResponse, sym string, lastPx map[string]float64) {
+func onPriceUpdate(pxResp PriceUpdateResponse, sym string, lastPx map[string]float64, affectedTriang map[string][]string, triangulations map[string][]string) {
 	if sym == "" {
 		return
 	}
@@ -122,6 +129,13 @@ func onPriceUpdate(pxResp PriceUpdateResponse, sym string, lastPx map[string]flo
 	}
 	lastPx[sym] = px
 	slog.Info("Received price update: " + sym + " price=" + fmt.Sprint(px) + fmt.Sprint(pxResp.PriceFeed))
+	// triangulations
+	targetSymbols := affectedTriang[sym]
+	for _, tsym := range targetSymbols {
+		pxTriang := utils.Triangulate(triangulations[tsym], lastPx)
+		lastPx[tsym] = pxTriang
+		slog.Info("-- triangulation price update: " + tsym + " price=" + fmt.Sprint(pxTriang))
+	}
 
 }
 
