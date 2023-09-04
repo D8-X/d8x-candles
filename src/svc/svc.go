@@ -22,7 +22,7 @@ func RunCandleCharts() {
 		fmt.Println("Error:", err.Error())
 		return
 	}
-	wscandle.StartWSServer(c)
+	wscandle.StartWSServer(c, viper.GetString(env.REDIS_ADDR), viper.GetString(env.REDIS_PW))
 }
 
 func StreamPyth() {

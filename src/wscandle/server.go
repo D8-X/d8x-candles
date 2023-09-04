@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/gorilla/websocket"
+	redis "github.com/redis/go-redis/v9"
 )
 
 // Subscriptions is a type for each string of topic and the clients that subscribe to it
@@ -157,4 +158,15 @@ func errorResponse(reqType string, reqTopic string, msg string) []byte {
 		slog.Error("forming error response")
 	}
 	return jsonData
+}
+
+func (s *Server) SubscribePxUpdate(sub *redis.PubSub) {
+	for {
+		msg, err := sub.ReceiveMessage(ctx)
+		if err != nil {
+			panic(err)
+		}
+
+		slog.Info("REDIS received message:" + msg.String())
+	}
 }

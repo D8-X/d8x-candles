@@ -1,14 +1,17 @@
 package wscandle
 
 import (
+	"context"
 	"d8x-candles/src/utils"
 	"flag"
 	"log/slog"
 	"net/http"
 	"time"
 
+	redistimeseries "github.com/RedisTimeSeries/redistimeseries-go"
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
+	"github.com/redis/go-redis/v9"
 )
 
 const (
@@ -24,13 +27,28 @@ const (
 
 var upgrader = websocket.Upgrader{}
 
-// Initialize server with empty subscription and period
+// Initialize server with empty subscription
 var server = &Server{Subscriptions: make(Subscriptions)}
 var config utils.PriceConfig
+var redisClient *redis.Client
+var redisTSClient *redistimeseries.Client
+var ctx context.Context
 
-func StartWSServer(config_ utils.PriceConfig) {
+func StartWSServer(config_ utils.PriceConfig, REDIS_ADDR string, REDIS_PW string) {
 	flag.Parse()
 	config = config_
+
+	// Redis connection
+	redisClient = redis.NewClient(&redis.Options{
+		Addr:     REDIS_ADDR,
+		Password: REDIS_PW,
+		DB:       0,
+	})
+	redisTSClient = redistimeseries.NewClient(REDIS_ADDR, "client", &REDIS_PW)
+	ctx = context.Background()
+	subscriber := redisClient.Subscribe(ctx, "px_update")
+	go server.SubscribePxUpdate(subscriber)
+
 	http.HandleFunc("/ws", HandleWs)
 	slog.Info("Listening on localhost:8080/ws")
 	slog.Error(http.ListenAndServe(*addr, nil).Error())
@@ -49,7 +67,7 @@ func HandleWs(w http.ResponseWriter, r *http.Request) {
 	// create new client id
 	clientID := uuid.New().String()
 
-	// greet the new client
+	//log new client
 	slog.Info("Server: new client connected, ID is %s", clientID)
 
 	// create channel to signal client health
