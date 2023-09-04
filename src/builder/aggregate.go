@@ -7,7 +7,7 @@ import (
 	redistimeseries "github.com/RedisTimeSeries/redistimeseries-go"
 )
 
-// Query OHLC data from REDIS price cache
+// Query OHLC data from REDIS price cache, timestamps in ms
 func Ohlc(client *redistimeseries.Client, sym utils.SymbolPyth, fromTs uint32, toTs uint32, resolSec uint32) ([]OhlcData, error) {
 	keyname := sym.PairString()
 	agg := redistimeseries.DefaultRangeOptions
@@ -51,8 +51,8 @@ func ConvertTimestampToISO8601(timestampMs int64) string {
 	return iso8601
 }
 
-func AddPriceObs(client *redistimeseries.Client, sym utils.SymbolPyth, timestamp int64, value float64) {
-	client.Add(sym.PairString(), timestamp, value)
+func AddPriceObs(client *redistimeseries.Client, sym utils.SymbolPyth, timestampMs int64, value float64) {
+	client.Add(sym.PairString(), timestampMs, value)
 }
 
 func CreateTimeSeries(client *redistimeseries.Client, sym utils.SymbolPyth) {

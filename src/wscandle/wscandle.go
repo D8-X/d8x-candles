@@ -31,7 +31,7 @@ var upgrader = websocket.Upgrader{}
 // Initialize server with empty subscription
 var server = &Server{
 	Subscriptions: make(Subscriptions),
-	LastCandles:   make(map[string]builder.OhlcData),
+	LastCandles:   make(map[string]*builder.OhlcData),
 }
 var config utils.PriceConfig
 var redisClient *redis.Client

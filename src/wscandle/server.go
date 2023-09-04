@@ -23,7 +23,7 @@ type Clients map[string]*websocket.Conn
 // Server is the struct to handle the Server functions & manage the Subscriptions
 type Server struct {
 	Subscriptions Subscriptions
-	LastCandles   map[string]builder.OhlcData //symbol:period->OHLC
+	LastCandles   map[string]*builder.OhlcData //symbol:period->OHLC
 }
 
 type ClientMessage struct {
@@ -194,13 +194,17 @@ func (s *Server) candleUpdates(sym string) {
 	for _, prd := range config.CandlePeriodsMs {
 		key := sym + ":" + prd.Name
 		lastCandle := s.LastCandles[key]
-		nextTs := lastCandle.StartTsMs + int64(prd.TimeMs)
-		if pxLast.Timestamp > nextTs {
+		if lastCandle == nil {
+			s.LastCandles[key] = &builder.OhlcData{}
+			lastCandle = s.LastCandles[key]
+		}
+		if pxLast.Timestamp > lastCandle.StartTsMs+int64(prd.TimeMs) {
 			// new candle
 			lastCandle.O = pxLast.Value
 			lastCandle.H = pxLast.Value
 			lastCandle.L = pxLast.Value
 			lastCandle.C = pxLast.Value
+			nextTs := (pxLast.Timestamp / int64(prd.TimeMs)) * int64(prd.TimeMs)
 			lastCandle.StartTsMs = nextTs
 			lastCandle.Time = builder.ConvertTimestampToISO8601(nextTs)
 		} else {

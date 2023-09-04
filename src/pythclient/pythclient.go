@@ -146,7 +146,7 @@ func onPriceUpdate(pxResp PriceUpdateResponse, sym string, lastPx map[string]flo
 		return
 	}
 	lastPx[sym] = px
-	meta.RedisTSClient.Add(sym, pxResp.PriceFeed.Price.PublishTime, px)
+	meta.RedisTSClient.Add(sym, pxResp.PriceFeed.Price.PublishTime*1000, px)
 
 	slog.Info("Received price update: " + sym + " price=" + fmt.Sprint(px) + fmt.Sprint(pxResp.PriceFeed))
 
@@ -159,7 +159,7 @@ func onPriceUpdate(pxResp PriceUpdateResponse, sym string, lastPx map[string]flo
 		pxTriang := utils.Triangulate(meta.Triangulations[tsym], lastPx)
 		lastPx[tsym] = pxTriang
 		pubMsg += ";" + tsym
-		meta.RedisTSClient.Add(tsym, pxResp.PriceFeed.Price.PublishTime, pxTriang)
+		meta.RedisTSClient.Add(tsym, pxResp.PriceFeed.Price.PublishTime*1000, pxTriang)
 		slog.Info("-- triangulation price update: " + tsym + " price=" + fmt.Sprint(pxTriang))
 	}
 	// publish updates to listeners
