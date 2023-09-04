@@ -35,7 +35,6 @@ var server = &Server{
 }
 var config utils.PriceConfig
 var redisClient *redis.Client
-var redisTSClient *redistimeseries.Client
 var ctx context.Context
 
 func StartWSServer(config_ utils.PriceConfig, REDIS_ADDR string, REDIS_PW string) {
@@ -48,7 +47,7 @@ func StartWSServer(config_ utils.PriceConfig, REDIS_ADDR string, REDIS_PW string
 		Password: REDIS_PW,
 		DB:       0,
 	})
-	redisTSClient = redistimeseries.NewClient(REDIS_ADDR, "client", &REDIS_PW)
+	server.RedisTSClient = redistimeseries.NewClient(REDIS_ADDR, "client", &REDIS_PW)
 	ctx = context.Background()
 	subscriber := redisClient.Subscribe(ctx, "px_update")
 	go server.SubscribePxUpdate(subscriber)

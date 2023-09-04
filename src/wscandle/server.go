@@ -10,6 +10,7 @@ import (
 	"strings"
 	"sync"
 
+	redistimeseries "github.com/RedisTimeSeries/redistimeseries-go"
 	"github.com/gorilla/websocket"
 	redis "github.com/redis/go-redis/v9"
 )
@@ -24,6 +25,7 @@ type Clients map[string]*websocket.Conn
 type Server struct {
 	Subscriptions Subscriptions
 	LastCandles   map[string]*builder.OhlcData //symbol:period->OHLC
+	RedisTSClient *redistimeseries.Client
 }
 
 type ClientMessage struct {
@@ -138,7 +140,7 @@ func (s *Server) SubscribeCandles(conn *websocket.Conn, clientID string, topic s
 		}
 		// not subscribed
 		clients[clientID] = conn
-		return candleResponse(sym, p)
+		return s.candleResponse(sym, p)
 	}
 
 	// if topic does not exist, create a new topic
@@ -147,12 +149,12 @@ func (s *Server) SubscribeCandles(conn *websocket.Conn, clientID string, topic s
 
 	// add the client to the topic
 	s.Subscriptions[topic][clientID] = conn
-	return candleResponse(sym, p)
+	return s.candleResponse(sym, p)
 }
 
-func candleResponse(sym string, p utils.CandlePeriod) []byte {
+func (s *Server) candleResponse(sym string, p utils.CandlePeriod) []byte {
 	slog.Info("Subscription for symbol " + sym + " Period " + fmt.Sprint(p.TimeMs/60000) + "m")
-	data := []byte{}
+	data := GetInitialCandles(s.RedisTSClient, sym, p)
 	topic := sym + ":" + p.Name
 	res := ServerResponse{Type: "subscribe", Topic: topic, Data: data}
 	jsonData, err := json.Marshal(res)
@@ -189,7 +191,7 @@ func (s *Server) candleUpdates(symbols []string) {
 
 	var wg sync.WaitGroup
 	for _, sym := range symbols {
-		pxLast, err := redisTSClient.Get(sym)
+		pxLast, err := s.RedisTSClient.Get(sym)
 		if err != nil {
 			slog.Error(fmt.Sprintf("Error parsing date:%v", err))
 			return

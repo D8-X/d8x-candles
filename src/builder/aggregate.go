@@ -7,9 +7,9 @@ import (
 	redistimeseries "github.com/RedisTimeSeries/redistimeseries-go"
 )
 
-// Query OHLC data from REDIS price cache, timestamps in ms
-func Ohlc(client *redistimeseries.Client, sym utils.SymbolPyth, fromTs uint32, toTs uint32, resolSec uint32) ([]OhlcData, error) {
-	keyname := sym.PairString()
+// Ohlc queries OHLC data from REDIS price cache, timestamps in ms
+// sym is of the form btc-usd
+func Ohlc(client *redistimeseries.Client, sym string, fromTs int64, toTs int64, resolSec uint32) ([]OhlcData, error) {
 	agg := redistimeseries.DefaultRangeOptions
 	agg.TimeBucket = int(resolSec)
 
@@ -22,7 +22,7 @@ func Ohlc(client *redistimeseries.Client, sym utils.SymbolPyth, fromTs uint32, t
 	var redisData []*[]redistimeseries.DataPoint
 	for k := 0; k < len(aggregations); k++ {
 		agg.AggType = aggregations[k]
-		data, err := client.RangeWithOptions(keyname, int64(fromTs), int64(toTs), agg)
+		data, err := client.RangeWithOptions(sym, fromTs, toTs, agg)
 
 		if err != nil {
 			return []OhlcData{}, err
