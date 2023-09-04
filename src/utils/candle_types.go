@@ -178,7 +178,7 @@ func (c *PriceConfig) extractSymbolToTriangTarget() {
 			m[path[j]] = append(m[path[j]], c.ConfigFile.Triangulations[k].Target)
 		}
 	}
-
+	c.SymToDependentTriang = m
 }
 
 // get map for { "target": "btc-usdc", "path": ["*", "btc-usd", "/", "usdc-usd"] }

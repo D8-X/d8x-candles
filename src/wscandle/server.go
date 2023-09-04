@@ -180,49 +180,53 @@ func (s *Server) SubscribePxUpdate(sub *redis.PubSub) {
 			panic(err)
 		}
 		slog.Info("REDIS received message:" + msg.Payload)
-		s.candleUpdates(msg.Payload)
+		symbols := strings.Split(msg.Payload, ";")
+		s.candleUpdates(symbols)
 	}
 }
 
-func (s *Server) candleUpdates(sym string) {
-	pxLast, err := redisTSClient.Get(sym)
-	if err != nil {
-		slog.Error(fmt.Sprintf("Error parsing date:%v", err))
-		return
-	}
+func (s *Server) candleUpdates(symbols []string) {
+
 	var wg sync.WaitGroup
-	for _, prd := range config.CandlePeriodsMs {
-		key := sym + ":" + prd.Name
-		lastCandle := s.LastCandles[key]
-		if lastCandle == nil {
-			s.LastCandles[key] = &builder.OhlcData{}
-			lastCandle = s.LastCandles[key]
-		}
-		if pxLast.Timestamp > lastCandle.StartTsMs+int64(prd.TimeMs) {
-			// new candle
-			lastCandle.O = pxLast.Value
-			lastCandle.H = pxLast.Value
-			lastCandle.L = pxLast.Value
-			lastCandle.C = pxLast.Value
-			nextTs := (pxLast.Timestamp / int64(prd.TimeMs)) * int64(prd.TimeMs)
-			lastCandle.StartTsMs = nextTs
-			lastCandle.Time = builder.ConvertTimestampToISO8601(nextTs)
-		} else {
-			// update existing candle
-			lastCandle.C = pxLast.Value
-			lastCandle.H = math.Max(pxLast.Value, lastCandle.H)
-			lastCandle.L = math.Min(pxLast.Value, lastCandle.L)
-		}
-		// update subscribers
-		clients := server.Subscriptions[key]
-		r := ServerResponse{Type: "update", Topic: key, Data: lastCandle}
-		jsonData, err := json.Marshal(r)
+	for _, sym := range symbols {
+		pxLast, err := redisTSClient.Get(sym)
 		if err != nil {
-			slog.Error("forming lastCandle update")
+			slog.Error(fmt.Sprintf("Error parsing date:%v", err))
+			return
 		}
-		for _, conn := range clients {
-			wg.Add(1)
-			go server.SendWithWait(conn, jsonData, &wg)
+		for _, prd := range config.CandlePeriodsMs {
+			key := sym + ":" + prd.Name
+			lastCandle := s.LastCandles[key]
+			if lastCandle == nil {
+				s.LastCandles[key] = &builder.OhlcData{}
+				lastCandle = s.LastCandles[key]
+			}
+			if pxLast.Timestamp > lastCandle.StartTsMs+int64(prd.TimeMs) {
+				// new candle
+				lastCandle.O = pxLast.Value
+				lastCandle.H = pxLast.Value
+				lastCandle.L = pxLast.Value
+				lastCandle.C = pxLast.Value
+				nextTs := (pxLast.Timestamp / int64(prd.TimeMs)) * int64(prd.TimeMs)
+				lastCandle.StartTsMs = nextTs
+				lastCandle.Time = builder.ConvertTimestampToISO8601(nextTs)
+			} else {
+				// update existing candle
+				lastCandle.C = pxLast.Value
+				lastCandle.H = math.Max(pxLast.Value, lastCandle.H)
+				lastCandle.L = math.Min(pxLast.Value, lastCandle.L)
+			}
+			// update subscribers
+			clients := server.Subscriptions[key]
+			r := ServerResponse{Type: "update", Topic: key, Data: lastCandle}
+			jsonData, err := json.Marshal(r)
+			if err != nil {
+				slog.Error("forming lastCandle update")
+			}
+			for _, conn := range clients {
+				wg.Add(1)
+				go server.SendWithWait(conn, jsonData, &wg)
+			}
 		}
 	}
 	// wait until all goroutines jobs done
