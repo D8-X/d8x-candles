@@ -4,9 +4,11 @@ import (
 	"d8x-candles/src/utils"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -51,22 +53,23 @@ func (p *PythHistoryAPI) RetrieveCandlesFromPyth(sym utils.SymbolPyth, candleRes
 
 // Query Pyth Candle API and construct artificial price data which
 // is stored to Redis
-func (p *PythHistoryAPI) PythDataToRedisPriceObs(symbols []utils.SymbolPyth) error {
-	var obs []PriceObservations
-	var processedSym []utils.SymbolPyth
+func (p *PythHistoryAPI) PythDataToRedisPriceObs(symbols []utils.SymbolPyth) {
+	var wg sync.WaitGroup
 	for _, sym := range symbols {
-		o, err := p.ConstructPriceObsFromPythCandles(sym)
-		if err != nil {
-			fmt.Printf("error for " + sym.ToString() + ":" + err.Error())
-			continue
-		}
-		obs = append(obs, o)
-		processedSym = append(processedSym, sym)
+		wg.Add(1)
+		go func(sym utils.SymbolPyth) {
+			defer wg.Done()
+			o, err := p.ConstructPriceObsFromPythCandles(sym)
+			if err != nil {
+				slog.Error("error for " + sym.ToString() + ":" + err.Error())
+				return
+			}
+			p.PricesToRedis(sym, o)
+			slog.Info("Processed history for " + sym.ToString())
+		}(sym)
 	}
-	for k := 0; k < len(obs); k++ {
-		p.PricesToRedis(processedSym[k], obs[k])
-	}
-	return nil
+	wg.Wait()
+	slog.Info("History of Pyth sources complete")
 }
 
 func (p *PythHistoryAPI) PricesToRedis(sym utils.SymbolPyth, obs PriceObservations) {

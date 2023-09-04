@@ -4,8 +4,6 @@ import redistimeseries "github.com/RedisTimeSeries/redistimeseries-go"
 
 type PythHistoryAPI struct {
 	BaseUrl     string
-	RedisHost   string
-	RedisPwd    string
 	RedisClient *redistimeseries.Client
 }
 

@@ -46,6 +46,7 @@ func (s *SymbolPyth) New(symbol string, id string) error {
 	}
 	s.Symbol = strings.ToLower(parts2[0]) + "-" + strings.ToLower(parts2[1])
 	s.id = id
+	s.PythSymbol = strings.ToLower(symbol)
 	return nil
 }
 

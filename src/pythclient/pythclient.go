@@ -2,6 +2,7 @@ package pythclient
 
 import (
 	"context"
+	"d8x-candles/src/builder"
 	"d8x-candles/src/utils"
 	"encoding/json"
 	"fmt"
@@ -72,6 +73,13 @@ func StreamWs(config utils.PriceConfig, REDIS_ADDR string, REDIS_PW string) erro
 		DB:       0,
 	})
 	meta.RedisTSClient = redistimeseries.NewClient(REDIS_ADDR, "client", &REDIS_PW)
+	ph := builder.PythHistoryAPI{
+		BaseUrl:     config.ConfigFile.PythAPIEndpoint,
+		RedisClient: meta.RedisTSClient,
+	}
+	slog.Info("Building price history...")
+	buildHistory(ph, config)
+
 	meta.Ctx = context.Background()
 	var ids = make([]string, len(symMap))
 	k := 0
@@ -211,3 +219,13 @@ func Stream(baseUrl string, symMap map[string]string) error {
 	}
 }
 */
+
+func buildHistory(ph builder.PythHistoryAPI, config utils.PriceConfig) {
+	pythSyms := make([]utils.SymbolPyth, len(config.ConfigFile.PriceFeeds))
+	for k, feed := range config.ConfigFile.PriceFeeds {
+		var sym utils.SymbolPyth
+		sym.New(feed.SymbolPyth, feed.Id)
+		pythSyms[k] = sym
+	}
+	ph.PythDataToRedisPriceObs(pythSyms)
+}
