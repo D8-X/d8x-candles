@@ -25,7 +25,7 @@ const (
 var upgrader = websocket.Upgrader{}
 
 // Initialize server with empty subscription and period
-var server = &Server{Subscriptions: make(Subscription), ClientPeriod: make(ClientPeriod)}
+var server = &Server{Subscriptions: make(Subscriptions)}
 var config utils.PriceConfig
 
 func StartWSServer(config_ utils.PriceConfig) {

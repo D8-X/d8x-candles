@@ -10,16 +10,12 @@ import (
 	"github.com/gorilla/websocket"
 )
 
-// Subscription is a type for each string of topic and the clients that subscribe to it
-type Subscription map[string]Client
-
-// For each candle client we subscribe to a period (1m, 5m, ...)
-type ClientPeriod map[string]utils.CandlePeriod
+// Subscriptions is a type for each string of topic and the clients that subscribe to it
+type Subscriptions map[string]Clients
 
 // Server is the struct to handle the Server functions & manage the Subscriptions
 type Server struct {
-	Subscriptions Subscription
-	ClientPeriod  ClientPeriod
+	Subscriptions Subscriptions
 }
 
 type ClientMessage struct {
@@ -37,8 +33,8 @@ type ErrorResponse struct {
 	Error string `json:"error"`
 }
 
-// Client is a type that describe the clients' ID and their connection
-type Client map[string]*websocket.Conn
+// Clients is a type that describe the clients' ID and their connection
+type Clients map[string]*websocket.Conn
 
 // Send simply sends message to the websocket client
 func (s *Server) Send(conn *websocket.Conn, message []byte) {
@@ -76,7 +72,20 @@ func (s *Server) HandleRequest(conn *websocket.Conn, config utils.PriceConfig, c
 		}
 	} else {
 		// unsubscribe
-		return
+		if reqTopic == "markets" {
+			delete(s.Subscriptions[reqTopic], clientID)
+		} else {
+			server.UnsubscribeCandles(clientID, reqTopic)
+		}
+	}
+}
+
+func (s *Server) UnsubscribeCandles(clientID string, topic string) {
+	// if topic exists, check the client map
+	if _, exist := s.Subscriptions[topic]; exist {
+		client := s.Subscriptions[topic]
+		// remove the client from the topic's client map
+		delete(client, clientID)
 	}
 }
 
@@ -106,27 +115,24 @@ func (s *Server) SubscribeCandles(conn *websocket.Conn, clientID string, topic s
 		// period not supported
 		return errorResponse("subscribe", topic, "period not supported")
 	}
-	periodSubscribed := s.ClientPeriod[clientID]
 
-	if _, exist := s.Subscriptions[sym]; exist {
-		clients := s.Subscriptions[sym]
+	if _, exist := s.Subscriptions[topic]; exist {
+		clients := s.Subscriptions[topic]
 		// if client already subscribed, stop the process
-		if _, subbed := clients[clientID]; subbed && periodSubscribed.TimeMs == p.TimeMs {
+		if _, subbed := clients[clientID]; subbed {
 			return errorResponse("subscribe", topic, "client already subscribed")
 		}
 		// not subscribed
 		clients[clientID] = conn
-		s.ClientPeriod[clientID] = p
 		return candleResponse(sym, p)
 	}
 
 	// if topic does not exist, create a new topic
-	newClient := make(Client)
-	s.Subscriptions[sym] = newClient
+	newClient := make(Clients)
+	s.Subscriptions[topic] = newClient
 
 	// add the client to the topic
-	s.Subscriptions[sym][clientID] = conn
-	s.ClientPeriod[clientID] = p
+	s.Subscriptions[topic][clientID] = conn
 	return candleResponse(sym, p)
 }
 

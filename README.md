@@ -28,7 +28,10 @@ New:
 }
 
 ```
-
+Error:
+```
+{"type":"subscribe","topic":"xau-usvd:15m","data":{"error":"symbol not supported"}}
+```
 <details>
 <summary>
 Upon subscription the requestor receives an answer of the following form
