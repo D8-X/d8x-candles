@@ -145,6 +145,6 @@ A client request of the form `{"type": "ping"}` is responded with
 ## Testing 
 
 ```
-docker run -p 6379:6379 -it --rm redis/redis-stack-server
+docker run -d --name redis-stack -p 6379:6379 -e REDIS_ARGS="--requirepass yourpwd" redis/redis-stack-server:latest
 ```
 ## Functional Documentation

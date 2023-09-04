@@ -2,6 +2,7 @@ package wscandle
 
 import (
 	"context"
+	"d8x-candles/src/builder"
 	"d8x-candles/src/utils"
 	"flag"
 	"log/slog"
@@ -28,7 +29,10 @@ const (
 var upgrader = websocket.Upgrader{}
 
 // Initialize server with empty subscription
-var server = &Server{Subscriptions: make(Subscriptions)}
+var server = &Server{
+	Subscriptions: make(Subscriptions),
+	LastCandles:   make(map[string]builder.OhlcData),
+}
 var config utils.PriceConfig
 var redisClient *redis.Client
 var redisTSClient *redistimeseries.Client

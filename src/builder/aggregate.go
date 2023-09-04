@@ -35,7 +35,7 @@ func Ohlc(client *redistimeseries.Client, sym utils.SymbolPyth, fromTs uint32, t
 	for k := 0; k < len(*redisData[0]); k++ {
 		var data OhlcData
 		data.StartTsMs = (*redisData[0])[k].Timestamp
-		data.Time = convertTimestampToISO8601(data.StartTsMs)
+		data.Time = ConvertTimestampToISO8601(data.StartTsMs)
 		data.O = (*redisData[0])[k].Value
 		data.H = (*redisData[1])[k].Value
 		data.L = (*redisData[2])[k].Value
@@ -45,7 +45,7 @@ func Ohlc(client *redistimeseries.Client, sym utils.SymbolPyth, fromTs uint32, t
 	return ohlc, nil
 }
 
-func convertTimestampToISO8601(timestampMs int64) string {
+func ConvertTimestampToISO8601(timestampMs int64) string {
 	timestamp := time.Unix(0, timestampMs*int64(time.Millisecond))
 	iso8601 := timestamp.UTC().Format("2006-01-02T15:04:05.000Z")
 	return iso8601

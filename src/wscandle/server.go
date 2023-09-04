@@ -1,11 +1,14 @@
 package wscandle
 
 import (
+	"d8x-candles/src/builder"
 	"d8x-candles/src/utils"
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"math"
 	"strings"
+	"sync"
 
 	"github.com/gorilla/websocket"
 	redis "github.com/redis/go-redis/v9"
@@ -14,9 +17,13 @@ import (
 // Subscriptions is a type for each string of topic and the clients that subscribe to it
 type Subscriptions map[string]Clients
 
+// Clients is a type that describe the clients' ID and their connection
+type Clients map[string]*websocket.Conn
+
 // Server is the struct to handle the Server functions & manage the Subscriptions
 type Server struct {
 	Subscriptions Subscriptions
+	LastCandles   map[string]builder.OhlcData //symbol:period->OHLC
 }
 
 type ClientMessage struct {
@@ -34,13 +41,19 @@ type ErrorResponse struct {
 	Error string `json:"error"`
 }
 
-// Clients is a type that describe the clients' ID and their connection
-type Clients map[string]*websocket.Conn
-
 // Send simply sends message to the websocket client
 func (s *Server) Send(conn *websocket.Conn, message []byte) {
 	// send simple message
 	conn.WriteMessage(websocket.TextMessage, message)
+}
+
+// SendWithWait sends message to the websocket client using wait group, allowing usage with goroutines
+func (s *Server) SendWithWait(conn *websocket.Conn, message []byte, wg *sync.WaitGroup) {
+	// send simple message
+	conn.WriteMessage(websocket.TextMessage, message)
+
+	// set the task as done
+	wg.Done()
 }
 
 // RemoveClient removes the clients from the server subscription map
@@ -166,7 +179,48 @@ func (s *Server) SubscribePxUpdate(sub *redis.PubSub) {
 		if err != nil {
 			panic(err)
 		}
-
-		slog.Info("REDIS received message:" + msg.String())
+		slog.Info("REDIS received message:" + msg.Payload)
+		s.candleUpdates(msg.Payload)
 	}
+}
+
+func (s *Server) candleUpdates(sym string) {
+	pxLast, err := redisTSClient.Get(sym)
+	if err != nil {
+		slog.Error(fmt.Sprintf("Error parsing date:%v", err))
+		return
+	}
+	var wg sync.WaitGroup
+	for _, prd := range config.CandlePeriodsMs {
+		key := sym + ":" + prd.Name
+		lastCandle := s.LastCandles[key]
+		nextTs := lastCandle.StartTsMs + int64(prd.TimeMs)
+		if pxLast.Timestamp > nextTs {
+			// new candle
+			lastCandle.O = pxLast.Value
+			lastCandle.H = pxLast.Value
+			lastCandle.L = pxLast.Value
+			lastCandle.C = pxLast.Value
+			lastCandle.StartTsMs = nextTs
+			lastCandle.Time = builder.ConvertTimestampToISO8601(nextTs)
+		} else {
+			// update existing candle
+			lastCandle.C = pxLast.Value
+			lastCandle.H = math.Max(pxLast.Value, lastCandle.H)
+			lastCandle.L = math.Min(pxLast.Value, lastCandle.L)
+		}
+		// update subscribers
+		clients := server.Subscriptions[key]
+		r := ServerResponse{Type: "update", Topic: key, Data: lastCandle}
+		jsonData, err := json.Marshal(r)
+		if err != nil {
+			slog.Error("forming lastCandle update")
+		}
+		for _, conn := range clients {
+			wg.Add(1)
+			go server.SendWithWait(conn, jsonData, &wg)
+		}
+	}
+	// wait until all goroutines jobs done
+	wg.Wait()
 }
