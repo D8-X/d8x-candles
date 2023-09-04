@@ -10,6 +10,8 @@ RangeWithOptions
 #Websocket
 
 The client requests candle subscriptions via
+
+Old:
 ```
 {
   "type": "subscribe",
@@ -18,6 +20,15 @@ The client requests candle subscriptions via
 }
 
 ```
+New:
+```
+{
+  "type": "subscribe",
+  "topic": "btc-usd:1m",
+}
+
+```
+
 <details>
 <summary>
 Upon subscription the requestor receives an answer of the following form
@@ -51,11 +62,27 @@ Upon subscription the requestor receives an answer of the following form
 <summary>
 Updates are of the following form
 </summary>
+old:
 
 ```
 {
   "type": "update",
-  "msg": "btc-usdc:1m",
+  "topic": "btc-usdc:1m",
+  "data": [{
+    "start": 1678591260000,
+    "time": "2023-03-12T03:21:00.000Z",
+    "open": 20730.828392716117,
+    "high": 20730.828392716117,
+    "low": 20696.203770402524,
+    "close": 20723.290900287615
+  }]
+}
+```
+new:
+```
+{
+  "type": "update",
+  "topic": "btc-usdc:1m",
   "data": [{
     "start": 1678591260000,
     "time": "2023-03-12T03:21:00.000Z",
@@ -89,14 +116,15 @@ Supported periods are case-sensitive and as defined in the configuration file li
 The client requests market summaries via
 ```
 {
-  "type": "subscribe-markets"
+  "type": "subscribe",
+  "topic": "markets",
 }
 ```
 
 to get a response like
 ```
 {
-  "type": "update-markets",
+  "topic": "markets",
   "data": [{
     "symbol": "btc-usd",
     "24hpct": "20.02",

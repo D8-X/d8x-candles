@@ -108,7 +108,21 @@ func (c *PythCandleResolution) ToPythString() string {
 	}
 }
 
+type CandlePeriod struct {
+	Name           string
+	TimeMs         int
+	DisplayRangeMs int
+}
+
 type PriceConfig struct {
+	ConfigFile           ConfigFile
+	PythIdToSym          map[string]string       //pyth id (0xabc..) to symbol (btc-usd)
+	SymToDependentTriang map[string][]string     //sym to all dependent triangulations
+	SymToTriangPath      map[string][]string     //sym to triangulation path
+	CandlePeriodsMs      map[string]CandlePeriod //period 1m,5m,... to timeMs and displayRangeMs
+}
+
+type ConfigFile struct {
 	PythAPIEndpoint     string `json:"pythAPIEndpoint"`
 	PythPriceWSEndpoint string `json:"priceServiceWSEndpoint"`
 	PriceFeeds          []struct {
@@ -132,43 +146,75 @@ func (c *PriceConfig) LoadPriceConfig(fileName string) error {
 	if err != nil {
 		return err
 	}
-	err = json.Unmarshal(data, c)
+	err = json.Unmarshal(data, &c.ConfigFile)
 	if err != nil {
 		return err
 	}
+	c.extractPythIdToSymbolMap()
+	c.extractSymbolToTriangTarget()
+	c.extractTriangulationMap()
+	c.extractCandlePeriods()
 	return nil
 }
 
-func (c *PriceConfig) ExtractPythIdToSymbolMap() map[string]string {
-	m := make(map[string]string, len(c.PriceFeeds))
-	for _, el := range c.PriceFeeds {
+// creates a map from ids "0x32121..." to symbols "xau-usd"
+func (c *PriceConfig) extractPythIdToSymbolMap() {
+	m := make(map[string]string, len(c.ConfigFile.PriceFeeds))
+	for _, el := range c.ConfigFile.PriceFeeds {
 		idTrim, _ := strings.CutPrefix(el.Id, "0x")
 		m[idTrim] = el.Symbol
 	}
-	return m
+	c.PythIdToSym = m
 }
 
 // From the data of the form { "target": "btc-usdc", "path": ["*", "btc-usd", "/", "usdc-usd"] },
 // we create a mapping of the underlying symbols to the target.
 // This is to quickly find all affected triangulations on a price change
-func (c *PriceConfig) ExtractSymbolToTriangTarget() map[string][]string {
+func (c *PriceConfig) extractSymbolToTriangTarget() {
 	m := make(map[string][]string)
-	for k := 0; k < len(c.Triangulations); k++ {
-		path := c.Triangulations[k].Path
+	for k := 0; k < len(c.ConfigFile.Triangulations); k++ {
+		path := c.ConfigFile.Triangulations[k].Path
 		for j := 1; j < len(path); j = j + 2 {
-			m[path[j]] = append(m[path[j]], c.Triangulations[k].Target)
+			m[path[j]] = append(m[path[j]], c.ConfigFile.Triangulations[k].Target)
 		}
 	}
-	return m
+
 }
 
 // get map for { "target": "btc-usdc", "path": ["*", "btc-usd", "/", "usdc-usd"] }
-// from target -> path
-func (c *PriceConfig) ExtractTriangulationMap() map[string][]string {
+// from target -> path (map[string][]string)
+func (c *PriceConfig) extractTriangulationMap() {
 	m := make(map[string][]string)
-	for k := 0; k < len(c.Triangulations); k++ {
-		t := c.Triangulations[k].Target
-		m[t] = c.Triangulations[k].Path
+	for k := 0; k < len(c.ConfigFile.Triangulations); k++ {
+		t := c.ConfigFile.Triangulations[k].Target
+		m[t] = c.ConfigFile.Triangulations[k].Path
 	}
-	return m
+	c.SymToTriangPath = m
+}
+
+func (c *PriceConfig) extractCandlePeriods() {
+	c.CandlePeriodsMs = make(map[string]CandlePeriod, len(c.ConfigFile.SupportedCandlePeriods))
+	for _, el := range c.ConfigFile.SupportedCandlePeriods {
+		c.CandlePeriodsMs[el.Period] = CandlePeriod{Name: el.Period, TimeMs: el.TimeMs, DisplayRangeMs: el.DisplayRangeMs}
+	}
+}
+
+func (c *PriceConfig) IsSymbolAvailable(sym string) bool {
+	// symbol is a triangulated symbol?
+	s := c.SymToTriangPath[sym]
+	if len(s) > 0 {
+		return true
+	}
+	// symbol is part of a triangulation?
+	t := c.SymToTriangPath[sym]
+	if len(t) > 0 {
+		return true
+	}
+	// symbol is not used in triangulations but available
+	for _, el := range c.ConfigFile.PriceFeeds {
+		if el.Symbol == sym {
+			return true
+		}
+	}
+	return false
 }

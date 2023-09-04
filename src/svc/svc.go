@@ -17,7 +17,12 @@ func RunCandleCharts() {
 		fmt.Println("Error:", err.Error())
 		return
 	}
-	wscandle.StartWSServer()
+	c, err := loadConfig()
+	if err != nil {
+		fmt.Println("Error:", err.Error())
+		return
+	}
+	wscandle.StartWSServer(c)
 }
 
 func StreamPyth() {

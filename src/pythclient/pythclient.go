@@ -58,14 +58,14 @@ type PriceMeta struct {
 
 // symMap maps pyth ids to internal symbol (btc-usd)
 func StreamWs(config utils.PriceConfig, REDIS_ADDR string, REDIS_PW string) error {
-	symMap := config.ExtractPythIdToSymbolMap()
-	wsUrl := config.PythPriceWSEndpoint
+	symMap := config.PythIdToSym
+	wsUrl := config.ConfigFile.PythPriceWSEndpoint
 	slog.Info("Using wsUrl=" + wsUrl)
 	// keep track of latest price
 	var lastPx = make(map[string]float64, len(symMap))
 	var meta PriceMeta
-	meta.AffectedTriang = config.ExtractSymbolToTriangTarget()
-	meta.Triangulations = config.ExtractTriangulationMap()
+	meta.AffectedTriang = config.SymToDependentTriang
+	meta.Triangulations = config.SymToTriangPath
 	meta.RedisClient = redis.NewClient(&redis.Options{
 		Addr:     REDIS_ADDR,
 		Password: REDIS_PW,
