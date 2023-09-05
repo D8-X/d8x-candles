@@ -71,7 +71,7 @@ func HandleWs(w http.ResponseWriter, r *http.Request) {
 	clientID := uuid.New().String()
 
 	//log new client
-	slog.Info("Server: new client connected, ID is %s", clientID)
+	slog.Info("Server: new client connected, ID is " + clientID)
 
 	// create channel to signal client health
 	done := make(chan struct{})

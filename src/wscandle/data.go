@@ -13,6 +13,7 @@ import (
 func GetInitialCandles(client *redistimeseries.Client, sym string, p utils.CandlePeriod) []builder.OhlcData {
 	t := time.Now().UTC()
 	tMs := t.UnixNano() / int64(time.Millisecond)
+	tMs = (tMs / int64(p.TimeMs)) * int64(p.TimeMs) //floor
 	fromTsMs := tMs - int64(p.DisplayRangeMs)
 	resolSec := uint32(p.TimeMs / 1000)
 	data, err := builder.Ohlc(client, sym, fromTsMs, tMs, resolSec)

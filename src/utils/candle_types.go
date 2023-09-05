@@ -8,6 +8,11 @@ import (
 	"strings"
 )
 
+type DataPoints struct {
+	TimestampMs []int64
+	Value       []float64
+}
+
 type SymbolPyth struct {
 	AssetType  string
 	PythSymbol string
@@ -46,7 +51,7 @@ func (s *SymbolPyth) New(symbol string, id string) error {
 	}
 	s.Symbol = strings.ToLower(parts2[0]) + "-" + strings.ToLower(parts2[1])
 	s.id = id
-	s.PythSymbol = strings.ToLower(symbol)
+	s.PythSymbol = symbol
 	return nil
 }
 
