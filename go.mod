@@ -2,10 +2,7 @@ module d8x-candles
 
 go 1.21
 
-require (
-	github.com/RedisTimeSeries/redistimeseries-go v1.4.4
-	github.com/spf13/viper v1.16.0
-)
+require github.com/spf13/viper v1.16.0
 
 require (
 	github.com/cespare/xxhash/v2 v2.2.0 // indirect
