@@ -9,10 +9,10 @@ import (
 	"net/http"
 	"time"
 
-	redistimeseries "github.com/RedisTimeSeries/redistimeseries-go"
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 	"github.com/redis/go-redis/v9"
+	"github.com/redis/rueidis"
 )
 
 const (
@@ -37,7 +37,7 @@ var config utils.PriceConfig
 var redisClient *redis.Client
 var ctx context.Context
 
-func StartWSServer(config_ utils.PriceConfig, REDIS_ADDR string, REDIS_PW string) {
+func StartWSServer(config_ utils.PriceConfig, REDIS_ADDR string, REDIS_PW string) error {
 	flag.Parse()
 	config = config_
 
@@ -47,7 +47,16 @@ func StartWSServer(config_ utils.PriceConfig, REDIS_ADDR string, REDIS_PW string
 		Password: REDIS_PW,
 		DB:       0,
 	})
-	server.RedisTSClient = redistimeseries.NewClient(REDIS_ADDR, "client", &REDIS_PW)
+	client, err := rueidis.NewClient(
+		rueidis.ClientOption{InitAddress: []string{REDIS_ADDR}, Password: REDIS_PW})
+	if err != nil {
+		return err
+	}
+	ctx := context.Background()
+	server.RedisTSClient = &utils.RueidisClient{
+		Client: &client,
+		Ctx:    ctx,
+	}
 	ctx = context.Background()
 	subscriber := redisClient.Subscribe(ctx, "px_update")
 	go server.SubscribePxUpdate(subscriber)
@@ -55,6 +64,7 @@ func StartWSServer(config_ utils.PriceConfig, REDIS_ADDR string, REDIS_PW string
 	http.HandleFunc("/ws", HandleWs)
 	slog.Info("Listening on localhost:8080/ws")
 	slog.Error(http.ListenAndServe(*addr, nil).Error())
+	return nil
 }
 
 var addr = flag.String("addr", "localhost:8080", "http service address")

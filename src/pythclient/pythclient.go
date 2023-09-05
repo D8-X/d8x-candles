@@ -12,9 +12,9 @@ import (
 	"strconv"
 	"strings"
 
-	redistimeseries "github.com/RedisTimeSeries/redistimeseries-go"
 	"github.com/gorilla/websocket"
 	"github.com/redis/go-redis/v9"
+	"github.com/redis/rueidis"
 )
 
 type PythStream struct {
@@ -53,7 +53,7 @@ type PriceMeta struct {
 	AffectedTriang map[string][]string
 	Triangulations map[string][]string
 	RedisClient    *redis.Client
-	RedisTSClient  *redistimeseries.Client
+	RedisTSClient  *utils.RueidisClient
 	Ctx            context.Context
 }
 
@@ -72,7 +72,16 @@ func StreamWs(config utils.PriceConfig, REDIS_ADDR string, REDIS_PW string) erro
 		Password: REDIS_PW,
 		DB:       0,
 	})
-	meta.RedisTSClient = redistimeseries.NewClient(REDIS_ADDR, "client", &REDIS_PW)
+	meta.Ctx = context.Background()
+	client, err := rueidis.NewClient(
+		rueidis.ClientOption{InitAddress: []string{REDIS_ADDR}, Password: REDIS_PW})
+	if err != nil {
+		return err
+	}
+	meta.RedisTSClient = &utils.RueidisClient{
+		Client: &client,
+		Ctx:    meta.Ctx,
+	}
 	ph := builder.PythHistoryAPI{
 		BaseUrl:     config.ConfigFile.PythAPIEndpoint,
 		RedisClient: meta.RedisTSClient,
@@ -80,7 +89,6 @@ func StreamWs(config utils.PriceConfig, REDIS_ADDR string, REDIS_PW string) erro
 	slog.Info("Building price history...")
 	buildHistory(ph, config)
 
-	meta.Ctx = context.Background()
 	var ids = make([]string, len(symMap))
 	k := 0
 	for id, _ := range symMap {
@@ -154,7 +162,7 @@ func onPriceUpdate(pxResp PriceUpdateResponse, sym string, lastPx map[string]flo
 		return
 	}
 	lastPx[sym] = px
-	meta.RedisTSClient.Add(sym, pxResp.PriceFeed.Price.PublishTime*1000, px)
+	builder.AddPriceObs(meta.RedisTSClient, sym, pxResp.PriceFeed.Price.PublishTime*1000, px)
 
 	slog.Info("Received price update: " + sym + " price=" + fmt.Sprint(px) + fmt.Sprint(pxResp.PriceFeed))
 
@@ -167,7 +175,7 @@ func onPriceUpdate(pxResp PriceUpdateResponse, sym string, lastPx map[string]flo
 		pxTriang := utils.Triangulate(meta.Triangulations[tsym], lastPx)
 		lastPx[tsym] = pxTriang
 		pubMsg += ";" + tsym
-		meta.RedisTSClient.Add(tsym, pxResp.PriceFeed.Price.PublishTime*1000, pxTriang)
+		builder.AddPriceObs(meta.RedisTSClient, tsym, pxResp.PriceFeed.Price.PublishTime*1000, pxTriang)
 		slog.Info("-- triangulation price update: " + tsym + " price=" + fmt.Sprint(pxTriang))
 	}
 	// publish updates to listeners

@@ -3,30 +3,24 @@ package builder
 import (
 	"d8x-candles/src/utils"
 	"fmt"
+	"strconv"
 	"time"
 
-	redistimeseries "github.com/RedisTimeSeries/redistimeseries-go"
+	"math"
 )
 
 // Ohlc queries OHLC data from REDIS price cache, timestamps in ms
 // sym is of the form btc-usd
-func Ohlc(client *redistimeseries.Client, sym string, fromTs int64, toTs int64, resolSec uint32) ([]OhlcData, error) {
-	agg := redistimeseries.DefaultRangeOptions
-	agg.TimeBucket = int(resolSec) * 1000
+func Ohlc(client *utils.RueidisClient, sym string, fromTs int64, toTs int64, resolSec uint32) ([]OhlcData, error) {
+
+	timeBucket := int(resolSec) * 1000
 	//agg.Count = 100
 	// collect aggregations
-	aggregations := []redistimeseries.AggregationType{redistimeseries.FirstAggregation,
-		redistimeseries.MaxAggregation,
-		redistimeseries.MinAggregation,
-		redistimeseries.LastAggregation}
+	aggregations := []string{"first", "max", "min", "last"}
 
-	var redisData []*[]redistimeseries.DataPoint
-	for k := 0; k < len(aggregations); k++ {
-		agg.AggType = aggregations[k]
-		data0, err := client.Range(sym, fromTs, toTs)
-		fmt.Print(data0)
-		data, err := client.RangeWithOptions(sym, fromTs, toTs, agg)
-
+	var redisData []*[]utils.DataPoint
+	for _, a := range aggregations {
+		data, err := client.RangeAggr(sym, fromTs, toTs, int64(timeBucket), a)
 		if err != nil {
 			return []OhlcData{}, err
 		}
@@ -55,18 +49,21 @@ func ConvertTimestampToISO8601(timestampMs int64) string {
 	return iso8601
 }
 
-func AddPriceObs(client *redistimeseries.Client, sym utils.SymbolPyth, timestampMs int64, value float64) {
-	client.Add(sym.Symbol, timestampMs, value)
+func AddPriceObs(client *utils.RueidisClient, sym string, timestampMs int64, value float64) {
+	ts := strconv.FormatInt(timestampMs, 10)
+	(*client.Client).Do(client.Ctx,
+		(*client.Client).B().TsAdd().Key(sym).Timestamp(ts).Value(value).Build())
 }
 
-func CreateTimeSeries(client *redistimeseries.Client, sym utils.SymbolPyth) {
-	var keyname = sym.Symbol
-	a, haveit := client.Info(keyname)
+func CreateTimeSeries(client *utils.RueidisClient, sym string) {
+	a, haveit := (*client.Client).Do(client.Ctx, (*client.Client).B().
+		TsInfo().Key(sym).Build()).AsMap()
 	fmt.Print(a)
 	if haveit == nil {
 		// key exists, we purge the timeseries
-		client.DeleteSerie(keyname)
+		(*client.Client).Do(client.Ctx, (*client.Client).B().TsDel().
+			Key(sym).FromTimestamp(0).ToTimestamp(math.MaxInt64).Build())
 	}
 	// key does not exist, create series
-	client.CreateKeyWithOptions(keyname, redistimeseries.DefaultCreateOptions)
+	(*client.Client).Do(client.Ctx, (*client.Client).B().TsCreate().Key(sym).Build())
 }

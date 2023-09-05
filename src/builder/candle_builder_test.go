@@ -1,12 +1,13 @@
 package builder
 
 import (
+	"context"
 	"d8x-candles/src/utils"
 	"fmt"
 	"testing"
 	"time"
 
-	redistimeseries "github.com/RedisTimeSeries/redistimeseries-go"
+	"github.com/redis/rueidis"
 )
 
 func TestRetrieveCandle(t *testing.T) {
@@ -68,20 +69,26 @@ func TestConcatCandles(t *testing.T) {
 }
 
 func TestPythDataToRedisPriceObs(t *testing.T) {
-	host := "localhost:6379"
-	//password := ""
-	var client = redistimeseries.NewClient(host, "client", nil)
-	api := PythHistoryAPI{BaseUrl: "https://benchmarks.pyth.network/", RedisClient: client}
+	REDIS_ADDR := "localhost:6379"
+	REDIS_PW := "23_*PAejOanJma"
+	ctx := context.Background()
+	client, err := rueidis.NewClient(
+		rueidis.ClientOption{InitAddress: []string{REDIS_ADDR}, Password: REDIS_PW})
+	if err != nil {
+		t.Errorf("Error :%v", err)
+		return
+	}
+	redisTSClient := utils.RueidisClient{
+		Client: &client,
+		Ctx:    ctx,
+	}
+	api := PythHistoryAPI{BaseUrl: "https://benchmarks.pyth.network/", RedisClient: &redisTSClient}
 	var sym1, sym2 utils.SymbolPyth
 	sym1.New("Crypto.ETH/USD", "")
 	sym2.New("Fx.USD/CHF", "")
 	symbols := []utils.SymbolPyth{sym1, sym2}
 	api.PythDataToRedisPriceObs(symbols)
-	vlast, err := client.Get(sym1.PairString())
-	if err != nil {
-		t.Errorf("Error parsing date:%v", err)
-		return
-	}
+	vlast, _ := redisTSClient.Get(sym1.Symbol)
 	fmt.Print(vlast)
 }
 

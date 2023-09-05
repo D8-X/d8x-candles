@@ -73,10 +73,10 @@ func (p *PythHistoryAPI) PythDataToRedisPriceObs(symbols []utils.SymbolPyth) {
 }
 
 func (p *PythHistoryAPI) PricesToRedis(sym utils.SymbolPyth, obs PriceObservations) {
-	CreateTimeSeries(p.RedisClient, sym)
+	CreateTimeSeries(p.RedisClient, sym.Symbol)
 	for k := 0; k < len(obs.P); k++ {
 		// store prices in ms
-		AddPriceObs(p.RedisClient, sym, int64(obs.T[k])*1000, obs.P[k])
+		AddPriceObs(p.RedisClient, sym.Symbol, int64(obs.T[k])*1000, obs.P[k])
 	}
 }
 

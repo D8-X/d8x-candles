@@ -1,10 +1,12 @@
 package builder
 
-import redistimeseries "github.com/RedisTimeSeries/redistimeseries-go"
+import (
+	"d8x-candles/src/utils"
+)
 
 type PythHistoryAPI struct {
 	BaseUrl     string
-	RedisClient *redistimeseries.Client
+	RedisClient *utils.RueidisClient
 }
 
 type PythHistoryAPIResponse struct {

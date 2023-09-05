@@ -1,16 +1,86 @@
 package utils
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"strconv"
 	"strings"
+
+	"github.com/redis/rueidis"
 )
 
-type DataPoints struct {
-	TimestampMs []int64
-	Value       []float64
+type DataPoint struct {
+	Timestamp int64
+	Value     float64
+}
+
+type RueidisClient struct {
+	Client *rueidis.Client
+	Ctx    context.Context
+}
+
+func (r *RueidisClient) Get(key string) (DataPoint, error) {
+	vlast, err := (*r.Client).Do(r.Ctx, (*r.Client).B().TsGet().Key(key).Build()).ToArray()
+	if err != nil {
+		return DataPoint{}, err
+	}
+	ts, _ := vlast[0].AsInt64()
+	v, _ := vlast[1].AsFloat64()
+	d := DataPoint{Timestamp: ts, Value: v}
+	return d, nil
+}
+
+func (r *RueidisClient) RangeAggr(key string, fromTs int64, toTs int64, bucketDur int64, aggr string) ([]DataPoint, error) {
+	var cmd rueidis.Completed
+	switch aggr {
+	case "min":
+		cmd = (*r.Client).B().TsRange().Key(key).
+			Fromtimestamp(strconv.FormatInt(fromTs, 10)).Totimestamp(strconv.FormatInt(toTs, 10)).
+			AggregationMin().Bucketduration(bucketDur).Build()
+	case "max":
+		cmd = (*r.Client).B().TsRange().Key(key).
+			Fromtimestamp(strconv.FormatInt(fromTs, 10)).Totimestamp(strconv.FormatInt(toTs, 10)).
+			AggregationMax().Bucketduration(bucketDur).Build()
+	case "first":
+		cmd = (*r.Client).B().TsRange().Key(key).
+			Fromtimestamp(strconv.FormatInt(fromTs, 10)).Totimestamp(strconv.FormatInt(toTs, 10)).
+			AggregationFirst().Bucketduration(bucketDur).Build()
+	case "last":
+		cmd = (*r.Client).B().TsRange().Key(key).
+			Fromtimestamp(strconv.FormatInt(fromTs, 10)).Totimestamp(strconv.FormatInt(toTs, 10)).
+			AggregationFirst().Bucketduration(bucketDur).Build()
+	default:
+		return []DataPoint{}, errors.New("Invalid aggr type")
+	}
+	raw, err := (*r.Client).Do(r.Ctx, cmd).ToAny()
+	if err != nil {
+		return []DataPoint{}, err
+	}
+	data := ParseTsRange(raw)
+	return data, nil
+}
+
+func ParseTsRange(data interface{}) []DataPoint {
+	rSlice, ok := data.([]interface{})
+	if !ok {
+		return []DataPoint{}
+	}
+
+	dataPoints := make([]DataPoint, len(rSlice))
+	for k, innerSlice := range rSlice {
+		if inner, ok := innerSlice.([]interface{}); ok && len(inner) == 2 {
+			if intValue, ok := inner[0].(int64); ok {
+				dataPoints[k].Timestamp = intValue
+			}
+			if floatValue, ok := inner[1].(float64); ok {
+				dataPoints[k].Value = floatValue
+			}
+		}
+	}
+	return dataPoints
 }
 
 type SymbolPyth struct {

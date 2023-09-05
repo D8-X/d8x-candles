@@ -10,7 +10,6 @@ import (
 	"strings"
 	"sync"
 
-	redistimeseries "github.com/RedisTimeSeries/redistimeseries-go"
 	"github.com/gorilla/websocket"
 	redis "github.com/redis/go-redis/v9"
 )
@@ -25,7 +24,7 @@ type Clients map[string]*websocket.Conn
 type Server struct {
 	Subscriptions Subscriptions
 	LastCandles   map[string]*builder.OhlcData //symbol:period->OHLC
-	RedisTSClient *redistimeseries.Client
+	RedisTSClient *utils.RueidisClient
 }
 
 type ClientMessage struct {
@@ -191,7 +190,9 @@ func (s *Server) candleUpdates(symbols []string) {
 
 	var wg sync.WaitGroup
 	for _, sym := range symbols {
-		pxLast, err := s.RedisTSClient.Get(sym)
+		c := (*s.RedisTSClient)
+		pxLast, err := c.Get(sym)
+
 		if err != nil {
 			slog.Error(fmt.Sprintf("Error parsing date:%v", err))
 			return
