@@ -87,7 +87,7 @@ func StreamWs(config utils.PriceConfig, REDIS_ADDR string, REDIS_PW string) erro
 		RedisClient: meta.RedisTSClient,
 	}
 	slog.Info("Building price history...")
-	buildHistory(ph, config)
+	buildHistory(meta.RedisTSClient, config, ph)
 
 	var ids = make([]string, len(symMap))
 	k := 0
@@ -129,11 +129,6 @@ func StreamWs(config utils.PriceConfig, REDIS_ADDR string, REDIS_PW string) erro
 		switch resp["type"] {
 		case "response":
 			continue //{"type":"response","status":"success"}
-		case "ping":
-			{
-				slog.Error("ping")
-				panic("ping")
-			}
 		case "price_update":
 			break
 		default:
@@ -228,12 +223,15 @@ func Stream(baseUrl string, symMap map[string]string) error {
 }
 */
 
-func buildHistory(ph builder.PythHistoryAPI, config utils.PriceConfig) {
+func buildHistory(client *utils.RueidisClient, config utils.PriceConfig, ph builder.PythHistoryAPI) {
 	pythSyms := make([]utils.SymbolPyth, len(config.ConfigFile.PriceFeeds))
 	for k, feed := range config.ConfigFile.PriceFeeds {
 		var sym utils.SymbolPyth
 		sym.New(feed.SymbolPyth, feed.Id)
 		pythSyms[k] = sym
 	}
+	slog.Info("-- building history from Pyth candles...")
 	ph.PythDataToRedisPriceObs(pythSyms)
+	slog.Info("-- triangulating history...")
+	ph.CandlesToTriangulatedCandles(client, config)
 }

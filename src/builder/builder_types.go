@@ -37,10 +37,10 @@ type D8XCandleResponse struct {
 }
 
 type OhlcData struct {
-	StartTsMs int64   `json:"start"`
-	Time      string  `json:"time"` //e.g. "2023-07-18T15:00:00.000Z"
-	O         float64 `json:"open"`
-	H         float64 `json:"high"`
-	L         float64 `json:"low"`
-	C         float64 `json:"close"`
+	TsMs int64   `json:"start"` // start time in milliseconds
+	Time string  `json:"time"`  //e.g. "2023-07-18T15:00:00.000Z"
+	O    float64 `json:"open"`
+	H    float64 `json:"high"`
+	L    float64 `json:"low"`
+	C    float64 `json:"close"`
 }

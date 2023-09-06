@@ -2,7 +2,6 @@ package builder
 
 import (
 	"d8x-candles/src/utils"
-	"fmt"
 	"strconv"
 	"time"
 
@@ -13,14 +12,14 @@ import (
 // sym is of the form btc-usd
 func Ohlc(client *utils.RueidisClient, sym string, fromTs int64, toTs int64, resolSec uint32) ([]OhlcData, error) {
 
-	timeBucket := int(resolSec) * 1000
+	timeBucket := int64(resolSec) * 1000
 	//agg.Count = 100
 	// collect aggregations
 	aggregations := []string{"first", "max", "min", "last"}
 
 	var redisData []*[]utils.DataPoint
 	for _, a := range aggregations {
-		data, err := client.RangeAggr(sym, fromTs, toTs, int64(timeBucket), a)
+		data, err := client.RangeAggr(sym, fromTs, toTs, timeBucket, a)
 		if err != nil {
 			return []OhlcData{}, err
 		}
@@ -29,15 +28,30 @@ func Ohlc(client *utils.RueidisClient, sym string, fromTs int64, toTs int64, res
 
 	// store in candle format
 	var ohlc []OhlcData
-	// start at one because redis aggregation set 0 for open
-	for k := 1; k < len(*redisData[0]); k++ {
+	var tOld int64 = 0
+	for k := 0; k < len(*redisData[0]); k++ {
 		var data OhlcData
-		data.StartTsMs = (*redisData[0])[k].Timestamp
-		data.Time = ConvertTimestampToISO8601(data.StartTsMs)
+		data.TsMs = (*redisData[0])[k].Timestamp
+		data.Time = ConvertTimestampToISO8601(data.TsMs)
 		data.O = (*redisData[0])[k].Value
 		data.H = (*redisData[1])[k].Value
 		data.L = (*redisData[2])[k].Value
 		data.C = (*redisData[3])[k].Value
+
+		// insert artificial data for gaps before adding 'data'
+		numGaps := (data.TsMs - tOld) / timeBucket
+		for j := 0; j < int(numGaps)-1 && k > 0; j++ {
+			var dataGap OhlcData
+			dataGap.TsMs = data.TsMs + int64(j)*timeBucket
+			dataGap.Time = ConvertTimestampToISO8601(dataGap.TsMs)
+			// set all data to close of previous OHLC observation
+			dataGap.O = (*redisData[3])[k].Value
+			dataGap.H = (*redisData[3])[k].Value
+			dataGap.L = (*redisData[3])[k].Value
+			dataGap.C = (*redisData[3])[k].Value
+			ohlc = append(ohlc, dataGap)
+		}
+		tOld = data.TsMs
 		ohlc = append(ohlc, data)
 	}
 	return ohlc, nil
@@ -56,10 +70,9 @@ func AddPriceObs(client *utils.RueidisClient, sym string, timestampMs int64, val
 }
 
 func CreateTimeSeries(client *utils.RueidisClient, sym string) {
-	a, haveit := (*client.Client).Do(client.Ctx, (*client.Client).B().
+	_, err := (*client.Client).Do(client.Ctx, (*client.Client).B().
 		TsInfo().Key(sym).Build()).AsMap()
-	fmt.Print(a)
-	if haveit == nil {
+	if err == nil {
 		// key exists, we purge the timeseries
 		(*client.Client).Do(client.Ctx, (*client.Client).B().TsDel().
 			Key(sym).FromTimestamp(0).ToTimestamp(math.MaxInt64).Build())

@@ -204,14 +204,14 @@ func (s *Server) candleUpdates(symbols []string) {
 				s.LastCandles[key] = &builder.OhlcData{}
 				lastCandle = s.LastCandles[key]
 			}
-			if pxLast.Timestamp > lastCandle.StartTsMs+int64(prd.TimeMs) {
+			if pxLast.Timestamp > lastCandle.TsMs+int64(prd.TimeMs) {
 				// new candle
 				lastCandle.O = pxLast.Value
 				lastCandle.H = pxLast.Value
 				lastCandle.L = pxLast.Value
 				lastCandle.C = pxLast.Value
 				nextTs := (pxLast.Timestamp / int64(prd.TimeMs)) * int64(prd.TimeMs)
-				lastCandle.StartTsMs = nextTs
+				lastCandle.TsMs = nextTs
 				lastCandle.Time = builder.ConvertTimestampToISO8601(nextTs)
 			} else {
 				// update existing candle

@@ -73,3 +73,41 @@ func TestRueidis(t *testing.T) {
 	fmt.Print(dp2[0])
 	client.Close()
 }
+
+func TestRedisAggr(t *testing.T) {
+	client, err := rueidis.NewClient(
+		rueidis.ClientOption{InitAddress: []string{"127.0.0.1:6379"}, Password: "23_*PAejOanJma"})
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	ctx := context.Background()
+	rc := utils.RueidisClient{Client: &client, Ctx: ctx}
+	sym := "rds-tst"
+	for k := 0; k < 50; k++ {
+		var timestampMs int64 = 1 + int64(k)*1000
+		AddPriceObs(&rc, sym, timestampMs, float64(k))
+	}
+	obs, err := rc.RangeAggr(sym, 0, 50000, 0, "")
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	fmt.Println(obs)
+	var bucket int64 = 10000
+	aF, err := rc.RangeAggr(sym, 0, 50000, bucket, "first")
+	aL, err := rc.RangeAggr(sym, 0, 50000, bucket, "last")
+	// 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, ...
+	// bucket size 10 will take 10 elements and each of it counts for
+	// the aggregation, next bucket is non-overlapping
+	// aggregation considers the first timestamp
+	// => timestamp...timestamp+bucketSize-1 is the range
+	if aF[0].Value != float64(0) {
+		t.Errorf("want 1, got %f", aF[0].Value)
+	}
+	// aggregation is exclusive of the last
+	if aL[0].Value != float64(9) {
+		t.Errorf("want 9, got %f", aL[0].Value)
+	}
+
+}

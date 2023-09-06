@@ -3,8 +3,10 @@ package builder
 import (
 	"d8x-candles/src/utils"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
+	"math/rand"
 	"net/http"
 	"strconv"
 	"strings"
@@ -59,12 +61,24 @@ func (p *PythHistoryAPI) PythDataToRedisPriceObs(symbols []utils.SymbolPyth) {
 		wg.Add(1)
 		go func(sym utils.SymbolPyth) {
 			defer wg.Done()
-			o, err := p.ConstructPriceObsFromPythCandles(sym)
-			if err != nil {
-				slog.Error("error for " + sym.ToString() + ":" + err.Error())
-				return
+			trial := 0
+			var err error
+			var o PriceObservations
+			for {
+				o, err = p.ConstructPriceObsFromPythCandles(sym)
+				if err == nil {
+					break
+				}
+				if trial < 10 {
+					slog.Info("pyth query failed for " + sym.ToString() + ":" + err.Error() + ". Retrying.")
+					time.Sleep(time.Duration(rand.Intn(250)+50) * time.Millisecond)
+				} else {
+					slog.Error("pyth query failed for " + sym.ToString() + ":" + err.Error())
+					return
+				}
+				trial++
 			}
-			p.PricesToRedis(sym, o)
+			p.PricesToRedis(sym.Symbol, o)
 			slog.Info("Processed history for " + sym.ToString())
 		}(sym)
 	}
@@ -72,11 +86,33 @@ func (p *PythHistoryAPI) PythDataToRedisPriceObs(symbols []utils.SymbolPyth) {
 	slog.Info("History of Pyth sources complete")
 }
 
-func (p *PythHistoryAPI) PricesToRedis(sym utils.SymbolPyth, obs PriceObservations) {
-	CreateTimeSeries(p.RedisClient, sym.Symbol)
+// symbols of the form eth-usd
+func (p *PythHistoryAPI) CandlesToTriangulatedCandles(client *utils.RueidisClient, config utils.PriceConfig) {
+	//var wg sync.WaitGroup
+
+	for sym, path := range config.SymToTriangPath {
+		//wg.Add(1)
+		//go func(sym string, path []string) {
+		//	defer wg.Done()
+		o, err := p.ConstructPriceObsForTriang(client, sym, path)
+		if err != nil {
+			slog.Error("error for triangulation " + sym + ":" + err.Error())
+			return
+		}
+		p.PricesToRedis(sym, o)
+		slog.Info("Processed history for " + sym)
+		//}(sym, path)
+	}
+	//wg.Wait()
+	slog.Info("History of Pyth sources complete")
+}
+
+// sym of the form eth-usd
+func (p *PythHistoryAPI) PricesToRedis(sym string, obs PriceObservations) {
+	CreateTimeSeries(p.RedisClient, sym)
 	for k := 0; k < len(obs.P); k++ {
 		// store prices in ms
-		AddPriceObs(p.RedisClient, sym.Symbol, int64(obs.T[k])*1000, obs.P[k])
+		AddPriceObs(p.RedisClient, sym, int64(obs.T[k])*1000, obs.P[k])
 	}
 }
 
@@ -85,31 +121,127 @@ func (p *PythHistoryAPI) PricesToRedis(sym utils.SymbolPyth, obs PriceObservatio
 func (p *PythHistoryAPI) ConstructPriceObsFromPythCandles(sym utils.SymbolPyth) (PriceObservations, error) {
 	var candleRes utils.PythCandleResolution
 	candleRes.New(1, utils.MinuteCandle)
-	currentTime := uint32(time.Now().Unix())
-	oneDayResolutionMinute, err := p.RetrieveCandlesFromPyth(sym, candleRes, currentTime-86400, currentTime)
+	currentTimeSec := uint32(time.Now().UTC().Unix())
+	oneDayResolutionMinute, err := p.RetrieveCandlesFromPyth(sym, candleRes, currentTimeSec-86400, currentTimeSec)
 	if err != nil {
 		return PriceObservations{}, err
 	}
 	candleRes.New(5, utils.MinuteCandle)
-	twoDayResolution5Minute, err := p.RetrieveCandlesFromPyth(sym, candleRes, currentTime-86400*2, currentTime)
+	twoDayResolution5Minute, err := p.RetrieveCandlesFromPyth(sym, candleRes, currentTimeSec-86400*2, currentTimeSec)
 	if err != nil {
 		return PriceObservations{}, err
 	}
 	candleRes.New(60, utils.MinuteCandle)
-	oneMonthResolution1h, err := p.RetrieveCandlesFromPyth(sym, candleRes, currentTime-86400*2, currentTime)
+	oneMonthResolution1h, err := p.RetrieveCandlesFromPyth(sym, candleRes, currentTimeSec-86400*30, currentTimeSec)
 	if err != nil {
 		return PriceObservations{}, err
 	}
 	candleRes.New(1, utils.DayCandle)
 	// jan1 2022: 1640995200
-	allTimeResolution1D, err := p.RetrieveCandlesFromPyth(sym, candleRes, 1640995200, currentTime)
+	allTimeResolution1D, err := p.RetrieveCandlesFromPyth(sym, candleRes, 1640995200, currentTimeSec)
 	if err != nil {
 		return PriceObservations{}, err
 	}
 	var candles = []PythHistoryAPIResponse{oneDayResolutionMinute, twoDayResolution5Minute, oneMonthResolution1h, allTimeResolution1D}
 	// concatenate candles into price observations
 	var obs PriceObservations
-	obs, err = CandlesToPriceObs(candles)
-
+	obs, err = PythCandlesToPriceObs(candles)
+	if err != nil {
+		return PriceObservations{}, err
+	}
 	return obs, nil
+}
+
+// Construct price observations for triangulated currencies
+// symT is of the form btc-usd, path the result of config.SymToTriangPath[symT]
+func (p *PythHistoryAPI) ConstructPriceObsForTriang(client *utils.RueidisClient, symT string, path []string) (PriceObservations, error) {
+	currentTimeSec := uint32(time.Now().UTC().Unix())
+	// find starting time
+	var timeStart, timeEnd int64 = 0, int64(currentTimeSec) * 1000
+	for k := 1; k < len(path); k = k + 2 {
+		sym := path[k]
+		info, err := (*client.Client).Do(client.Ctx, (*client.Client).B().
+			TsInfo().Key(sym).Build()).AsMap()
+
+		if err != nil {
+			// key does not exist
+			return PriceObservations{}, errors.New("symbol not in REDIS" + sym)
+		}
+		first := info["firstTimestamp"]
+		last := info["lastTimestamp"]
+		fromTsMs, _ := (&first).AsInt64()
+		toTsMs, _ := (&last).AsInt64()
+		if fromTsMs > timeStart {
+			timeStart = fromTsMs
+		}
+		if timeEnd > toTsMs {
+			timeEnd = toTsMs
+		}
+	}
+	// candles
+
+	oneDayResolutionMinute, err := p.triangulateCandles(client, path, timeEnd-86400000, timeEnd, 60)
+	if err != nil {
+		slog.Error("1min resolution triangulation error " + err.Error())
+	}
+	twoDayResolution5Minute, err := p.triangulateCandles(client, path, timeEnd-86400000*2, timeEnd-86400000, 5*60)
+	if err != nil {
+		slog.Error("5min resolution triangulation error " + err.Error())
+	}
+	oneMonthResolution1h, err := p.triangulateCandles(client, path, timeEnd-86400000*30, timeEnd-86400000*2, 60*60)
+	if err != nil {
+		slog.Error("1h resolution triangulation error " + err.Error())
+	}
+	allTimeResolution1D, err := p.triangulateCandles(client, path, timeStart, timeEnd-86400000*30, 24*60*60)
+	if err != nil {
+		slog.Error("1day resolution triangulation error " + err.Error())
+	}
+	var candles = [][]OhlcData{oneDayResolutionMinute, twoDayResolution5Minute, oneMonthResolution1h, allTimeResolution1D}
+	var obs PriceObservations
+	obs, err = OhlcCandlesToPriceObs(candles)
+	if err != nil {
+		return PriceObservations{}, err
+	}
+	return obs, nil
+}
+
+func (p *PythHistoryAPI) triangulateCandles(client *utils.RueidisClient, path []string, fromTsMs int64, toTsMs int64, resolSec uint32) ([]OhlcData, error) {
+	var ohlcPath []*[]OhlcData
+	for k := 1; k < len(path); k = k + 2 {
+		ohlc, err := Ohlc(client, path[k], fromTsMs, toTsMs, resolSec)
+		if err != nil {
+			return nil, errors.New("ohlc not available for " + path[k])
+		}
+		ohlcPath = append(ohlcPath, &ohlc)
+	}
+	T := len(*ohlcPath[0])
+	ohlcRes := *ohlcPath[0]
+	if path[0] == "/" {
+		for t := 0; t < T; t++ {
+			ohlcRes[t].O = 1 / ohlcRes[t].O
+			ohlcRes[t].C = 1 / ohlcRes[t].C
+			ohlcRes[t].H = 1 / ohlcRes[t].L
+			ohlcRes[t].L = 1 / ohlcRes[t].H
+		}
+	}
+	for k := 3; k < len(path); k = k + 2 {
+		j := k / 2
+
+		if path[k-1] == "*" {
+			for t := 0; t < T; t++ {
+				ohlcRes[t].O = ohlcRes[t].O * (*ohlcPath[j])[t].O
+				ohlcRes[t].C = ohlcRes[t].C * (*ohlcPath[j])[t].C
+				ohlcRes[t].H = ohlcRes[t].H * (*ohlcPath[j])[t].H
+				ohlcRes[t].L = ohlcRes[t].L * (*ohlcPath[j])[t].L
+			}
+		} else if path[k-1] == "/" {
+			for t := 0; t < T; t++ {
+				ohlcRes[t].O = ohlcRes[t].O / (*ohlcPath[j])[t].O
+				ohlcRes[t].C = ohlcRes[t].C / (*ohlcPath[j])[t].C
+				ohlcRes[t].H = ohlcRes[t].H / (*ohlcPath[j])[t].L
+				ohlcRes[t].L = ohlcRes[t].L / (*ohlcPath[j])[t].H
+			}
+		}
+	}
+	return ohlcRes, nil
 }

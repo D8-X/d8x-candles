@@ -60,7 +60,7 @@ func TestConcatCandles(t *testing.T) {
 		return
 	}
 	var candles = []PythHistoryAPIResponse{candles1min, candles1h}
-	p, err := CandlesToPriceObs(candles)
+	p, err := PythCandlesToPriceObs(candles)
 	if err != nil {
 		t.Errorf("Error parsing date:%v", err)
 		return

@@ -51,7 +51,11 @@ func (r *RueidisClient) RangeAggr(key string, fromTs int64, toTs int64, bucketDu
 	case "last":
 		cmd = (*r.Client).B().TsRange().Key(key).
 			Fromtimestamp(strconv.FormatInt(fromTs, 10)).Totimestamp(strconv.FormatInt(toTs, 10)).
-			AggregationFirst().Bucketduration(bucketDur).Build()
+			AggregationLast().Bucketduration(bucketDur).Build()
+	case "": //no aggregation
+		cmd = (*r.Client).B().TsRange().Key(key).
+			Fromtimestamp(strconv.FormatInt(fromTs, 10)).Totimestamp(strconv.FormatInt(toTs, 10)).
+			Build()
 	default:
 		return []DataPoint{}, errors.New("Invalid aggr type")
 	}
