@@ -208,7 +208,8 @@ type ConfigFile struct {
 	PriceFeeds          []struct {
 		Symbol     string `json:"symbol"`
 		SymbolPyth string `json:"symbolPyth"`
-		Id         string `json:"id"`
+		IdVaa      string `json:"idVaa"` // id used for vaa (testnet or mainnet)
+		Id         string `json:"id"`    // id used for benchmarks/price_feeds-endpoint (mainnet)
 	} `json:"priceFeeds"`
 	Triangulations []struct {
 		Target string   `json:"target"`
@@ -241,7 +242,7 @@ func (c *PriceConfig) LoadPriceConfig(fileName string) error {
 func (c *PriceConfig) extractPythIdToSymbolMap() {
 	m := make(map[string]string, len(c.ConfigFile.PriceFeeds))
 	for _, el := range c.ConfigFile.PriceFeeds {
-		idTrim, _ := strings.CutPrefix(el.Id, "0x")
+		idTrim, _ := strings.CutPrefix(el.IdVaa, "0x")
 		m[idTrim] = el.Symbol
 	}
 	c.PythIdToSym = m

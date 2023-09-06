@@ -69,6 +69,17 @@ func TestConcatCandles(t *testing.T) {
 }
 
 func TestPythDataToRedisPriceObs(t *testing.T) {
+	api := createHistApi(t)
+	var sym1, sym2 utils.SymbolPyth
+	sym1.New("Crypto.ETH/USD", "")
+	sym2.New("Fx.USD/CHF", "")
+	symbols := []utils.SymbolPyth{sym1, sym2}
+	api.PythDataToRedisPriceObs(symbols)
+	vlast, _ := api.RedisClient.Get(sym1.Symbol)
+	fmt.Print(vlast)
+}
+
+func createHistApi(t *testing.T) PythHistoryAPI {
 	REDIS_ADDR := "localhost:6379"
 	REDIS_PW := "23_*PAejOanJma"
 	ctx := context.Background()
@@ -76,20 +87,21 @@ func TestPythDataToRedisPriceObs(t *testing.T) {
 		rueidis.ClientOption{InitAddress: []string{REDIS_ADDR}, Password: REDIS_PW})
 	if err != nil {
 		t.Errorf("Error :%v", err)
-		return
+		return PythHistoryAPI{}
 	}
 	redisTSClient := utils.RueidisClient{
 		Client: &client,
 		Ctx:    ctx,
 	}
-	api := PythHistoryAPI{BaseUrl: "https://benchmarks.pyth.network/", RedisClient: &redisTSClient}
-	var sym1, sym2 utils.SymbolPyth
-	sym1.New("Crypto.ETH/USD", "")
-	sym2.New("Fx.USD/CHF", "")
-	symbols := []utils.SymbolPyth{sym1, sym2}
-	api.PythDataToRedisPriceObs(symbols)
-	vlast, _ := redisTSClient.Get(sym1.Symbol)
-	fmt.Print(vlast)
+	capacity := 30
+	refillRate := 3.0 // 3 tokens per second
+	tb := NewTokenBucket(capacity, refillRate)
+	api := PythHistoryAPI{
+		BaseUrl:     "https://benchmarks.pyth.network/",
+		RedisClient: &redisTSClient,
+		TokenBucket: tb,
+	}
+	return api
 }
 
 func timestampFromTimeString(timestr string) (uint32, error) {
@@ -99,4 +111,15 @@ func timestampFromTimeString(timestr string) (uint32, error) {
 		return 0, fmt.Errorf("Error parsing date: %v", err)
 	}
 	return uint32(ts.UTC().Unix()), nil
+}
+
+func TestQueryPriceFeedInfo(t *testing.T) {
+	api := createHistApi(t)
+	api.QueryPriceFeedInfo("eth-usd", "0xff61491a931112ddf1bd8147cd1b641375f79f5825126d665480874634fd0ace")
+	r, err := api.GetMarketHours("eth-usd")
+	if err != nil {
+		t.Errorf("Error parsing date:%v", err)
+		return
+	}
+	fmt.Print(r)
 }

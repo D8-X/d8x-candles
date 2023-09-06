@@ -146,4 +146,36 @@ A client request of the form `{"type": "ping"}` is responded with
 ```
 docker run -d --name redis-stack -p 6379:6379 -e REDIS_ARGS="--requirepass yourpwd" redis/redis-stack-server:latest
 ```
-## Functional Documentation
+## Developer Comments
+
+###REDIS
+
+**pub/sub:**
+
+| **Pub/Sub Channel** | **Message Example** |
+|---------------------|---------------------|
+| px_update           | btc-usdc;btc-usd    |
+
+Price observations are stored using the symbol of the format btc-usd as
+key. Prices for triangulated series are also stored in this format.
+
+**hset:**
+
+```
+hgetall btc-usd:mkt_hours 
+1) "is_open"
+2) "true"
+3) "nxt_open"
+4) "null"
+5) "nxt_close"
+6) "null"
+```
+```
+hgetall xau-usd:mkt_hours
+1) "is_open"
+2) "true"
+3) "nxt_open"
+4) "1694379600"
+5) "nxt_close"
+6) "1694206800"
+```

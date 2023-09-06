@@ -231,7 +231,7 @@ func buildHistory(client *utils.RueidisClient, config utils.PriceConfig, ph buil
 	pythSyms := make([]utils.SymbolPyth, len(config.ConfigFile.PriceFeeds))
 	for k, feed := range config.ConfigFile.PriceFeeds {
 		var sym utils.SymbolPyth
-		sym.New(feed.SymbolPyth, feed.Id)
+		sym.New(feed.SymbolPyth, feed.IdVaa)
 		pythSyms[k] = sym
 	}
 	slog.Info("-- building history from Pyth candles...")
