@@ -123,3 +123,14 @@ func TestQueryPriceFeedInfo(t *testing.T) {
 	}
 	fmt.Print(r)
 }
+
+func TestBuildPriceFeedInfo(t *testing.T) {
+	var c utils.PriceConfig
+	err := c.LoadPriceConfig("../../config/live.config.json")
+	if err != nil {
+		t.Errorf("Error:%v", err)
+		return
+	}
+	api := createHistApi(t)
+	api.BuildPriceFeedInfo(&c)
+}

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"math"
 	"math/rand"
 	"net/http"
 	"strconv"
@@ -29,9 +30,68 @@ func (p *PythHistoryAPI) BuildPriceFeedInfo(config *utils.PriceConfig) {
 	f := config.ConfigFile.PriceFeeds
 	for k := 0; k < len(f); k++ {
 		sym := f[k].Symbol
+		asset := strings.ToLower(strings.Split(f[k].SymbolPyth, ".")[0])
+		if asset == "crypto" {
+			// crypto markets are always open, huray
+			p.setMarketHours(sym, MarketHours{true, nil, nil})
+			continue
+		}
 		id := f[k].Id
 		p.QueryPriceFeedInfo(sym, id)
 	}
+	// construct info for triangulated price feeds, e.g. chf-usdc
+	p.buildTriangulatedFeedsInfo(config)
+}
+
+func (p *PythHistoryAPI) buildTriangulatedFeedsInfo(config *utils.PriceConfig) {
+	paths := config.SymToTriangPath
+outerLoop:
+	for symT, path := range paths {
+		isOpen := true
+		var nxtOpen, nxtClose int64 = 0, math.MaxInt64
+		for k := 1; k < len(path); k += 2 {
+			mh, err := p.GetMarketHours(path[k])
+			if err != nil {
+				slog.Error("Error triangulated feeds info " + symT + " at " + path[k])
+				continue outerLoop
+			}
+			isOpen = isOpen && mh.IsOpen
+			if mh.NextOpen != nil {
+				if *mh.NextOpen > nxtOpen {
+					nxtOpen = *mh.NextOpen
+				}
+			}
+			if mh.NextClose != nil {
+				if *mh.NextClose < nxtClose {
+					nxtClose = *mh.NextClose
+				}
+			}
+		}
+		if nxtOpen == 0 {
+			p.setMarketHours(symT, MarketHours{
+				IsOpen:    isOpen,
+				NextOpen:  nil,
+				NextClose: nil})
+			continue
+		}
+		p.setMarketHours(symT, MarketHours{
+			IsOpen:    isOpen,
+			NextOpen:  &nxtOpen,
+			NextClose: &nxtClose})
+	}
+}
+
+func nilMax(a *int64, b *int64) int64 {
+	if a == nil {
+		return *b
+	}
+	if b == nil {
+		return *a
+	}
+	if *a > *b {
+		return *a
+	}
+	return *b
 }
 
 func (p *PythHistoryAPI) QueryPriceFeedInfo(sym string, id string) {
@@ -104,6 +164,19 @@ func (p *PythHistoryAPI) GetMarketHours(ticker string) (MarketHours, error) {
 	isOpen, _ := strconv.ParseBool(hm["is_open"])
 	nxtOpen, _ := strconv.ParseInt(hm["nxt_open"], 10, 64)
 	nxtClose, _ := strconv.ParseInt(hm["nxt_open"], 10, 64)
+
+	if nxtOpen == 0 {
+		var mh = MarketHours{
+			IsOpen:    isOpen,
+			NextOpen:  nil,
+			NextClose: nil,
+		}
+		return mh, nil
+	}
+	// determine market open/close based on current timestamp and
+	// next close ts (can be outdated as long as not outdated for more than
+	// closing period)
+	isOpen = time.Now().UTC().Unix() < nxtClose
 	var mh = MarketHours{
 		IsOpen:    isOpen,
 		NextOpen:  &nxtOpen,
