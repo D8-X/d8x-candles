@@ -88,22 +88,22 @@ func (p *PythHistoryAPI) PythDataToRedisPriceObs(symbols []utils.SymbolPyth) {
 
 // symbols of the form eth-usd
 func (p *PythHistoryAPI) CandlesToTriangulatedCandles(client *utils.RueidisClient, config utils.PriceConfig) {
-	//var wg sync.WaitGroup
+	var wg sync.WaitGroup
 
 	for sym, path := range config.SymToTriangPath {
-		//wg.Add(1)
-		//go func(sym string, path []string) {
-		//	defer wg.Done()
-		o, err := p.ConstructPriceObsForTriang(client, sym, path)
-		if err != nil {
-			slog.Error("error for triangulation " + sym + ":" + err.Error())
-			return
-		}
-		p.PricesToRedis(sym, o)
-		slog.Info("Processed history for " + sym)
-		//}(sym, path)
+		wg.Add(1)
+		go func(sym string, path []string) {
+			defer wg.Done()
+			o, err := p.ConstructPriceObsForTriang(client, sym, path)
+			if err != nil {
+				slog.Error("error for triangulation " + sym + ":" + err.Error())
+				return
+			}
+			p.PricesToRedis(sym, o)
+			slog.Info("Processed history for " + sym)
+		}(sym, path)
 	}
-	//wg.Wait()
+	wg.Wait()
 	slog.Info("History of Pyth sources complete")
 }
 
