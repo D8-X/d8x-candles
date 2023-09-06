@@ -82,9 +82,13 @@ func StreamWs(config utils.PriceConfig, REDIS_ADDR string, REDIS_PW string) erro
 		Client: &client,
 		Ctx:    meta.Ctx,
 	}
+	capacity := 30
+	refillRate := 3.0 // 3 tokens per second
+	tb := builder.NewTokenBucket(capacity, refillRate)
 	ph := builder.PythHistoryAPI{
 		BaseUrl:     config.ConfigFile.PythAPIEndpoint,
 		RedisClient: meta.RedisTSClient,
+		TokenBucket: tb,
 	}
 	slog.Info("Building price history...")
 	buildHistory(meta.RedisTSClient, config, ph)

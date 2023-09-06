@@ -7,6 +7,7 @@ import (
 type PythHistoryAPI struct {
 	BaseUrl     string
 	RedisClient *utils.RueidisClient
+	TokenBucket *TokenBucket
 }
 
 type PythHistoryAPIResponse struct {

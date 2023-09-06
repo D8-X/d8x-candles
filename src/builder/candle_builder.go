@@ -32,10 +32,20 @@ func (p *PythHistoryAPI) RetrieveCandlesFromPyth(sym utils.SymbolPyth, candleRes
 
 	url := strings.TrimSuffix(p.BaseUrl, "/") + endpoint + query
 	// Send a GET request
-	response, err := http.Get(url)
-	if err != nil {
-		return PythHistoryAPIResponse{}, fmt.Errorf("Error making GET request: %v", err)
+	var response *http.Response
+	var err error
+	for {
+		if p.TokenBucket.Take() {
+			response, err = http.Get(url)
+			if err != nil {
+				return PythHistoryAPIResponse{}, fmt.Errorf("Error making GET request: %v", err)
+			}
+			break
+		}
+		slog.Info("too many requests, slowing down for " + sym.Symbol)
+		time.Sleep(time.Duration(rand.Intn(25)) * time.Millisecond)
 	}
+
 	defer response.Body.Close()
 
 	// Check response status code
