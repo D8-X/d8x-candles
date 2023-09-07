@@ -132,5 +132,11 @@ func TestBuildPriceFeedInfo(t *testing.T) {
 		return
 	}
 	api := createHistApi(t)
-	api.BuildPriceFeedInfo(&c)
+	api.FetchMktHours(&c)
+	a, err := api.GetMarketHours("btc-usd")
+	fmt.Print(a)
+	a, err = api.GetMarketHours("bs-ws")
+	if err != nil {
+		fmt.Print("intended error" + err.Error())
+	}
 }

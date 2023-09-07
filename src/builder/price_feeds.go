@@ -3,6 +3,7 @@ package builder
 import (
 	"d8x-candles/src/utils"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"math"
@@ -25,7 +26,10 @@ type PriceFeedApiResponse struct {
 	Attributes  map[string]string `json:"attributes"`
 }
 
-func (p *PythHistoryAPI) BuildPriceFeedInfo(config *utils.PriceConfig) {
+// Goes through all symbols in the config files, including triangulated ones,
+// and fetches market hours (next open, next close). Stores in
+// Redis
+func (p *PythHistoryAPI) FetchMktHours(config *utils.PriceConfig) {
 	// process base price feeds (no triangulation)
 	f := config.ConfigFile.PriceFeeds
 	for k := 0; k < len(f); k++ {
@@ -40,10 +44,10 @@ func (p *PythHistoryAPI) BuildPriceFeedInfo(config *utils.PriceConfig) {
 		p.QueryPriceFeedInfo(sym, id)
 	}
 	// construct info for triangulated price feeds, e.g. chf-usdc
-	p.buildTriangulatedFeedsInfo(config)
+	p.fetchTriangulatedMktHours(config)
 }
 
-func (p *PythHistoryAPI) buildTriangulatedFeedsInfo(config *utils.PriceConfig) {
+func (p *PythHistoryAPI) fetchTriangulatedMktHours(config *utils.PriceConfig) {
 	paths := config.SymToTriangPath
 outerLoop:
 	for symT, path := range paths {
@@ -160,6 +164,9 @@ func (p *PythHistoryAPI) GetMarketHours(ticker string) (MarketHours, error) {
 	hm, err := c.Do(p.RedisClient.Ctx, c.B().Hgetall().Key(ticker+":mkt_hours").Build()).AsStrMap()
 	if err != nil {
 		return MarketHours{}, err
+	}
+	if len(hm) == 0 {
+		return MarketHours{}, errors.New("ticker not found")
 	}
 	isOpen, _ := strconv.ParseBool(hm["is_open"])
 	nxtOpen, _ := strconv.ParseInt(hm["nxt_open"], 10, 64)
