@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/gorilla/websocket"
 	"github.com/redis/go-redis/v9"
@@ -92,6 +93,7 @@ func StreamWs(config utils.PriceConfig, REDIS_ADDR string, REDIS_PW string) erro
 	}
 	slog.Info("Building price history...")
 	buildHistory(meta.RedisTSClient, config, ph)
+	go ph.ScheduleMktHoursUpdate(&config, 3*time.Minute)
 
 	var ids = make([]string, len(symMap))
 	k := 0

@@ -26,6 +26,20 @@ type PriceFeedApiResponse struct {
 	Attributes  map[string]string `json:"attributes"`
 }
 
+// Runs FetchMktHours and schedules next runs
+func (p *PythHistoryAPI) ScheduleMktHoursUpdate(config *utils.PriceConfig, updtInterval time.Duration) {
+	p.FetchMktHours(config)
+	tickerUpdate := time.NewTicker(updtInterval)
+	for {
+		select {
+		case <-tickerUpdate.C:
+			slog.Info("Updating market hours...")
+			p.FetchMktHours(config)
+			fmt.Println("Market hours data updated.")
+		}
+	}
+}
+
 // Goes through all symbols in the config files, including triangulated ones,
 // and fetches market hours (next open, next close). Stores in
 // Redis
