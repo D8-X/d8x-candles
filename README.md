@@ -128,13 +128,21 @@ to get a response like
 {
   "topic": "markets",
   "data": [{
-    "symbol": "btc-usd",
-    "24hpct": "20.02",
-    "current": "30715.33957029727",
+    "symbol": "xau-usd",
+    "assetType": "metal",
+    "ret24hPerc": "-1.02",
+    "currentPx": "1715.33",
+    "isOpen": true,
+    "nextOpen": 1694379600,
+    "nextClose": 1694206800
   }, {
-    "symbol": "eth-usd",
-    "24hpct": "00.01",
-    "current": "1715.33957029727",
+     "symbol": "btc-usd",
+     "assetType": "crypto",
+    "ret24hPerc": "20.02",
+    "currentPx": "24715.33957029727",
+    "isOpen": true,
+    "nextOpen": null,
+    "nextClose": null
   }, ...]
 }
 ```
@@ -162,7 +170,7 @@ key. Prices for triangulated series are also stored in this format.
 **hset:**
 
 ```
-hgetall btc-usd:mkt_hours 
+hgetall btc-usd:mkt_info 
 1) "is_open"
 2) "true"
 3) "nxt_open"
@@ -171,7 +179,7 @@ hgetall btc-usd:mkt_hours
 6) "null"
 ```
 ```
-hgetall xau-usd:mkt_hours
+hgetall xau-usd:mkt_info
 1) "is_open"
 2) "true"
 3) "nxt_open"

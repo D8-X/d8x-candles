@@ -1,6 +1,7 @@
 package wscandle
 
 import (
+	"context"
 	"d8x-candles/src/builder"
 	"d8x-candles/src/utils"
 	"encoding/json"
@@ -42,6 +43,16 @@ type ErrorResponse struct {
 	Error string `json:"error"`
 }
 
+type MarketResponse struct {
+	Sym           string  `json:"symbol"`
+	AssetType     string  `json:"assetType"`
+	Ret24hPerc    float64 `json:"ret24hPerc"`
+	CurrentPx     float64 `json:"currentPx"`
+	IsOpen        bool    `json:"isOpen"`
+	NxtOpenTsSec  int64   `json:"nextOpen"`
+	NxtCloseTsSec int64   `json:"nextClose"`
+}
+
 // Send simply sends message to the websocket client
 func (s *Server) Send(conn *websocket.Conn, message []byte) {
 	// send simple message
@@ -66,6 +77,7 @@ func (s *Server) RemoveClient(clientID string) {
 	}
 }
 
+// Process incoming websocket message
 // https://github.com/madeindra/golang-websocket/
 func (s *Server) HandleRequest(conn *websocket.Conn, config utils.PriceConfig, clientID string, message []byte) {
 	slog.Info("recv: " + fmt.Sprint(message))
@@ -95,6 +107,7 @@ func (s *Server) HandleRequest(conn *websocket.Conn, config utils.PriceConfig, c
 	}
 }
 
+// Unsubscribe the client from a candle-topic (e.g. btc-usd:15m)
 func (s *Server) UnsubscribeCandles(clientID string, topic string) {
 	// if topic exists, check the client map
 	if _, exist := s.Subscriptions[topic]; exist {
@@ -104,6 +117,7 @@ func (s *Server) UnsubscribeCandles(clientID string, topic string) {
 	}
 }
 
+// Subscribe the client to market updates (markets)
 func (s *Server) SubscribeMarkets(conn *websocket.Conn, clientID string) []byte {
 	client := s.Subscriptions["markets"]
 	// if client already subbed, stop the process
@@ -115,6 +129,18 @@ func (s *Server) SubscribeMarkets(conn *websocket.Conn, clientID string) []byte 
 	return []byte{}
 }
 
+// form response for markets subscription
+func (s *Server) marketResponse(sym string) []byte {
+	//nowUTCms := time.Now().UTC().UnixNano() / int64(time.Millisecond)
+
+	return []byte{}
+}
+
+func (s *Server) marketForSym(sym string, anchorTime24hMs int64) MarketResponse {
+	return MarketResponse{}
+}
+
+// Subscribe the client to a candle-topic (e.g. btc-usd:15m)
 func (s *Server) SubscribeCandles(conn *websocket.Conn, clientID string, topic string, config utils.PriceConfig) []byte {
 	sym, period, isFound := strings.Cut(topic, ":")
 	if !isFound {
@@ -151,6 +177,7 @@ func (s *Server) SubscribeCandles(conn *websocket.Conn, clientID string, topic s
 	return s.candleResponse(sym, p)
 }
 
+// form initial response for candle subscription (e.g., eth-usd:5m)
 func (s *Server) candleResponse(sym string, p utils.CandlePeriod) []byte {
 	slog.Info("Subscription for symbol " + sym + " Period " + fmt.Sprint(p.TimeMs/60000) + "m")
 	data := GetInitialCandles(s.RedisTSClient, sym, p)
@@ -174,7 +201,8 @@ func errorResponse(reqType string, reqTopic string, msg string) []byte {
 	return jsonData
 }
 
-func (s *Server) SubscribePxUpdate(sub *redis.PubSub) {
+// subscribe the server to redis pub/sub
+func (s *Server) SubscribePxUpdate(sub *redis.PubSub, ctx context.Context) {
 	for {
 		msg, err := sub.ReceiveMessage(ctx)
 		if err != nil {
@@ -186,6 +214,8 @@ func (s *Server) SubscribePxUpdate(sub *redis.PubSub) {
 	}
 }
 
+// process price updates triggered by redis pub message for
+// candles
 func (s *Server) candleUpdates(symbols []string) {
 
 	var wg sync.WaitGroup

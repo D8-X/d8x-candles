@@ -20,6 +20,11 @@ type MarketHours struct {
 	NextClose *int64 `json:"next_close"`
 }
 
+type MarketInfo struct {
+	MarketHours MarketHours
+	AssetType   string `json:"assetType"`
+}
+
 type PriceFeedApiResponse struct {
 	ID          string            `json:"id"`
 	MarketHours MarketHours       `json:"market_hours"`
@@ -28,13 +33,13 @@ type PriceFeedApiResponse struct {
 
 // Runs FetchMktHours and schedules next runs
 func (p *PythHistoryAPI) ScheduleMktHoursUpdate(config *utils.PriceConfig, updtInterval time.Duration) {
-	p.FetchMktHours(config)
+	p.FetchMktInfo(config)
 	tickerUpdate := time.NewTicker(updtInterval)
 	for {
 		select {
 		case <-tickerUpdate.C:
 			slog.Info("Updating market hours...")
-			p.FetchMktHours(config)
+			p.FetchMktInfo(config)
 			fmt.Println("Market hours data updated.")
 		}
 	}
@@ -43,7 +48,7 @@ func (p *PythHistoryAPI) ScheduleMktHoursUpdate(config *utils.PriceConfig, updtI
 // Goes through all symbols in the config files, including triangulated ones,
 // and fetches market hours (next open, next close). Stores in
 // Redis
-func (p *PythHistoryAPI) FetchMktHours(config *utils.PriceConfig) {
+func (p *PythHistoryAPI) FetchMktInfo(config *utils.PriceConfig) {
 	// process base price feeds (no triangulation)
 	f := config.ConfigFile.PriceFeeds
 	for k := 0; k < len(f); k++ {
@@ -51,37 +56,43 @@ func (p *PythHistoryAPI) FetchMktHours(config *utils.PriceConfig) {
 		asset := strings.ToLower(strings.Split(f[k].SymbolPyth, ".")[0])
 		if asset == "crypto" {
 			// crypto markets are always open, huray
-			p.setMarketHours(sym, MarketHours{true, nil, nil})
+			p.setMarketHours(sym, MarketHours{true, nil, nil}, "crypto")
 			continue
 		}
 		id := f[k].Id
 		p.QueryPriceFeedInfo(sym, id)
 	}
 	// construct info for triangulated price feeds, e.g. chf-usdc
-	p.fetchTriangulatedMktHours(config)
+	p.fetchTriangulatedMktInfo(config)
 }
 
-func (p *PythHistoryAPI) fetchTriangulatedMktHours(config *utils.PriceConfig) {
+func (p *PythHistoryAPI) fetchTriangulatedMktInfo(config *utils.PriceConfig) {
 	paths := config.SymToTriangPath
 outerLoop:
 	for symT, path := range paths {
 		isOpen := true
 		var nxtOpen, nxtClose int64 = 0, math.MaxInt64
+		var assetType string = "crypto"
 		for k := 1; k < len(path); k += 2 {
-			mh, err := p.GetMarketHours(path[k])
+			m, err := p.GetMarketInfo(path[k])
+			if m.AssetType != "crypto" {
+				// dominant asset type for triangulations is
+				// the non-crypto asset
+				assetType = m.AssetType
+			}
 			if err != nil {
 				slog.Error("Error triangulated feeds info " + symT + " at " + path[k])
 				continue outerLoop
 			}
-			isOpen = isOpen && mh.IsOpen
-			if mh.NextOpen != nil {
-				if *mh.NextOpen > nxtOpen {
-					nxtOpen = *mh.NextOpen
+			isOpen = isOpen && m.MarketHours.IsOpen
+			if m.MarketHours.NextOpen != nil {
+				if *m.MarketHours.NextOpen > nxtOpen {
+					nxtOpen = *m.MarketHours.NextOpen
 				}
 			}
-			if mh.NextClose != nil {
-				if *mh.NextClose < nxtClose {
-					nxtClose = *mh.NextClose
+			if m.MarketHours.NextClose != nil {
+				if *m.MarketHours.NextClose < nxtClose {
+					nxtClose = *m.MarketHours.NextClose
 				}
 			}
 		}
@@ -89,13 +100,15 @@ outerLoop:
 			p.setMarketHours(symT, MarketHours{
 				IsOpen:    isOpen,
 				NextOpen:  nil,
-				NextClose: nil})
+				NextClose: nil},
+				assetType)
 			continue
 		}
 		p.setMarketHours(symT, MarketHours{
 			IsOpen:    isOpen,
 			NextOpen:  &nxtOpen,
-			NextClose: &nxtClose})
+			NextClose: &nxtClose},
+			assetType)
 	}
 }
 
@@ -150,10 +163,11 @@ func (p *PythHistoryAPI) QueryPriceFeedInfo(sym string, id string) {
 			" but symbol " + sym)
 		return
 	}
-	p.setMarketHours(sym, apiResponse[0].MarketHours)
+	p.setMarketHours(sym, apiResponse[0].MarketHours, apiResponse[0].Attributes["asset_type"])
 }
 
-func (p *PythHistoryAPI) setMarketHours(ticker string, mh MarketHours) error {
+func (p *PythHistoryAPI) setMarketHours(ticker string, mh MarketHours, assetType string) error {
+	assetType = strings.ToLower(assetType)
 	c := *p.RedisClient.Client
 	var nxto, nxtc string
 	if mh.NextOpen == nil {
@@ -166,33 +180,35 @@ func (p *PythHistoryAPI) setMarketHours(ticker string, mh MarketHours) error {
 	} else {
 		nxtc = strconv.FormatInt(*mh.NextClose, 10)
 	}
-	c.Do(p.RedisClient.Ctx, c.B().Hset().Key(ticker+":mkt_hours").
+	c.Do(p.RedisClient.Ctx, c.B().Hset().Key(ticker+":mkt_info").
 		FieldValue().FieldValue("is_open", strconv.FormatBool(mh.IsOpen)).
 		FieldValue("nxt_open", nxto).
-		FieldValue("nxt_close", nxtc).Build())
+		FieldValue("nxt_close", nxtc).
+		FieldValue("asset_type", assetType).Build())
 	return nil
 }
 
-func (p *PythHistoryAPI) GetMarketHours(ticker string) (MarketHours, error) {
+func (p *PythHistoryAPI) GetMarketInfo(ticker string) (MarketInfo, error) {
 	c := *p.RedisClient.Client
-	hm, err := c.Do(p.RedisClient.Ctx, c.B().Hgetall().Key(ticker+":mkt_hours").Build()).AsStrMap()
+	hm, err := c.Do(p.RedisClient.Ctx, c.B().Hgetall().Key(ticker+":mkt_info").Build()).AsStrMap()
 	if err != nil {
-		return MarketHours{}, err
+		return MarketInfo{}, err
 	}
 	if len(hm) == 0 {
-		return MarketHours{}, errors.New("ticker not found")
+		return MarketInfo{}, errors.New("ticker not found")
 	}
 	isOpen, _ := strconv.ParseBool(hm["is_open"])
 	nxtOpen, _ := strconv.ParseInt(hm["nxt_open"], 10, 64)
 	nxtClose, _ := strconv.ParseInt(hm["nxt_open"], 10, 64)
-
+	asset := hm["asset_type"]
 	if nxtOpen == 0 {
 		var mh = MarketHours{
 			IsOpen:    isOpen,
 			NextOpen:  nil,
 			NextClose: nil,
 		}
-		return mh, nil
+		var m = MarketInfo{MarketHours: mh, AssetType: asset}
+		return m, nil
 	}
 	// determine market open/close based on current timestamp and
 	// next close ts (can be outdated as long as not outdated for more than
@@ -203,5 +219,6 @@ func (p *PythHistoryAPI) GetMarketHours(ticker string) (MarketHours, error) {
 		NextOpen:  &nxtOpen,
 		NextClose: &nxtClose,
 	}
-	return mh, nil
+	var m = MarketInfo{MarketHours: mh, AssetType: asset}
+	return m, nil
 }

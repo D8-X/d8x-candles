@@ -35,7 +35,6 @@ var server = &Server{
 }
 var config utils.PriceConfig
 var redisClient *redis.Client
-var ctx context.Context
 
 func StartWSServer(config_ utils.PriceConfig, REDIS_ADDR string, REDIS_PW string) error {
 	flag.Parse()
@@ -59,7 +58,7 @@ func StartWSServer(config_ utils.PriceConfig, REDIS_ADDR string, REDIS_PW string
 	}
 	ctx = context.Background()
 	subscriber := redisClient.Subscribe(ctx, "px_update")
-	go server.SubscribePxUpdate(subscriber)
+	go server.SubscribePxUpdate(subscriber, ctx)
 
 	http.HandleFunc("/ws", HandleWs)
 	slog.Info("Listening on localhost:8080/ws")

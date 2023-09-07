@@ -116,7 +116,7 @@ func timestampFromTimeString(timestr string) (uint32, error) {
 func TestQueryPriceFeedInfo(t *testing.T) {
 	api := createHistApi(t)
 	api.QueryPriceFeedInfo("eth-usd", "0xff61491a931112ddf1bd8147cd1b641375f79f5825126d665480874634fd0ace")
-	r, err := api.GetMarketHours("eth-usd")
+	r, err := api.GetMarketInfo("eth-usd")
 	if err != nil {
 		t.Errorf("Error parsing date:%v", err)
 		return
@@ -124,7 +124,7 @@ func TestQueryPriceFeedInfo(t *testing.T) {
 	fmt.Print(r)
 }
 
-func TestBuildPriceFeedInfo(t *testing.T) {
+func TestFetchMktInfo(t *testing.T) {
 	var c utils.PriceConfig
 	err := c.LoadPriceConfig("../../config/live.config.json")
 	if err != nil {
@@ -132,10 +132,10 @@ func TestBuildPriceFeedInfo(t *testing.T) {
 		return
 	}
 	api := createHistApi(t)
-	api.FetchMktHours(&c)
-	a, err := api.GetMarketHours("btc-usd")
+	api.FetchMktInfo(&c)
+	a, err := api.GetMarketInfo("chf-usdc")
 	fmt.Print(a)
-	a, err = api.GetMarketHours("bs-ws")
+	a, err = api.GetMarketInfo("bs-ws")
 	if err != nil {
 		fmt.Print("intended error" + err.Error())
 	}
