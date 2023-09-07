@@ -97,7 +97,7 @@ func StreamWs(config utils.PriceConfig, REDIS_ADDR string, REDIS_PW string) erro
 
 	var ids = make([]string, len(symMap))
 	k := 0
-	for id, _ := range symMap {
+	for id := range symMap {
 		ids[k] = "0x" + id
 		k++
 	}
