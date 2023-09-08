@@ -140,15 +140,11 @@ func (p *PythHistoryAPI) ConstructPriceObsFromPythCandles(sym utils.SymbolPyth) 
 	var candleRes utils.PythCandleResolution
 	candleRes.New(1, utils.MinuteCandle)
 	currentTimeSec := uint32(time.Now().UTC().Unix())
-	oneDayResolutionMinute, err := p.RetrieveCandlesFromPyth(sym, candleRes, currentTimeSec-86400, currentTimeSec)
+	twoDayResolutionMinute, err := p.RetrieveCandlesFromPyth(sym, candleRes, currentTimeSec-86400*2, currentTimeSec)
 	if err != nil {
 		return PriceObservations{}, err
 	}
-	candleRes.New(5, utils.MinuteCandle)
-	twoDayResolution5Minute, err := p.RetrieveCandlesFromPyth(sym, candleRes, currentTimeSec-86400*2, currentTimeSec)
-	if err != nil {
-		return PriceObservations{}, err
-	}
+
 	candleRes.New(60, utils.MinuteCandle)
 	oneMonthResolution1h, err := p.RetrieveCandlesFromPyth(sym, candleRes, currentTimeSec-86400*30, currentTimeSec)
 	if err != nil {
@@ -160,7 +156,7 @@ func (p *PythHistoryAPI) ConstructPriceObsFromPythCandles(sym utils.SymbolPyth) 
 	if err != nil {
 		return PriceObservations{}, err
 	}
-	var candles = []PythHistoryAPIResponse{oneDayResolutionMinute, twoDayResolution5Minute, oneMonthResolution1h, allTimeResolution1D}
+	var candles = []PythHistoryAPIResponse{twoDayResolutionMinute, oneMonthResolution1h, allTimeResolution1D}
 	// concatenate candles into price observations
 	var obs PriceObservations
 	obs, err = PythCandlesToPriceObs(candles)
