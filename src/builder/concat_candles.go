@@ -101,7 +101,7 @@ func candleToPriceObs(px *PriceObservations, candles PythHistoryAPIResponse, sto
 	}
 }
 
-// Produce artificial price observations from ohlc candle data, used when constructing triangulations
+// Produce artificial price observations from ohlc candle data, used e.g. when constructing triangulations
 // from candles.
 // Identical to candleToPriceObs we process the candle data so that the last candle is
 // the first to end after stopAtTs
