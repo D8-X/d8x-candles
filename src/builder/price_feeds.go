@@ -18,9 +18,9 @@ import (
 )
 
 type MarketHours struct {
-	IsOpen    bool   `json:"is_open"`
-	NextOpen  *int64 `json:"next_open"`
-	NextClose *int64 `json:"next_close"`
+	IsOpen    bool  `json:"is_open"`
+	NextOpen  int64 `json:"next_open"`
+	NextClose int64 `json:"next_close"`
 }
 
 type MarketInfo struct {
@@ -35,15 +35,15 @@ type PriceFeedApiResponse struct {
 }
 
 // Runs FetchMktHours and schedules next runs
-func (p *PythHistoryAPI) ScheduleMktHoursUpdate(config *utils.PriceConfig, updtInterval time.Duration) {
+func (p *PythHistoryAPI) ScheduleMktInfoUpdate(config *utils.PriceConfig, updtInterval time.Duration) {
 	p.FetchMktInfo(config)
 	tickerUpdate := time.NewTicker(updtInterval)
 	for {
 		select {
 		case <-tickerUpdate.C:
-			slog.Info("Updating market hours...")
+			slog.Info("Updating market info...")
 			p.FetchMktInfo(config)
-			fmt.Println("Market hours data updated.")
+			fmt.Println("Market info updated.")
 		}
 	}
 }
@@ -59,7 +59,7 @@ func (p *PythHistoryAPI) FetchMktInfo(config *utils.PriceConfig) {
 		asset := strings.ToLower(strings.Split(f[k].SymbolPyth, ".")[0])
 		if asset == "crypto" {
 			// crypto markets are always open, huray
-			p.setMarketHours(sym, MarketHours{true, nil, nil}, "crypto")
+			p.setMarketHours(sym, MarketHours{true, 0, 0}, "crypto")
 			continue
 		}
 		id := f[k].Id
@@ -88,29 +88,22 @@ outerLoop:
 				continue outerLoop
 			}
 			isOpen = isOpen && m.MarketHours.IsOpen
-			if m.MarketHours.NextOpen != nil {
-				if *m.MarketHours.NextOpen > nxtOpen {
-					nxtOpen = *m.MarketHours.NextOpen
+			if m.MarketHours.NextOpen != 0 {
+				if m.MarketHours.NextOpen > nxtOpen {
+					nxtOpen = m.MarketHours.NextOpen
 				}
 			}
-			if m.MarketHours.NextClose != nil {
-				if *m.MarketHours.NextClose < nxtClose {
-					nxtClose = *m.MarketHours.NextClose
+			if m.MarketHours.NextClose != 0 {
+				if m.MarketHours.NextClose < nxtClose {
+					nxtClose = m.MarketHours.NextClose
 				}
 			}
 		}
-		if nxtOpen == 0 {
-			p.setMarketHours(symT, MarketHours{
-				IsOpen:    isOpen,
-				NextOpen:  nil,
-				NextClose: nil},
-				assetType)
-			continue
-		}
+
 		p.setMarketHours(symT, MarketHours{
 			IsOpen:    isOpen,
-			NextOpen:  &nxtOpen,
-			NextClose: &nxtClose},
+			NextOpen:  nxtOpen,
+			NextClose: nxtClose},
 			assetType)
 	}
 }
@@ -153,36 +146,30 @@ func (p *PythHistoryAPI) QueryPriceFeedInfo(sym string, id string) {
 		return
 	}
 	// Read the response body
-	var apiResponse []PriceFeedApiResponse
+	var apiResponse PriceFeedApiResponse
 	err = json.NewDecoder(response.Body).Decode(&apiResponse)
 	if err != nil {
 		slog.Error("Error parsing GET request:" + err.Error())
 		return
 	}
 	// check whether id provided is indeed for the symbol we aim to store
-	symSource := strings.ToLower(apiResponse[0].Attributes["generic_symbol"])
+	symSource := strings.ToLower(apiResponse.Attributes["generic_symbol"])
 	if symSource != strings.ReplaceAll(sym, "-", "") {
 		slog.Error("Error: price_feeds GET id is for " + symSource +
 			" but symbol " + sym)
 		return
 	}
-	p.setMarketHours(sym, apiResponse[0].MarketHours, apiResponse[0].Attributes["asset_type"])
+	p.setMarketHours(sym, apiResponse.MarketHours, apiResponse.Attributes["asset_type"])
 }
 
 func (p *PythHistoryAPI) setMarketHours(ticker string, mh MarketHours, assetType string) error {
 	assetType = strings.ToLower(assetType)
 	c := *p.RedisClient.Client
 	var nxto, nxtc string
-	if mh.NextOpen == nil {
-		nxto = "null"
-	} else {
-		nxto = strconv.FormatInt(*mh.NextOpen, 10)
-	}
-	if mh.NextClose == nil {
-		nxtc = "null"
-	} else {
-		nxtc = strconv.FormatInt(*mh.NextClose, 10)
-	}
+
+	nxto = strconv.FormatInt(mh.NextOpen, 10)
+	nxtc = strconv.FormatInt(mh.NextClose, 10)
+
 	c.Do(p.RedisClient.Ctx, c.B().Hset().Key(ticker+":mkt_info").
 		FieldValue().FieldValue("is_open", strconv.FormatBool(mh.IsOpen)).
 		FieldValue("nxt_open", nxto).
@@ -207,23 +194,15 @@ func GetMarketInfo(ctx context.Context, client *rueidis.Client, ticker string) (
 	nxtOpen, _ := strconv.ParseInt(hm["nxt_open"], 10, 64)
 	nxtClose, _ := strconv.ParseInt(hm["nxt_open"], 10, 64)
 	asset := hm["asset_type"]
-	if nxtOpen == 0 {
-		var mh = MarketHours{
-			IsOpen:    isOpen,
-			NextOpen:  nil,
-			NextClose: nil,
-		}
-		var m = MarketInfo{MarketHours: mh, AssetType: asset}
-		return m, nil
-	}
+
 	// determine market open/close based on current timestamp and
 	// next close ts (can be outdated as long as not outdated for more than
 	// closing period)
-	isOpen = time.Now().UTC().Unix() < nxtClose
+	isOpen = nxtClose == 0 || time.Now().UTC().Unix() < nxtClose
 	var mh = MarketHours{
 		IsOpen:    isOpen,
-		NextOpen:  &nxtOpen,
-		NextClose: &nxtClose,
+		NextOpen:  nxtOpen,
+		NextClose: nxtClose,
 	}
 	var m = MarketInfo{MarketHours: mh, AssetType: asset}
 	return m, nil

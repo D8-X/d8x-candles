@@ -93,7 +93,7 @@ func StreamWs(config utils.PriceConfig, REDIS_ADDR string, REDIS_PW string) erro
 	}
 	slog.Info("Building price history...")
 	buildHistory(meta.RedisTSClient, config, ph)
-	go ph.ScheduleMktHoursUpdate(&config, 3*time.Minute)
+	go ph.ScheduleMktInfoUpdate(&config, 3*time.Minute)
 
 	var ids = make([]string, len(symMap))
 	k := 0

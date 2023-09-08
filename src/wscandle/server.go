@@ -232,21 +232,15 @@ func (s *Server) updtMarketForSym(sym string, anchorTime24hMs int64) error {
 		scale := float64(px.Timestamp-px24[0].Timestamp) / float64(d)
 		ret = ret * scale
 	}
-	var nxtO, nxtC int64
-	if m.MarketHours.NextClose != nil {
-		nxtC = *m.MarketHours.NextClose
-	}
-	if m.MarketHours.NextOpen != nil {
-		nxtO = *m.MarketHours.NextOpen
-	}
+
 	var mr = MarketResponse{
 		Sym:           sym,
 		AssetType:     m.AssetType,
 		Ret24hPerc:    ret * 100,
 		CurrentPx:     px.Value,
 		IsOpen:        m.MarketHours.IsOpen,
-		NxtOpenTsSec:  nxtO,
-		NxtCloseTsSec: nxtC,
+		NxtOpenTsSec:  m.MarketHours.NextOpen,
+		NxtCloseTsSec: m.MarketHours.NextClose,
 	}
 	s.MarketResponses[sym] = mr
 	return nil
