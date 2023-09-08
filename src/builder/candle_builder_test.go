@@ -133,9 +133,9 @@ func TestFetchMktInfo(t *testing.T) {
 	}
 	api := createHistApi(t)
 	api.FetchMktInfo(&c)
-	a, err := api.GetMarketInfo("chf-usdc")
+	a, err := GetMarketInfo(api.RedisClient.Ctx, api.RedisClient.Client, "chf-usdc")
 	fmt.Print(a)
-	a, err = api.GetMarketInfo("bs-ws")
+	a, err = GetMarketInfo(api.RedisClient.Ctx, api.RedisClient.Client, "bs-ws")
 	if err != nil {
 		fmt.Print("intended error" + err.Error())
 	}

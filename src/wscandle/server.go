@@ -8,8 +8,10 @@ import (
 	"fmt"
 	"log/slog"
 	"math"
+	"math/rand"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/gorilla/websocket"
 	redis "github.com/redis/go-redis/v9"
@@ -23,9 +25,10 @@ type Clients map[string]*websocket.Conn
 
 // Server is the struct to handle the Server functions & manage the Subscriptions
 type Server struct {
-	Subscriptions Subscriptions
-	LastCandles   map[string]*builder.OhlcData //symbol:period->OHLC
-	RedisTSClient *utils.RueidisClient
+	Subscriptions   Subscriptions
+	LastCandles     map[string]*builder.OhlcData //symbol:period->OHLC
+	MarketResponses map[string]MarketResponse    //symbol->market response
+	RedisTSClient   *utils.RueidisClient
 }
 
 type ClientMessage struct {
@@ -51,6 +54,17 @@ type MarketResponse struct {
 	IsOpen        bool    `json:"isOpen"`
 	NxtOpenTsSec  int64   `json:"nextOpen"`
 	NxtCloseTsSec int64   `json:"nextClose"`
+}
+
+const MARKETS_TOPIC = "markets"
+
+func NewServer() *Server {
+	var s Server
+	s.Subscriptions = make(Subscriptions)
+	s.Subscriptions[MARKETS_TOPIC] = make(Clients)
+	s.LastCandles = make(map[string]*builder.OhlcData)
+	s.MarketResponses = make(map[string]MarketResponse)
+	return &s
 }
 
 // Send simply sends message to the websocket client
@@ -90,7 +104,7 @@ func (s *Server) HandleRequest(conn *websocket.Conn, config utils.PriceConfig, c
 	reqTopic := strings.TrimSpace(strings.ToLower(data.Topic))
 	reqType := strings.TrimSpace(strings.ToLower(data.Type))
 	if reqType == "subscribe" {
-		if reqTopic == "markets" {
+		if reqTopic == MARKETS_TOPIC {
 			msg := s.SubscribeMarkets(conn, clientID)
 			server.Send(conn, msg)
 		} else {
@@ -99,7 +113,7 @@ func (s *Server) HandleRequest(conn *websocket.Conn, config utils.PriceConfig, c
 		}
 	} else {
 		// unsubscribe
-		if reqTopic == "markets" {
+		if reqTopic == MARKETS_TOPIC {
 			delete(s.Subscriptions[reqTopic], clientID)
 		} else {
 			server.UnsubscribeCandles(clientID, reqTopic)
@@ -119,25 +133,123 @@ func (s *Server) UnsubscribeCandles(clientID string, topic string) {
 
 // Subscribe the client to market updates (markets)
 func (s *Server) SubscribeMarkets(conn *websocket.Conn, clientID string) []byte {
-	client := s.Subscriptions["markets"]
-	// if client already subbed, stop the process
-	if _, subbed := client[clientID]; subbed {
-		return []byte{}
+	clients := s.Subscriptions[MARKETS_TOPIC]
+	// if client already subscribed, stop the process
+	if _, subbed := clients[clientID]; subbed {
+		return errorResponse("subscribe", MARKETS_TOPIC, "client already subscribed")
 	}
 	// if not subbed, add to client map
-	client[clientID] = conn
-	return []byte{}
+	clients[clientID] = conn
+	// data to send
+	return s.buildMarketResponse("subscribe")
 }
 
-// form response for markets subscription
-func (s *Server) marketResponse(sym string) []byte {
-	//nowUTCms := time.Now().UTC().UnixNano() / int64(time.Millisecond)
+func (s *Server) ScheduleUpdateMarketAndBroadcast(waitTime time.Duration, config utils.PriceConfig) {
+	tickerUpdate := time.NewTicker(waitTime)
+	s.UpdateMarketAndBroadcast(config)
+	for {
+		select {
+		case <-tickerUpdate.C:
+			// if no subscribers we update infrequently
+			if len(server.Subscriptions[MARKETS_TOPIC]) == 0 &&
+				rand.Float64() < 0.95 {
+				slog.Info("UpdateMarketAndBroadcast: no subscribers")
+				break
+			}
+			s.UpdateMarketAndBroadcast(config)
+			fmt.Println("Market info data updated.")
+		}
+	}
 
-	return []byte{}
 }
 
-func (s *Server) marketForSym(sym string, anchorTime24hMs int64) MarketResponse {
-	return MarketResponse{}
+func (s *Server) UpdateMarketAndBroadcast(config utils.PriceConfig) {
+	s.UpdateMarketResponses(config)
+	s.SendMarketResponses()
+}
+
+func (s *Server) buildMarketResponse(typeRes string) []byte {
+	// create array of MarketResponses
+	var m = make([]MarketResponse, len(s.MarketResponses))
+	k := 0
+	for _, el := range s.MarketResponses {
+		m[k] = el
+		k += 1
+	}
+	r := ServerResponse{Type: typeRes, Topic: MARKETS_TOPIC, Data: m}
+	jsonData, err := json.Marshal(r)
+	if err != nil {
+		slog.Error("forming market update")
+		return []byte{}
+	}
+	return jsonData
+}
+
+func (s *Server) SendMarketResponses() {
+	jsonData := s.buildMarketResponse("update")
+	// update subscribers
+	clients := server.Subscriptions[MARKETS_TOPIC]
+	var wg sync.WaitGroup
+	for _, conn := range clients {
+		wg.Add(1)
+		go server.SendWithWait(conn, jsonData, &wg)
+	}
+	wg.Wait()
+}
+
+// update market info for all symbols using Redis
+func (s *Server) UpdateMarketResponses(config utils.PriceConfig) {
+	feeds := config.ConfigFile.PriceFeeds
+	nowUTCms := time.Now().UTC().UnixNano() / int64(time.Millisecond)
+	//yesterday:
+	var anchorTime24hMs int64 = nowUTCms - 86400000
+	for k := 0; k < len(feeds); k++ {
+		s.updtMarketForSym(feeds[k].Symbol, anchorTime24hMs)
+	}
+	//triangulations:
+	triang := config.ConfigFile.Triangulations
+	for k := 0; k < len(triang); k++ {
+		s.updtMarketForSym(triang[k].Target, anchorTime24hMs)
+	}
+}
+
+func (s *Server) updtMarketForSym(sym string, anchorTime24hMs int64) error {
+	m, err := builder.GetMarketInfo(s.RedisTSClient.Ctx, s.RedisTSClient.Client, sym)
+	if err != nil {
+		return err
+	}
+	px, err := s.RedisTSClient.Get(sym)
+	if err != nil {
+		return err
+	}
+	const d = 86400000
+	px24, err := s.RedisTSClient.RangeAggr(sym, anchorTime24hMs, anchorTime24hMs+d, 60000, "first")
+	var ret float64
+	if err != nil {
+		px24 = nil
+	} else {
+		ret = px.Value/px24[0].Value - 1
+		scale := float64(px.Timestamp-px24[0].Timestamp) / float64(d)
+		ret = ret * scale
+	}
+	var nxtO, nxtC int64
+	if m.MarketHours.NextClose != nil {
+		nxtC = *m.MarketHours.NextClose
+	}
+	if m.MarketHours.NextOpen != nil {
+		nxtO = *m.MarketHours.NextOpen
+	}
+	var mr = MarketResponse{
+		Sym:           sym,
+		AssetType:     m.AssetType,
+		Ret24hPerc:    ret * 100,
+		CurrentPx:     px.Value,
+		IsOpen:        m.MarketHours.IsOpen,
+		NxtOpenTsSec:  nxtO,
+		NxtCloseTsSec: nxtC,
+	}
+	s.MarketResponses[sym] = mr
+	return nil
 }
 
 // Subscribe the client to a candle-topic (e.g. btc-usd:15m)

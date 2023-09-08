@@ -1,6 +1,7 @@
 package builder
 
 import (
+	"context"
 	"d8x-candles/src/utils"
 	"encoding/json"
 	"errors"
@@ -12,6 +13,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/redis/rueidis"
 )
 
 type MarketHours struct {
@@ -187,10 +190,13 @@ func (p *PythHistoryAPI) setMarketHours(ticker string, mh MarketHours, assetType
 		FieldValue("asset_type", assetType).Build())
 	return nil
 }
-
 func (p *PythHistoryAPI) GetMarketInfo(ticker string) (MarketInfo, error) {
-	c := *p.RedisClient.Client
-	hm, err := c.Do(p.RedisClient.Ctx, c.B().Hgetall().Key(ticker+":mkt_info").Build()).AsStrMap()
+	return GetMarketInfo(p.RedisClient.Ctx, p.RedisClient.Client, ticker)
+}
+
+func GetMarketInfo(ctx context.Context, client *rueidis.Client, ticker string) (MarketInfo, error) {
+	c := *client
+	hm, err := c.Do(ctx, c.B().Hgetall().Key(ticker+":mkt_info").Build()).AsStrMap()
 	if err != nil {
 		return MarketInfo{}, err
 	}

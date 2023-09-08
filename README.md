@@ -156,7 +156,14 @@ docker run -d --name redis-stack -p 6379:6379 -e REDIS_ARGS="--requirepass yourp
 ```
 ## Developer Comments
 
-###REDIS
+### Services
+
+- PythClient
+  `go run cmd/pyth-client/main.go`
+- WsCandle
+ `go run cmd/pyth-client/main.go`
+
+### REDIS
 
 **pub/sub:**
 
@@ -187,3 +194,11 @@ hgetall xau-usd:mkt_info
 5) "nxt_close"
 6) "1694206800"
 ```
+
+Todos
+[] Token bucket per endpoint
+[] Whipe data after build-up via. 
+   Can be without endpoints just from REDIS:
+   - construct OHLS from REDIS
+   - construct artificial data points from REDIS
+   - purge old, add new

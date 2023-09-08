@@ -2,7 +2,6 @@ package wscandle
 
 import (
 	"context"
-	"d8x-candles/src/builder"
 	"d8x-candles/src/utils"
 	"flag"
 	"log/slog"
@@ -29,10 +28,7 @@ const (
 var upgrader = websocket.Upgrader{}
 
 // Initialize server with empty subscription
-var server = &Server{
-	Subscriptions: make(Subscriptions),
-	LastCandles:   make(map[string]*builder.OhlcData),
-}
+var server = NewServer()
 var config utils.PriceConfig
 var redisClient *redis.Client
 
@@ -59,7 +55,7 @@ func StartWSServer(config_ utils.PriceConfig, REDIS_ADDR string, REDIS_PW string
 	ctx = context.Background()
 	subscriber := redisClient.Subscribe(ctx, "px_update")
 	go server.SubscribePxUpdate(subscriber, ctx)
-
+	go server.ScheduleUpdateMarketAndBroadcast(5*time.Second, config)
 	http.HandleFunc("/ws", HandleWs)
 	slog.Info("Listening on localhost:8080/ws")
 	slog.Error(http.ListenAndServe(*addr, nil).Error())
