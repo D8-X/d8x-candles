@@ -120,10 +120,18 @@ func (p *PythHistoryAPI) CandlesToTriangulatedCandles(client *utils.RueidisClien
 // sym of the form eth-usd
 func (p *PythHistoryAPI) PricesToRedis(sym string, obs PriceObservations) {
 	CreateTimeSeries(p.RedisClient, sym)
+	var wg sync.WaitGroup
 	for k := 0; k < len(obs.P); k++ {
 		// store prices in ms
-		AddPriceObs(p.RedisClient, sym, int64(obs.T[k])*1000, obs.P[k])
+		val := obs.P[k]
+		t := int64(obs.T[k]) * 1000
+		wg.Add(1)
+		go func(sym string, t int64, val float64) {
+			defer wg.Done()
+			AddPriceObs(p.RedisClient, sym, t, val)
+		}(sym, t, val)
 	}
+	wg.Wait()
 }
 
 // Query specific candle resolutions and time ranges from the Pyth-API
