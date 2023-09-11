@@ -58,7 +58,7 @@ func loadEnv() error {
 
 	viper.SetConfigFile(".env")
 	if err := viper.ReadInConfig(); err != nil {
-		slog.Error("could not load .env file", err)
+		slog.Error("could not load .env file", "err", err)
 	}
 
 	viper.AutomaticEnv()
