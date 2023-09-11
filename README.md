@@ -9,6 +9,15 @@ RangeWithOptions
 
 #Websocket
 
+- client subscribes (`"type": "subscribe"`) to a topic (`"topic": "<topic>"`) which is either 
+  `"markets"` or `"<symbol>:<period>"` for candle-data, for example `"btc-usd:1m"`. Available
+  periods are 1m, 5m, 15m, 1h, 1d (m: minute, h: hour, d: day)
+- after each subscription the client receives a response `"type": "subscribe"` with the same topic, and a data array. The data array can contain
+  an error `"data": ["error": "error message"]`, or it contains actual response data.
+- after subscribing, the client will receive updates regularly `"type": "update"`
+- the client has to unsubscribe from each topic `{"type": "unsubscribe", "topic":"btc-usd:15m"}`, or they will continue receiving data. 
+- pings are handled on "protocol-level"
+
 The client requests candle subscriptions via
 
 Old:
@@ -98,8 +107,41 @@ new:
 </details>
 
 
-Note that the array in data can contain more than one update element.
-Only one period can be subscribed at a time for a given symbol. User should unsubscribe and re-subscribe. 
+The client requests market summaries via
+```
+{
+  "type": "subscribe",
+  "topic": "markets",
+}
+```
+
+to get a response like
+```
+{
+  "topic": "markets",
+  "data": [{
+         "symbol":"chf-usdc",
+         "assetType":"fx",
+         "ret24hPerc":0.14039172448203116,
+         "currentPx":1.121819392820981,
+         "isOpen":true,
+         "nextOpen":1694984400,
+         "nextClose":1694984400
+      },
+      {
+         "symbol":"usdc-usd",
+         "assetType":"crypto",
+         "ret24hPerc":-0.00540585710068383,
+         "currentPx":1.00009996,
+         "isOpen":true,
+         "nextOpen":0,
+         "nextClose":0
+      }, ...]
+}
+```
+
+
+## Developer Comments
 
 <details>
 <summary>
@@ -115,49 +157,12 @@ Supported periods are case-sensitive and as defined in the configuration file li
 ```
 </details>
 
-The client requests market summaries via
-```
-{
-  "type": "subscribe",
-  "topic": "markets",
-}
-```
-
-to get a response like
-```
-{
-  "topic": "markets",
-  "data": [{
-    "symbol": "xau-usd",
-    "assetType": "metal",
-    "ret24hPerc": "-1.02",
-    "currentPx": "1715.33",
-    "isOpen": true,
-    "nextOpen": 1694379600,
-    "nextClose": 1694206800
-  }, {
-     "symbol": "btc-usd",
-     "assetType": "crypto",
-    "ret24hPerc": "20.02",
-    "currentPx": "24715.33957029727",
-    "isOpen": true,
-    "nextOpen": null,
-    "nextClose": null
-  }, ...]
-}
-```
-A client request of the form `{"type": "ping"}` is responded with 
-`{"type": "ping","msg": "pong"}`
-
 ## Testing 
 
 ```
 docker run -d --name redis-stack -p 6379:6379 -e REDIS_ARGS="--requirepass yourpwd" redis/redis-stack-server:latest
 ```
-## Developer Comments
-
-### Services
-
+- adjuste .env as indicated in .envExample comments
 - PythClient
   `go run cmd/pyth-client/main.go`
 - WsCandle
@@ -194,11 +199,3 @@ hgetall xau-usd:mkt_info
 5) "nxt_close"
 6) "1694206800"
 ```
-
-Todos
-[] Token bucket per endpoint
-[] Whipe data after build-up via. 
-   Can be without endpoints just from REDIS:
-   - construct OHLS from REDIS
-   - construct artificial data points from REDIS
-   - purge old, add new
