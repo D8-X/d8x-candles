@@ -43,7 +43,8 @@ func OhlcCandlesToPriceObs(candles [][]OhlcData) (PriceObservations, error) {
 	for i := 0; i < len(candles); i++ {
 		err := ohlcToPriceObs(&px, candles[i], stopAtTs, nextLow, nextHigh)
 		if err != nil {
-			slog.Error("Problem with candle" + err.Error())
+			slog.Info("Some candle not available:" + err.Error())
+			continue
 		}
 		if len(px.P) > 0 {
 			stopAtTs = px.T[0]
@@ -108,8 +109,8 @@ func candleToPriceObs(px *PriceObservations, candles PythHistoryAPIResponse, sto
 // nextLow and nextHigh are the LH values of the first candle that has a higher resolution and starts
 // at stopAtTs (seconds)
 func ohlcToPriceObs(px *PriceObservations, candles []OhlcData, stopAtTs uint32, nextLow float64, nextHigh float64) error {
-	if len(candles) == 0 {
-		return errors.New("no candles observations")
+	if len(candles) < 2 {
+		return errors.New("less than 2 candle observations")
 	}
 	// determine resolution (sec)
 	candleResolutionSec := uint32((candles[1].TsMs - candles[0].TsMs) / 1000)
