@@ -1,4 +1,4 @@
-REDISCLOUD_URL="redis://redis:6379"
-#local: REDISCLOUD_URL="localhost:6379"
-REDIS_PASSWORD=thisismypassword
+REDIS_PW=thisismypassword
+REDIS_ADDR="redis-timeseries:6379"
+#local: REDIS_ADDR="localhost:6379"
 CONFIG_PATH="./config/live.config.json"

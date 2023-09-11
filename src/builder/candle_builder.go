@@ -179,7 +179,7 @@ func (p *PythHistoryAPI) ConstructPriceObsForTriang(client *utils.RueidisClient,
 
 		if err != nil {
 			// key does not exist
-			return PriceObservations{}, errors.New("symbol not in REDIS" + sym)
+			return PriceObservations{}, errors.New(err.Error() + " symbol:" + sym)
 		}
 		first := info["firstTimestamp"]
 		last := info["lastTimestamp"]

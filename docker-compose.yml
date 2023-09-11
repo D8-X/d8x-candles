@@ -1,0 +1,47 @@
+version: '3'
+services:
+  pyth-client:
+    build:
+      context: .
+      dockerfile: cmd/pyth-client/Dockerfile
+    environment:
+      - REDIS_PW=${REDIS_PW}
+      #- REDIS_ADDR="redis://:${REDIS_PW}@redis:6379"
+    depends_on:
+      - redis-timeseries
+    networks:
+      - app-net
+    logging:
+      options:
+        max-size: "10m"
+
+  ws-server:
+    build:
+      context: .
+      dockerfile: cmd/ws-server/Dockerfile
+    environment:
+      - REDIS_PW=${REDIS_PW}
+      #- REDIS_ADDR="redis://:${REDIS_PW}@redis:6379"
+    depends_on:
+      - redis-timeseries
+    networks:
+     - app-net
+    logging:
+      options:
+        max-size: "10m"
+
+  redis-timeseries:
+    image: redis/redis-stack-server:latest
+    command: redis-stack-server --requirepass ${REDIS_PW}
+    environment:
+      - TZ=UTC
+    ports:
+      - "6379:6379"
+    networks:
+      - app-net
+    logging:
+      options:
+        max-size: "10m"
+
+networks:
+  app-net:

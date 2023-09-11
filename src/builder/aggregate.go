@@ -2,6 +2,7 @@ package builder
 
 import (
 	"d8x-candles/src/utils"
+	"log/slog"
 	"strconv"
 	"time"
 
@@ -63,10 +64,15 @@ func ConvertTimestampToISO8601(timestampMs int64) string {
 	return iso8601
 }
 
-func AddPriceObs(client *utils.RueidisClient, sym string, timestampMs int64, value float64) {
+func AddPriceObs(client *utils.RueidisClient, sym string, timestampMs int64, value float64) error {
 	ts := strconv.FormatInt(timestampMs, 10)
-	(*client.Client).Do(client.Ctx,
+	resp := (*client.Client).Do(client.Ctx,
 		(*client.Client).B().TsAdd().Key(sym).Timestamp(ts).Value(value).Build())
+	if resp.Error() != nil {
+		slog.Error("AddPriceObs:" + resp.Error().Error())
+		return resp.Error()
+	}
+	return nil
 }
 
 func CreateTimeSeries(client *utils.RueidisClient, sym string) {
@@ -78,5 +84,5 @@ func CreateTimeSeries(client *utils.RueidisClient, sym string) {
 			Key(sym).FromTimestamp(0).ToTimestamp(math.MaxInt64).Build())
 	}
 	// key does not exist, create series
-	(*client.Client).Do(client.Ctx, (*client.Client).B().TsCreate().Key(sym).Build())
+	(*client.Client).Do(client.Ctx, (*client.Client).B().TsCreate().Key(sym).DuplicatePolicyLast().Build())
 }

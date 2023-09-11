@@ -68,6 +68,8 @@ func StreamWs(config utils.PriceConfig, REDIS_ADDR string, REDIS_PW string) erro
 	var meta PriceMeta
 	meta.AffectedTriang = config.SymToDependentTriang
 	meta.Triangulations = config.SymToTriangPath
+	fmt.Print("REDIS ADDR = ", REDIS_ADDR)
+	fmt.Print("REDIS_PW=", REDIS_PW)
 	meta.RedisClient = redis.NewClient(&redis.Options{
 		Addr:     REDIS_ADDR,
 		Password: REDIS_PW,
