@@ -11,9 +11,11 @@ services:
       - redis-timeseries
     networks:
       - app-net
+    restart: on-failure
     logging:
       options:
         max-size: "10m"
+        max-file: "10"
 
   ws-server:
     build:
@@ -24,11 +26,15 @@ services:
       #- REDIS_ADDR="redis://:${REDIS_PW}@redis:6379"
     depends_on:
       - redis-timeseries
+    ports:
+      - 8080:8080
     networks:
      - app-net
+    restart: on-failure
     logging:
       options:
         max-size: "10m"
+        max-file: "10"
 
   redis-timeseries:
     image: redis/redis-stack-server:latest
@@ -39,9 +45,11 @@ services:
       - "6379:6379"
     networks:
       - app-net
+    restart: on-failure
     logging:
       options:
         max-size: "10m"
+        max-file: "10"
 
 networks:
   app-net:

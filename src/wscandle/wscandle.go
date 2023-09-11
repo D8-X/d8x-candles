@@ -3,7 +3,6 @@ package wscandle
 import (
 	"context"
 	"d8x-candles/src/utils"
-	"flag"
 	"log/slog"
 	"net/http"
 	"time"
@@ -32,8 +31,7 @@ var server = NewServer()
 var config utils.PriceConfig
 var redisClient *redis.Client
 
-func StartWSServer(config_ utils.PriceConfig, REDIS_ADDR string, REDIS_PW string) error {
-	flag.Parse()
+func StartWSServer(config_ utils.PriceConfig, WS_ADDR string, REDIS_ADDR string, REDIS_PW string) error {
 	config = config_
 
 	// Redis connection
@@ -57,12 +55,10 @@ func StartWSServer(config_ utils.PriceConfig, REDIS_ADDR string, REDIS_PW string
 	go server.SubscribePxUpdate(subscriber, ctx)
 	go server.ScheduleUpdateMarketAndBroadcast(5*time.Second, config)
 	http.HandleFunc("/ws", HandleWs)
-	slog.Info("Listening on localhost:8080/ws")
-	slog.Error(http.ListenAndServe(*addr, nil).Error())
+	slog.Info("Listening on " + WS_ADDR + "/ws")
+	slog.Error(http.ListenAndServe(WS_ADDR, nil).Error())
 	return nil
 }
-
-var addr = flag.String("addr", "localhost:8080", "http service address")
 
 func HandleWs(w http.ResponseWriter, r *http.Request) {
 	upgrader.CheckOrigin = func(r *http.Request) bool { return true }

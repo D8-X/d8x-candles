@@ -7,4 +7,5 @@ const (
 	CONFIG_PATH       = "CONFIG_PATH"
 	REDIS_ADDR        = "REDIS_ADDR"
 	REDIS_PW          = "REDIS_PW"
+	WS_ADDR           = "WS_ADDR"
 )

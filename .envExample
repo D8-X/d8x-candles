@@ -1,4 +1,10 @@
 REDIS_PW=thisismypassword
+# run via docker compose
+WS_ADDR="ws-server:8080"
 REDIS_ADDR="redis-timeseries:6379"
-#local: REDIS_ADDR="localhost:6379"
+
+# run without docker compose
+#REDIS_ADDR="localhost:6379"
+#WS_ADDR="127.0.0.1:8080"
+
 CONFIG_PATH="./config/live.config.json"

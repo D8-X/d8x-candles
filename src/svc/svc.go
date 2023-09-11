@@ -22,7 +22,7 @@ func RunCandleCharts() {
 		fmt.Println("Error:", err.Error())
 		return
 	}
-	wscandle.StartWSServer(c, viper.GetString(env.REDIS_ADDR), viper.GetString(env.REDIS_PW))
+	wscandle.StartWSServer(c, viper.GetString(env.WS_ADDR), viper.GetString(env.REDIS_ADDR), viper.GetString(env.REDIS_PW))
 }
 
 func StreamPyth() {
@@ -63,6 +63,7 @@ func loadEnv() error {
 
 	viper.SetDefault(env.PYTH_API_BASE_URL, "https://benchmarks.pyth.network/")
 	viper.SetDefault(env.REDIS_ADDR, "localhost:6379")
+	viper.SetDefault(env.WS_ADDR, "localhost:8080")
 	requiredEnvs := []string{}
 
 	for _, e := range requiredEnvs {
