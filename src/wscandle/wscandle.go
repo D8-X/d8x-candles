@@ -31,14 +31,14 @@ var server = NewServer()
 var config utils.PriceConfig
 var redisClient *redis.Client
 
-func StartWSServer(config_ utils.PriceConfig, WS_ADDR string, REDIS_ADDR string, REDIS_PW string) error {
+func StartWSServer(config_ utils.PriceConfig, WS_ADDR string, REDIS_ADDR string, REDIS_PW string, RedisDb int) error {
 	config = config_
 
 	// Redis connection
 	redisClient = redis.NewClient(&redis.Options{
 		Addr:     REDIS_ADDR,
 		Password: REDIS_PW,
-		DB:       0,
+		DB:       RedisDb,
 	})
 	client, err := rueidis.NewClient(
 		rueidis.ClientOption{InitAddress: []string{REDIS_ADDR}, Password: REDIS_PW})
