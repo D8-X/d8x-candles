@@ -55,7 +55,6 @@ func loadConfig() (utils.PriceConfig, error) {
 }
 
 func loadEnv() error {
-
 	viper.SetConfigFile(".env")
 	if err := viper.ReadInConfig(); err != nil {
 		slog.Error("could not load .env file", "err", err)
@@ -66,12 +65,15 @@ func loadEnv() error {
 	viper.SetDefault(env.PYTH_API_BASE_URL, "https://benchmarks.pyth.network/")
 	viper.SetDefault(env.REDIS_ADDR, "localhost:6379")
 	viper.SetDefault(env.WS_ADDR, "localhost:8080")
-	requiredEnvs := []string{}
+	requiredEnvs := []string{
+		env.CONFIG_PATH,
+	}
 
 	for _, e := range requiredEnvs {
 		if !viper.IsSet(e) {
 			return fmt.Errorf("required environment variable not set", e)
 		}
 	}
+
 	return nil
 }
