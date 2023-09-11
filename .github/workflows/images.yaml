@@ -1,0 +1,46 @@
+name: Build images
+on:
+  push:
+    branches: ["main", "dev"]
+    tags:
+      # Build images for all tags
+      - "*"
+env:
+  container_registry: ghcr.io
+jobs:
+  build:
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+            - dockerfile: ./cmd/pyth-client/Dockerfile
+              image: ghcr.io/d8-x/d8x-candles-pyth-client
+            - dockerfile: ./cmd/ws-server/Dockerfile
+              image: ghcr.io/d8-x/d8x-candles-ws-server
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v3
+      - name: Login to GHCR
+        uses: docker/login-action@v2
+        with:
+          registry: ${{ env.container_registry }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+      - name: Docker meta
+        id: meta
+        uses: docker/metadata-action@v4
+        with:
+          images: ${{matrix.image}}
+      - name: Build and push ${{ matrix.image }}
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
