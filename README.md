@@ -2,11 +2,15 @@
 Second Evolution of Candle Stick Charts
 
 
-https://github.com/RedisTimeSeries/redistimeseries-go
+## Install
+- clone the repository
+- install docker, you can run `./host-setup.sh` to do so
+- copy .envExample to .env and change the value for REDIS_PW. Special characters in this password need to be escaped (e.g., $ needs to be written as \$)
+- setup nginx/certbot to point to this machine
+- run docker-compose `docker compose up --build -d`. Per default config, the websocket is available at port 8080/ws
 
-Aggregate:
-RangeWithOptions
 
+## Use
 #Websocket
 
 - client subscribes (`"type": "subscribe"`) to a topic (`"topic": "<topic>"`) which is either 
