@@ -10,8 +10,7 @@ Second Evolution of Candle Stick Charts
 - run docker-compose `docker compose up --build -d`. Per default config, the websocket is available at port 8080/ws
 
 
-## Use
-#Websocket
+## Websocket
 
 - client subscribes (`"type": "subscribe"`) to a topic (`"topic": "<topic>"`) which is either 
   `"markets"` or `"<symbol>:<period>"` for candle-data, for example `"btc-usd:1m"`. Available
