@@ -173,7 +173,11 @@ func onPriceUpdate(pxResp PriceUpdateResponse, sym string, lastPx map[string]flo
 	// triangulations
 	targetSymbols := meta.AffectedTriang[sym]
 	for _, tsym := range targetSymbols {
-		// TODO: if market closed for any of the items in the triangulation,
+		// if market closed for any of the items in the triangulation,
+		if isTriangulatedMarketClosed(tsym, meta.Triangulations[tsym], meta) {
+			slog.Info("-- triangulation price update: " + tsym + " - market closed")
+			continue
+		}
 		// we should not publish an update
 		pxTriang := utils.Triangulate(meta.Triangulations[tsym], lastPx)
 		lastPx[tsym] = pxTriang
@@ -186,6 +190,29 @@ func onPriceUpdate(pxResp PriceUpdateResponse, sym string, lastPx map[string]flo
 	if err != nil {
 		slog.Error("Redis Pub" + err.Error())
 	}
+}
+
+// check whether any of the symbols in the triangulation has a closed market
+func isTriangulatedMarketClosed(tsym string, symbols []string, meta PriceMeta) bool {
+	info, err := builder.GetMarketInfo(meta.Ctx, meta.RedisTSClient.Client, tsym)
+	if err != nil {
+		slog.Error("Error market-closed determination " + tsym + ":" + err.Error())
+		return true
+	}
+	if !info.MarketHours.IsOpen {
+		return true
+	}
+	for _, sym := range symbols {
+		info, err := builder.GetMarketInfo(meta.Ctx, meta.RedisTSClient.Client, tsym)
+		if err != nil {
+			slog.Error("Error market-closed determination " + tsym + "(" + sym + "):" + err.Error())
+			return true
+		}
+		if !info.MarketHours.IsOpen {
+			return true
+		}
+	}
+	return false
 }
 
 // calculate floating point price from 'price' and 'expo'
