@@ -110,7 +110,7 @@ func StreamWs(config utils.PriceConfig, REDIS_ADDR string, REDIS_PW string) erro
 
 	c, _, err := websocket.DefaultDialer.Dial(u.String(), nil)
 	if err != nil {
-		slog.Error("Dial:", err)
+		slog.Error("Dial:" + err.Error())
 	}
 	defer c.Close()
 

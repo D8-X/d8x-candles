@@ -330,7 +330,7 @@ func (s *Server) candleUpdates(symbols []string) {
 		pxLast, err := c.Get(sym)
 
 		if err != nil {
-			slog.Error(fmt.Sprintf("Error parsing date:%v", err))
+			slog.Error(fmt.Sprintf("Error parsing date:" + err.Error()))
 			return
 		}
 		for _, prd := range config.CandlePeriodsMs {
@@ -360,7 +360,7 @@ func (s *Server) candleUpdates(symbols []string) {
 			r := ServerResponse{Type: "update", Topic: key, Data: lastCandle}
 			jsonData, err := json.Marshal(r)
 			if err != nil {
-				slog.Error("forming lastCandle update")
+				slog.Error("forming lastCandle update:" + err.Error())
 			}
 			for _, conn := range clients {
 				wg.Add(1)
