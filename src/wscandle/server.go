@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"math"
 	"math/rand"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -111,14 +112,14 @@ func (s *Server) HandleRequest(conn *websocket.Conn, config utils.PriceConfig, c
 			msg := s.SubscribeCandles(conn, clientID, reqTopic, config)
 			server.Send(conn, msg)
 		}
-	} else {
+	} else if reqType == "unsubscribe" {
 		// unsubscribe
 		if reqTopic == MARKETS_TOPIC {
 			delete(s.Subscriptions[reqTopic], clientID)
 		} else {
 			server.UnsubscribeCandles(clientID, reqTopic)
 		}
-	}
+	} //else: ignore
 }
 
 // Unsubscribe the client from a candle-topic (e.g. btc-usd:15m)
@@ -248,6 +249,9 @@ func (s *Server) updtMarketForSym(sym string, anchorTime24hMs int64) error {
 
 // Subscribe the client to a candle-topic (e.g. btc-usd:15m)
 func (s *Server) SubscribeCandles(conn *websocket.Conn, clientID string, topic string, config utils.PriceConfig) []byte {
+	if !isValidCandleTopic(topic) {
+		return errorResponse("subscribe", topic, "usage: symbol:period")
+	}
 	sym, period, isFound := strings.Cut(topic, ":")
 	if !isFound {
 		// usage: symbol:period
@@ -281,6 +285,12 @@ func (s *Server) SubscribeCandles(conn *websocket.Conn, clientID string, topic s
 	// add the client to the topic
 	s.Subscriptions[topic][clientID] = conn
 	return s.candleResponse(sym, p)
+}
+
+func isValidCandleTopic(topic string) bool {
+	pattern := "^[a-zA-Z]+-[a-zA-Z]+:[0-9]+[hmd]$" // Regular expression for candle topics
+	regex, _ := regexp.Compile(pattern)
+	return regex.MatchString(topic)
 }
 
 // form initial response for candle subscription (e.g., eth-usd:5m)
