@@ -96,6 +96,7 @@ func (p *PythHistoryAPI) PythDataToRedisPriceObs(symbols []utils.SymbolPyth) {
 	slog.Info("History of Pyth sources complete")
 }
 
+// Extract candles to triangulated candles
 // symbols of the form eth-usd
 func (p *PythHistoryAPI) CandlesToTriangulatedCandles(client *utils.RueidisClient, config utils.PriceConfig) {
 	var wg sync.WaitGroup
