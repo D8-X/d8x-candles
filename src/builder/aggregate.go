@@ -43,7 +43,7 @@ func Ohlc(client *utils.RueidisClient, sym string, fromTs int64, toTs int64, res
 		numGaps := (data.TsMs - tOld) / timeBucket
 		for j := 0; j < int(numGaps)-1 && k > 0; j++ {
 			var dataGap OhlcData
-			dataGap.TsMs = data.TsMs + int64(j)*timeBucket
+			dataGap.TsMs = tOld + int64(j+1)*timeBucket
 			dataGap.Time = ConvertTimestampToISO8601(dataGap.TsMs)
 			// set all data to close of previous OHLC observation
 			dataGap.O = (*redisData[3])[k].Value
