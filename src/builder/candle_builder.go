@@ -235,8 +235,9 @@ func (p *PythHistoryAPI) triangulateCandles(client *utils.RueidisClient, path []
 		for t := 0; t < T; t++ {
 			ohlcRes[t].O = 1 / ohlcRes[t].O
 			ohlcRes[t].C = 1 / ohlcRes[t].C
+			h := ohlcRes[t].H
 			ohlcRes[t].H = 1 / ohlcRes[t].L
-			ohlcRes[t].L = 1 / ohlcRes[t].H
+			ohlcRes[t].L = 1 / h
 		}
 	}
 	for k := 3; k < len(path); k = k + 2 {
