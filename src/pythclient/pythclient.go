@@ -180,6 +180,10 @@ func onPriceUpdate(pxResp PriceUpdateResponse, sym string, lastPx map[string]flo
 		}
 		// we should not publish an update
 		pxTriang := utils.Triangulate(meta.Triangulations[tsym], lastPx)
+		if pxTriang == 0 {
+			slog.Info("-- triangulation currently not possible: " + tsym)
+			continue
+		}
 		lastPx[tsym] = pxTriang
 		pubMsg += ";" + tsym
 		builder.AddPriceObs(meta.RedisTSClient, tsym, pxResp.PriceFeed.Price.PublishTime*1000, pxTriang)
