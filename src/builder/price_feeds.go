@@ -192,13 +192,15 @@ func GetMarketInfo(ctx context.Context, client *rueidis.Client, ticker string) (
 	}
 	isOpen, _ := strconv.ParseBool(hm["is_open"])
 	nxtOpen, _ := strconv.ParseInt(hm["nxt_open"], 10, 64)
-	nxtClose, _ := strconv.ParseInt(hm["nxt_open"], 10, 64)
+	nxtClose, _ := strconv.ParseInt(hm["nxt_close"], 10, 64)
 	asset := hm["asset_type"]
-
 	// determine market open/close based on current timestamp and
 	// next close ts (can be outdated as long as not outdated for more than
 	// closing period)
-	isOpen = nxtClose == 0 || time.Now().UTC().Unix() < nxtClose
+	now := time.Now().UTC().Unix()
+	isOpen = nxtClose == 0 ||
+		(nxtOpen < now && now < nxtClose) ||
+		(now < nxtClose && nxtClose < nxtOpen)
 	var mh = MarketHours{
 		IsOpen:    isOpen,
 		NextOpen:  nxtOpen,
