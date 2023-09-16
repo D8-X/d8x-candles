@@ -99,6 +99,9 @@ outerLoop:
 				}
 			}
 		}
+		if assetType == "crypto" {
+			nxtClose = 0
+		}
 
 		p.setMarketHours(symT, MarketHours{
 			IsOpen:    isOpen,
