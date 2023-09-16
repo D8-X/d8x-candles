@@ -222,12 +222,36 @@ func (p *PythHistoryAPI) ConstructPriceObsForTriang(client *utils.RueidisClient,
 
 func (p *PythHistoryAPI) triangulateCandles(client *utils.RueidisClient, path []string, fromTsMs int64, toTsMs int64, resolSec uint32) ([]OhlcData, error) {
 	var ohlcPath []*[]OhlcData
+	var maxStart int64 = 0
 	for k := 1; k < len(path); k = k + 2 {
 		ohlc, err := Ohlc(client, path[k], fromTsMs, toTsMs, resolSec)
 		if err != nil {
 			return nil, errors.New("ohlc not available for " + path[k])
 		}
+		if ohlc[0].TsMs > maxStart {
+			maxStart = ohlc[0].TsMs
+		}
 		ohlcPath = append(ohlcPath, &ohlc)
+	}
+	// if no observation falls in one bucket, redis will omit the bucket,
+	// hence we need to align the candles starting times
+	for k := 0; k < len(ohlcPath); k = k + 1 {
+		ohlcCurr := *ohlcPath[k]
+		var tau int = 0
+		for t := 0; t < len(ohlcCurr); t++ {
+			if ohlcCurr[t].TsMs == maxStart {
+				tau = t
+				break
+			}
+		}
+		if tau > 0 {
+			reducedSlice := ohlcCurr[tau:]
+			ohlcPath[k] = &reducedSlice
+		}
+
+	}
+	if (*ohlcPath[0])[0].TsMs != (*ohlcPath[1])[0].TsMs {
+		panic("triangulateCandles mismatch")
 	}
 	T := len(*ohlcPath[0])
 	ohlcRes := *ohlcPath[0]

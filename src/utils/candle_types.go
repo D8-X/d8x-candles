@@ -35,26 +35,32 @@ func (r *RueidisClient) Get(key string) (DataPoint, error) {
 
 func (r *RueidisClient) RangeAggr(key string, fromTs int64, toTs int64, bucketDur int64, aggr string) ([]DataPoint, error) {
 	var cmd rueidis.Completed
+	fromTs = int64(fromTs/bucketDur) * bucketDur
 	switch aggr {
 	case "min":
 		cmd = (*r.Client).B().TsRange().Key(key).
 			Fromtimestamp(strconv.FormatInt(fromTs, 10)).Totimestamp(strconv.FormatInt(toTs, 10)).
+			Align("-").
 			AggregationMin().Bucketduration(bucketDur).Build()
 	case "max":
 		cmd = (*r.Client).B().TsRange().Key(key).
 			Fromtimestamp(strconv.FormatInt(fromTs, 10)).Totimestamp(strconv.FormatInt(toTs, 10)).
+			Align("-").
 			AggregationMax().Bucketduration(bucketDur).Build()
 	case "first":
 		cmd = (*r.Client).B().TsRange().Key(key).
 			Fromtimestamp(strconv.FormatInt(fromTs, 10)).Totimestamp(strconv.FormatInt(toTs, 10)).
+			Align("-").
 			AggregationFirst().Bucketduration(bucketDur).Build()
 	case "last":
 		cmd = (*r.Client).B().TsRange().Key(key).
 			Fromtimestamp(strconv.FormatInt(fromTs, 10)).Totimestamp(strconv.FormatInt(toTs, 10)).
+			Align("-").
 			AggregationLast().Bucketduration(bucketDur).Build()
 	case "": //no aggregation
 		cmd = (*r.Client).B().TsRange().Key(key).
 			Fromtimestamp(strconv.FormatInt(fromTs, 10)).Totimestamp(strconv.FormatInt(toTs, 10)).
+			Align("-").
 			Build()
 	default:
 		return []DataPoint{}, errors.New("Invalid aggr type")
@@ -64,6 +70,9 @@ func (r *RueidisClient) RangeAggr(key string, fromTs int64, toTs int64, bucketDu
 		return []DataPoint{}, err
 	}
 	data := ParseTsRange(raw)
+	if data[0].Timestamp != fromTs {
+		fmt.Println("halt " + key)
+	}
 	return data, nil
 }
 
