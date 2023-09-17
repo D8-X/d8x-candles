@@ -226,7 +226,7 @@ func (s *Server) updtMarketForSym(sym string, anchorTime24hMs int64) error {
 	const d = 86400000
 	px24, err := s.RedisTSClient.RangeAggr(sym, anchorTime24hMs, anchorTime24hMs+d, 60000, "first")
 	var ret float64
-	if err != nil {
+	if err != nil || len(px24) == 0 {
 		px24 = nil
 	} else {
 		ret = px.Value/px24[0].Value - 1
