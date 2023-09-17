@@ -70,9 +70,7 @@ func (r *RueidisClient) RangeAggr(key string, fromTs int64, toTs int64, bucketDu
 		return []DataPoint{}, err
 	}
 	data := ParseTsRange(raw)
-	if data[0].Timestamp != fromTs {
-		fmt.Println("halt " + key)
-	}
+
 	return data, nil
 }
 
