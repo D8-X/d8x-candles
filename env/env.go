@@ -9,4 +9,5 @@ const (
 	REDIS_DB_NUM      = "REDIS_DB_NUM"
 	REDIS_PW          = "REDIS_PW"
 	WS_ADDR           = "WS_ADDR"
+	NETWORK_NAME      = "NETWORK_NAME"
 )

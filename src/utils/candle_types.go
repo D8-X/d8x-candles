@@ -9,6 +9,8 @@ import (
 	"strconv"
 	"strings"
 
+	"log/slog"
+
 	"github.com/redis/rueidis"
 )
 
@@ -215,8 +217,8 @@ type ConfigFile struct {
 	PriceFeeds          []struct {
 		Symbol     string `json:"symbol"`
 		SymbolPyth string `json:"symbolPyth"`
-		IdVaa      string `json:"idVaa"` // id used for vaa (testnet or mainnet)
-		Id         string `json:"id"`    // id used for benchmarks/price_feeds-endpoint (mainnet)
+		IdVaaTest  string `json:"idVaaTestnet"` // id used for vaa (testnet - otherwise identical to id)
+		Id         string `json:"id"`           // id used for benchmarks/price_feeds-endpoint (mainnet)
 	} `json:"priceFeeds"`
 	Triangulations []struct {
 		Target string   `json:"target"`
@@ -229,7 +231,7 @@ type ConfigFile struct {
 	} `json:"supportedCandlePeriods"`
 }
 
-func (c *PriceConfig) LoadPriceConfig(fileName string) error {
+func (c *PriceConfig) LoadPriceConfig(fileName string, network string) error {
 	data, err := os.ReadFile(fileName)
 	if err != nil {
 		return err
@@ -238,7 +240,7 @@ func (c *PriceConfig) LoadPriceConfig(fileName string) error {
 	if err != nil {
 		return err
 	}
-	c.extractPythIdToSymbolMap()
+	c.extractPythIdToSymbolMap(network)
 	c.extractSymbolToTriangTarget()
 	c.extractTriangulationMap()
 	c.extractCandlePeriods()
@@ -246,10 +248,17 @@ func (c *PriceConfig) LoadPriceConfig(fileName string) error {
 }
 
 // creates a map from ids "0x32121..." to symbols "xau-usd"
-func (c *PriceConfig) extractPythIdToSymbolMap() {
+func (c *PriceConfig) extractPythIdToSymbolMap(network string) {
+	slog.Info("Loading VAA ids for network " + network)
 	m := make(map[string]string, len(c.ConfigFile.PriceFeeds))
 	for _, el := range c.ConfigFile.PriceFeeds {
-		idTrim, _ := strings.CutPrefix(el.IdVaa, "0x")
+		var idTrim string
+		if network == "testnet" {
+			idTrim, _ = strings.CutPrefix(el.IdVaaTest, "0x")
+		} else {
+			idTrim, _ = strings.CutPrefix(el.Id, "0x")
+		}
+
 		m[idTrim] = el.Symbol
 	}
 	c.PythIdToSym = m

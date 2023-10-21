@@ -126,7 +126,7 @@ func TestQueryPriceFeedInfo(t *testing.T) {
 
 func TestFetchMktInfo(t *testing.T) {
 	var c utils.PriceConfig
-	err := c.LoadPriceConfig("../../config/live.config.json")
+	err := c.LoadPriceConfig("../../config/live.config.json", "testnet")
 	if err != nil {
 		t.Errorf("Error:%v", err)
 		return

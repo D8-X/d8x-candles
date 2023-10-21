@@ -6,7 +6,7 @@ services:
       dockerfile: cmd/pyth-client/Dockerfile
     environment:
       - REDIS_PW=${REDIS_PW}
-      #- REDIS_ADDR="redis://:${REDIS_PW}@redis:6379"
+      - NETWORK_NAME=${NETWORK_NAME}
     depends_on:
       - redis-timeseries
     networks:
@@ -23,7 +23,7 @@ services:
       dockerfile: cmd/ws-server/Dockerfile
     environment:
       - REDIS_PW=${REDIS_PW}
-      #- REDIS_ADDR="redis://:${REDIS_PW}@redis:6379"
+      - NETWORK_NAME=${NETWORK_NAME}
     depends_on:
       - redis-timeseries
     ports:

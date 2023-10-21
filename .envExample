@@ -1,3 +1,8 @@
+
+# Network relevant for VAAs from Pyth (either mainnet or testnet)
+NETWORK_NAME=testnet
+#NETWORK_NAME=mainnet
+
 REDIS_PW=thisismypassword
 # run via docker compose
 WS_ADDR="ws-server:8080"
