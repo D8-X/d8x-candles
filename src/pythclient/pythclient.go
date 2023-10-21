@@ -59,7 +59,7 @@ type PriceMeta struct {
 }
 
 // symMap maps pyth ids to internal symbol (btc-usd)
-func StreamWs(config utils.PriceConfig, REDIS_ADDR string, REDIS_PW string) error {
+func StreamWs(config utils.PriceConfig, REDIS_ADDR string, REDIS_PW string, network string) error {
 	symMap := config.PythIdToSym
 	wsUrl := config.ConfigFile.PythPriceWSEndpoint
 	slog.Info("Using wsUrl=" + wsUrl)
@@ -94,7 +94,7 @@ func StreamWs(config utils.PriceConfig, REDIS_ADDR string, REDIS_PW string) erro
 		TokenBucket: tb,
 	}
 	slog.Info("Building price history...")
-	buildHistory(meta.RedisTSClient, config, ph)
+	buildHistory(meta.RedisTSClient, config, ph, network)
 	go ph.ScheduleMktInfoUpdate(&config, 15*time.Minute)
 	go ph.ScheduleCompaction(&config, 30*time.Minute)
 	var ids = make([]string, len(symMap))
@@ -262,11 +262,17 @@ func Stream(baseUrl string, symMap map[string]string) error {
 }
 */
 
-func buildHistory(client *utils.RueidisClient, config utils.PriceConfig, ph builder.PythHistoryAPI) {
+func buildHistory(client *utils.RueidisClient, config utils.PriceConfig, ph builder.PythHistoryAPI, network string) {
+
 	pythSyms := make([]utils.SymbolPyth, len(config.ConfigFile.PriceFeeds))
 	for k, feed := range config.ConfigFile.PriceFeeds {
 		var sym utils.SymbolPyth
-		sym.New(feed.SymbolPyth, feed.IdVaa)
+		if network == "testnet" {
+			sym.New(feed.SymbolPyth, feed.IdVaaTest)
+		} else {
+			sym.New(feed.SymbolPyth, feed.Id)
+		}
+
 		pythSyms[k] = sym
 	}
 	slog.Info("-- building history from Pyth candles...")

@@ -22,17 +22,6 @@ Second Evolution of Candle Stick Charts
 - pings are handled on "protocol-level"
 
 The client requests candle subscriptions via
-
-Old:
-```
-{
-  "type": "subscribe",
-  "symbol": "btc-usd",
-  "period": "1m"
-}
-
-```
-New:
 ```
 {
   "type": "subscribe",
@@ -77,23 +66,7 @@ Upon subscription the requestor receives an answer of the following form
 <summary>
 Updates are of the following form
 </summary>
-old:
 
-```
-{
-  "type": "update",
-  "topic": "btc-usdc:1m",
-  "data": [{
-    "start": 1678591260000,
-    "time": "2023-03-12T03:21:00.000Z",
-    "open": 20730.828392716117,
-    "high": 20730.828392716117,
-    "low": 20696.203770402524,
-    "close": 20723.290900287615
-  }]
-}
-```
-new:
 ```
 {{
   "type":"update",

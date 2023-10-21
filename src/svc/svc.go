@@ -5,6 +5,7 @@ import (
 	"d8x-candles/src/pythclient"
 	"d8x-candles/src/utils"
 	"d8x-candles/src/wscandle"
+	"errors"
 	"fmt"
 	"log/slog"
 
@@ -43,7 +44,7 @@ func StreamPyth() {
 		return
 	}
 
-	err = pythclient.StreamWs(c, viper.GetString(env.REDIS_ADDR), viper.GetString(env.REDIS_PW))
+	err = pythclient.StreamWs(c, viper.GetString(env.REDIS_ADDR), viper.GetString(env.REDIS_PW), viper.GetString(env.NETWORK_NAME))
 	if err != nil {
 		slog.Error(err.Error())
 	}
@@ -51,8 +52,9 @@ func StreamPyth() {
 
 func loadConfig() (utils.PriceConfig, error) {
 	fileName := viper.GetString(env.CONFIG_PATH)
+	network := viper.GetString(env.NETWORK_NAME)
 	var c utils.PriceConfig
-	err := c.LoadPriceConfig(fileName)
+	err := c.LoadPriceConfig(fileName, network)
 	if err != nil {
 		return utils.PriceConfig{}, err
 	}
@@ -71,13 +73,14 @@ func loadEnv() error {
 	viper.SetDefault(env.REDIS_ADDR, "localhost:6379")
 	viper.SetDefault(env.WS_ADDR, "localhost:8080")
 	viper.SetDefault(env.REDIS_DB_NUM, 0)
+	viper.SetDefault(env.NETWORK_NAME, "testnet")
 	requiredEnvs := []string{
 		env.CONFIG_PATH,
 	}
 
 	for _, e := range requiredEnvs {
 		if !viper.IsSet(e) {
-			return fmt.Errorf("required environment variable not set", e)
+			return errors.New("required environment variable not set" + e)
 		}
 	}
 
