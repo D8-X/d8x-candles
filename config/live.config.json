@@ -1,6 +1,5 @@
 
 {
-    "chainIds": [1440, 80001],
     "pythAPIEndpoint": "https://benchmarks.pyth.network/",
     "priceServiceWSEndpoint": "wss://hermes-beta.pyth.network/ws",
     "priceFeeds": [
