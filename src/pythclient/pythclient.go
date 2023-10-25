@@ -5,9 +5,11 @@ import (
 	"d8x-candles/src/builder"
 	"d8x-candles/src/utils"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"math"
+	"math/rand"
 	"net/url"
 	"strconv"
 	"strings"
@@ -61,8 +63,7 @@ type PriceMeta struct {
 // symMap maps pyth ids to internal symbol (btc-usd)
 func StreamWs(config utils.PriceConfig, REDIS_ADDR string, REDIS_PW string, network string) error {
 	symMap := config.PythIdToSym
-	wsUrl := config.ConfigFile.PythPriceWSEndpoint
-	slog.Info("Using wsUrl=" + wsUrl)
+
 	// keep track of latest price
 	var lastPx = make(map[string]float64, len(symMap))
 	var meta PriceMeta
@@ -103,14 +104,10 @@ func StreamWs(config utils.PriceConfig, REDIS_ADDR string, REDIS_PW string, netw
 		ids[k] = "0x" + id
 		k++
 	}
-	wsUrl = strings.TrimPrefix(wsUrl, "wss://")
-	wsUrl, pathUrl, _ := strings.Cut(wsUrl, "/")
-	u := url.URL{Scheme: "wss", Host: wsUrl, Path: pathUrl}
-	slog.Info("Connecting to " + u.String())
 
-	c, _, err := websocket.DefaultDialer.Dial(u.String(), nil)
+	c, err := connectToWebsocket(config.ConfigFile.PythPriceWSEndpoints)
 	if err != nil {
-		slog.Error("Dial:" + err.Error())
+		return err
 	}
 	defer c.Close()
 
@@ -152,6 +149,34 @@ func StreamWs(config utils.PriceConfig, REDIS_ADDR string, REDIS_PW string, netw
 			// Handle price update response
 			onPriceUpdate(pxResp, symMap[pxResp.PriceFeed.ID], lastPx, meta)
 		}
+	}
+}
+
+func connectToWebsocket(endpoints []string) (*websocket.Conn, error) {
+	shuffleSlice(endpoints)
+	var c *websocket.Conn
+	var err error
+	for _, wsUrl := range endpoints {
+		slog.Info("Using wsUrl=" + wsUrl)
+		wsUrl = strings.TrimPrefix(wsUrl, "wss://")
+		wsUrl, pathUrl, _ := strings.Cut(wsUrl, "/")
+		u := url.URL{Scheme: "wss", Host: wsUrl, Path: pathUrl}
+		slog.Info("Connecting to " + u.String())
+		c, _, err = websocket.DefaultDialer.Dial(u.String(), nil)
+		if err != nil {
+			slog.Info("Dial not successful:" + err.Error())
+			continue
+		}
+		return c, nil
+	}
+	return nil, errors.New("Could not connect to any price-service websocket endpoint")
+}
+
+func shuffleSlice(slice []string) {
+	n := len(slice)
+	for i := 0; i < n-1; i++ {
+		j := rand.Intn(n)
+		slice[i], slice[j] = slice[j], slice[i]
 	}
 }
 
