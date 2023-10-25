@@ -123,7 +123,7 @@ func StreamWs(config utils.PriceConfig, REDIS_ADDR string, REDIS_PW string, netw
 	for {
 		_, message, err := c.ReadMessage()
 		if err != nil {
-			slog.Info("Read:" + err.Error())
+			slog.Info("Pyth Price Service Websocket Read:" + err.Error())
 			return err
 		}
 		var resp map[string]interface{}
