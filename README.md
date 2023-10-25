@@ -121,7 +121,7 @@ to get a response like
 
 <details>
 <summary>
-Supported periods are case-sensitive and as defined in the configuration file live.config.json
+Supported periods are case-sensitive and as defined in the configuration file prices.config.json
 </summary>
 
 ```

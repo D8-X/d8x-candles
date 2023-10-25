@@ -12,4 +12,4 @@ REDIS_DB_NUM=0
 #REDIS_ADDR="localhost:6379"
 #WS_ADDR="127.0.0.1:8080"
 
-CONFIG_PATH="./config/live.config.json"
+CONFIG_PATH="./config/prices.config.json"

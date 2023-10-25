@@ -95,7 +95,7 @@ func (s *Server) RemoveClient(clientID string) {
 // Process incoming websocket message
 // https://github.com/madeindra/golang-websocket/
 func (s *Server) HandleRequest(conn *websocket.Conn, config utils.PriceConfig, clientID string, message []byte) {
-	slog.Info("recv: " + fmt.Sprint(message))
+	slog.Info("request received")
 	var data ClientMessage
 	err := json.Unmarshal(message, &data)
 	if err != nil {
