@@ -212,9 +212,9 @@ type PriceConfig struct {
 }
 
 type ConfigFile struct {
-	PythAPIEndpoint     string `json:"pythAPIEndpoint"`
-	PythPriceWSEndpoint string `json:"priceServiceWSEndpoint"`
-	PriceFeeds          []struct {
+	PythAPIEndpoint      string   `json:"pythAPIEndpoint"`
+	PythPriceWSEndpoints []string `json:"priceServiceWSEndpoints"`
+	PriceFeeds           []struct {
 		Symbol     string `json:"symbol"`
 		SymbolPyth string `json:"symbolPyth"`
 		IdVaaTest  string `json:"idVaaTestnet"` // id used for vaa (testnet - otherwise identical to id)
