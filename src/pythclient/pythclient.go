@@ -133,7 +133,13 @@ func StreamWs(config utils.PriceConfig, REDIS_ADDR string, REDIS_PW string, netw
 		}
 		switch resp["type"] {
 		case "response":
-			continue //{"type":"response","status":"success"}
+			if resp["status"] == "success" {
+				//{"type":"response","status":"success"}
+				continue
+			}
+			msg := fmt.Sprintf("%s : %s", resp["status"], resp["error"])
+			slog.Error("Pyth response " + msg)
+			break
 		case "price_update":
 			break
 		default:
