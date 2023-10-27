@@ -1,5 +1,5 @@
 # d8x-candles
-Second Evolution of Candle Stick Charts
+Second Evolution of Candle Stick Charts and index price service
 
 
 ## Install
