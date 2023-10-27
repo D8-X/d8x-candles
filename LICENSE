@@ -9,8 +9,14 @@ to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
 copies of the Software, and to permit persons to whom the Software is
 furnished to do so, subject to the following conditions:
 
-The above copyright notice and this permission notice shall be included in all
+- The above copyright notice and this permission notice shall be included in all
 copies or substantial portions of the Software.
+- Any usage of the Software is furthermore subject to Quantena AG's Terms of 
+Service, which take precedence in case of any conflict with the MIT License. 
+Note that the D8X Protocol is not operated by Quantena AG, and any usage of 
+the D8X Protocol is subject to the D8X Protocol Software Disclaimer. The Terms 
+of Service and the D8X Protocol Software Disclaimer are available 
+under https://d8x.exchange/.
 
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
