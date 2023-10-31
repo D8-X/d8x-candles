@@ -1,7 +1,7 @@
 
 {
     "pythAPIEndpoint": "https://benchmarks.pyth.network/",
-    "priceServiceWSEndpoints": ["wss://hermes-beta.pyth.network/ws"],
+    "priceServiceWSEndpoints": ["wss://hermes.pyth.network/ws"],
     "priceFeeds": [
       {
         "symbol": "btc-usd",
@@ -25,7 +25,7 @@
         "symbol": "matic-usd",
         "symbolPyth": "Crypto.MATIC/USD",
         "idVaaTestnet": "0xd2c2c1f2bba8e0964f9589e060c2ee97f5e19057267ac3284caef3bd50bd2cb5",
-        "id":           "0x50xde33a9112c2b700b8d30b8a3402c103578ccfa2765696471cc672bd5cf6ac52"
+        "id":           "0x5de33a9112c2b700b8d30b8a3402c103578ccfa2765696471cc672bd5cf6ac52"
       },
       {
         "symbol": "usd-chf",
