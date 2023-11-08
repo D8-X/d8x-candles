@@ -8,9 +8,16 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"os"
 
 	"github.com/spf13/viper"
 )
+
+func init() {
+	slog.SetDefault(slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
+		AddSource: true,
+	})))
+}
 
 func RunCandleCharts() {
 	err := loadEnv()
