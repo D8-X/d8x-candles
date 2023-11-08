@@ -6,4 +6,6 @@ COPY . .
 RUN go mod download && go mod verify
 RUN go build -o /usr/local/bin/app ./cmd/ws-server/main.go
 
+FROM debian:bookworm-slim
+COPY --from=0 /usr/local/bin/app /usr/local/bin/app
 CMD ["app"]

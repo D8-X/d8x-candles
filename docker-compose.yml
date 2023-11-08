@@ -6,7 +6,9 @@ services:
       dockerfile: cmd/pyth-client/Dockerfile
     environment:
       - REDIS_PW=${REDIS_PW}
+      - REDIS_ADDR=${REDIS_ADDR}
       - NETWORK_NAME=${NETWORK_NAME}
+      - CONFIG_PATH=/prices_conf
     depends_on:
       - redis-timeseries
     networks:
@@ -16,14 +18,17 @@ services:
       options:
         max-size: "10m"
         max-file: "10"
-
+    configs:
+      - prices_conf
   ws-server:
     build:
       context: .
       dockerfile: cmd/ws-server/Dockerfile
     environment:
       - REDIS_PW=${REDIS_PW}
+      - REDIS_ADDR=${REDIS_ADDR}
       - NETWORK_NAME=${NETWORK_NAME}
+      - CONFIG_PATH=/prices_conf
     depends_on:
       - redis-timeseries
     ports:
@@ -35,6 +40,8 @@ services:
       options:
         max-size: "10m"
         max-file: "10"
+    configs:
+      - prices_conf
 
   redis-timeseries:
     image: redis/redis-stack-server:latest
@@ -50,6 +57,8 @@ services:
       options:
         max-size: "10m"
         max-file: "10"
-
+configs:
+  prices_conf:
+    file: ./config/prices.config.json
 networks:
   app-net:
