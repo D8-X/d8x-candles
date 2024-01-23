@@ -44,6 +44,18 @@
         "symbolPyth": "FX.GBP/USD",
         "idVaaTestnet": "0xbcbdc2755bd74a2065f9d3283c2b8acbd898e473bdb90a6764b3dbd467c56ecd",
         "id":           "0x84c2dde9633d93d1bcad84e7dc41c9d56578b7ec52fabedc1f335d673df0a7c1"
+      },
+      {
+        "symbol": "eur-usd",
+        "symbolPyth": "FX.EUR/USD",
+        "idVaaTestnet": "0xc1b12769f6633798d45adfd62bfc70114839232e2949b01fb3d3f927d2606154",
+        "id":           "0xa995d00bb36a63cef7fd2c287dc105fc8f3d93779f062f09551b0af3e81ec30b"
+      }, 
+      {
+        "symbol": "usd-jpy",
+        "symbolPyth": "FX.USD/JPY",
+        "idVaaTestnet": "0x20a938f54b68f1f2ef18ea0328f6dd0747f8ea11486d22b021e83a900be89776",
+        "id":   "0xef2c98c804ba503c6a707e38be4dfbb16683775f195b091252bf24693042fd52"
       }
     ],
     "triangulations": [
@@ -52,7 +64,9 @@
       { "target": "matic-usdc", "path": ["*", "matic-usd", "/", "usdc-usd"] },
       { "target": "xau-usdc", "path": ["*", "xau-usd", "/", "usdc-usd"] },
       { "target": "gbp-usdc", "path": ["*", "gbp-usd", "/", "usdc-usd"] },
-      { "target": "chf-usdc", "path": ["/", "usd-chf", "/", "usdc-usd"] }
+      { "target": "chf-usdc", "path": ["/", "usd-chf", "/", "usdc-usd"] },
+      { "target": "eur-usdc", "path": ["*", "eur-usd", "/", "usdc-usd"] },
+      { "target": "jpy-usdc", "path": ["/", "usd-jpy", "/", "usdc-usd"] }
     ],
     "supportedCandlePeriods": [
       { "period": "1m", "timeMs": 60000, "displayRangeMs": 86400000 },
