@@ -5,11 +5,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"strconv"
 	"strings"
 
-	"log/slog"
+	embed "github.com/D8-X/d8x-futures-go-sdk/config"
 
 	"github.com/redis/rueidis"
 )
@@ -206,6 +207,7 @@ type CandlePeriod struct {
 type PriceConfig struct {
 	ConfigFile           ConfigFile
 	PythIdToSym          map[string]string       //pyth id (0xabc..) to symbol (btc-usd)
+	SymToPythOrigin      map[string]string       //symbol (btc-usd) to pyth origin ("Crypto.BTC/USD")
 	SymToDependentTriang map[string][]string     //sym to all dependent triangulations
 	SymToTriangPath      map[string][]string     //sym to triangulation path
 	CandlePeriodsMs      map[string]CandlePeriod //period 1m,5m,... to timeMs and displayRangeMs
@@ -214,13 +216,7 @@ type PriceConfig struct {
 type ConfigFile struct {
 	PythAPIEndpoint      string   `json:"pythAPIEndpoint"`
 	PythPriceWSEndpoints []string `json:"priceServiceWSEndpoints"`
-	PriceFeeds           []struct {
-		Symbol     string `json:"symbol"`
-		SymbolPyth string `json:"symbolPyth"`
-		IdVaaTest  string `json:"idVaaTestnet"` // id used for vaa (testnet - otherwise identical to id)
-		Id         string `json:"id"`           // id used for benchmarks/price_feeds-endpoint (mainnet)
-	} `json:"priceFeeds"`
-	Triangulations []struct {
+	Triangulations       []struct {
 		Target string   `json:"target"`
 		Path   []string `json:"path"`
 	} `json:"triangulations"`
@@ -240,7 +236,10 @@ func (c *PriceConfig) LoadPriceConfig(fileName string, network string) error {
 	if err != nil {
 		return err
 	}
-	c.extractPythIdToSymbolMap(network)
+	err = c.extractPythIdToSymbolMap(network)
+	if err != nil {
+		return err
+	}
 	c.extractSymbolToTriangTarget()
 	c.extractTriangulationMap()
 	c.extractCandlePeriods()
@@ -248,20 +247,27 @@ func (c *PriceConfig) LoadPriceConfig(fileName string, network string) error {
 }
 
 // creates a map from ids "0x32121..." to symbols "xau-usd"
-func (c *PriceConfig) extractPythIdToSymbolMap(network string) {
+func (c *PriceConfig) extractPythIdToSymbolMap(network string) error {
 	slog.Info("Loading VAA ids for network " + network)
-	m := make(map[string]string, len(c.ConfigFile.PriceFeeds))
-	for _, el := range c.ConfigFile.PriceFeeds {
-		var idTrim string
-		if network == "testnet" {
-			idTrim, _ = strings.CutPrefix(el.IdVaaTest, "0x")
-		} else {
-			idTrim, _ = strings.CutPrefix(el.Id, "0x")
-		}
-
-		m[idTrim] = el.Symbol
+	pSource := "PythEVMStable"
+	if network != "mainnet" {
+		pSource = "PythEVMBeta"
 	}
-	c.PythIdToSym = m
+	config, err := embed.GetDefaultPriceConfigByName(pSource)
+	if err != nil {
+		return err
+	}
+	mIdToSym := make(map[string]string, len(config.PriceFeedIds))
+	mSymToPythSym := make(map[string]string, len(config.PriceFeedIds))
+	for _, el := range config.PriceFeedIds {
+		s := strings.ToLower(el.Symbol)
+		idTrim, _ := strings.CutPrefix(el.Id, "0x")
+		mIdToSym[idTrim] = strings.ToLower(s)
+		mSymToPythSym[s] = el.Origin
+	}
+	c.PythIdToSym = mIdToSym
+	c.SymToPythOrigin = mSymToPythSym
+	return nil
 }
 
 // From the data of the form { "target": "btc-usdc", "path": ["*", "btc-usd", "/", "usdc-usd"] },
@@ -308,8 +314,8 @@ func (c *PriceConfig) IsSymbolAvailable(sym string) bool {
 		return true
 	}
 	// symbol is not used in triangulations but available
-	for _, el := range c.ConfigFile.PriceFeeds {
-		if el.Symbol == sym {
+	for _, val := range c.PythIdToSym {
+		if val == sym {
 			return true
 		}
 	}

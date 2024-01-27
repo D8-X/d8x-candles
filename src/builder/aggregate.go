@@ -69,13 +69,14 @@ func AddPriceObs(client *utils.RueidisClient, sym string, timestampMs int64, val
 	resp := (*client.Client).Do(client.Ctx,
 		(*client.Client).B().TsAdd().Key(sym).Timestamp(ts).Value(value).Build())
 	if resp.Error() != nil {
-		slog.Error("AddPriceObs:" + resp.Error().Error())
+		slog.Error("AddPriceObs " + sym + ": " + resp.Error().Error())
 		return resp.Error()
 	}
 	return nil
 }
 
 func CreateTimeSeries(client *utils.RueidisClient, sym string) {
+	slog.Info("create" + sym)
 	_, err := (*client.Client).Do(client.Ctx, (*client.Client).B().
 		TsInfo().Key(sym).Build()).AsMap()
 	if err == nil {

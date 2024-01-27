@@ -200,12 +200,12 @@ func (s *Server) SendMarketResponses() {
 
 // update market info for all symbols using Redis
 func (s *Server) UpdateMarketResponses(config utils.PriceConfig) {
-	feeds := config.ConfigFile.PriceFeeds
+
 	nowUTCms := time.Now().UTC().UnixNano() / int64(time.Millisecond)
 	//yesterday:
 	var anchorTime24hMs int64 = nowUTCms - 86400000
-	for k := 0; k < len(feeds); k++ {
-		s.updtMarketForSym(feeds[k].Symbol, anchorTime24hMs)
+	for _, sym := range config.PythIdToSym {
+		s.updtMarketForSym(sym, anchorTime24hMs)
 	}
 	//triangulations:
 	triang := config.ConfigFile.Triangulations

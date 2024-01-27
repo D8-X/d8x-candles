@@ -53,16 +53,14 @@ func (p *PythHistoryAPI) ScheduleMktInfoUpdate(config *utils.PriceConfig, updtIn
 // Redis
 func (p *PythHistoryAPI) FetchMktInfo(config *utils.PriceConfig) {
 	// process base price feeds (no triangulation)
-	f := config.ConfigFile.PriceFeeds
-	for k := 0; k < len(f); k++ {
-		sym := f[k].Symbol
-		asset := strings.ToLower(strings.Split(f[k].SymbolPyth, ".")[0])
+	for id, sym := range config.PythIdToSym {
+		origin := config.SymToPythOrigin[sym]
+		asset := strings.ToLower(strings.Split(origin, ".")[0])
 		if asset == "crypto" {
 			// crypto markets are always open, huray
 			p.setMarketHours(sym, MarketHours{true, 0, 0}, "crypto")
 			continue
 		}
-		id := f[k].Id
 		p.QueryPriceFeedInfo(sym, id)
 	}
 	// construct info for triangulated price feeds, e.g. chf-usdc

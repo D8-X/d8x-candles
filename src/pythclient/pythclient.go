@@ -294,17 +294,14 @@ func Stream(baseUrl string, symMap map[string]string) error {
 */
 
 func buildHistory(client *utils.RueidisClient, config utils.PriceConfig, ph builder.PythHistoryAPI, network string) {
-
-	pythSyms := make([]utils.SymbolPyth, len(config.ConfigFile.PriceFeeds))
-	for k, feed := range config.ConfigFile.PriceFeeds {
-		var sym utils.SymbolPyth
-		if network == "testnet" {
-			sym.New(feed.SymbolPyth, feed.IdVaaTest)
-		} else {
-			sym.New(feed.SymbolPyth, feed.Id)
-		}
-
-		pythSyms[k] = sym
+	var k int
+	pythSyms := make([]utils.SymbolPyth, len(config.PythIdToSym))
+	for id, sym := range config.PythIdToSym {
+		var symP utils.SymbolPyth
+		origin := config.SymToPythOrigin[sym]
+		symP.New(origin, id)
+		pythSyms[k] = symP
+		k++
 	}
 	slog.Info("-- building history from Pyth candles...")
 	ph.PythDataToRedisPriceObs(pythSyms)

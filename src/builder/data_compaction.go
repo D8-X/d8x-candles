@@ -21,13 +21,13 @@ func (p *PythHistoryAPI) ScheduleCompaction(config *utils.PriceConfig, waitTime 
 
 // Compact price observations so that aggregations needed for candles remain the same
 func (p *PythHistoryAPI) CompactAllPriceObs(config *utils.PriceConfig) {
-	for _, feed := range config.ConfigFile.PriceFeeds {
-		err := p.CompactPriceObs(feed.Symbol)
+	for _, sym := range config.PythIdToSym {
+		err := p.CompactPriceObs(sym)
 		if err != nil {
-			slog.Error("Compaction failed for " + feed.Symbol + ":" + err.Error())
+			slog.Error("Compaction failed for " + sym + ":" + err.Error())
 			continue
 		}
-		slog.Info("Compaction succeeded for " + feed.Symbol)
+		slog.Info("Compaction succeeded for " + sym)
 	}
 	for _, triang := range config.ConfigFile.Triangulations {
 		err := p.CompactPriceObs(triang.Target)
