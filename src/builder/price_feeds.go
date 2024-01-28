@@ -74,15 +74,15 @@ outerLoop:
 		isOpen := true
 		var nxtOpen, nxtClose int64 = 0, math.MaxInt64
 		var assetType string = "crypto"
-		for k := 1; k < len(path); k += 2 {
-			m, err := p.GetMarketInfo(path[k])
+		for k := 0; k < len(path.Symbol); k++ {
+			m, err := p.GetMarketInfo(path.Symbol[k])
 			if m.AssetType != "crypto" {
 				// dominant asset type for triangulations is
 				// the non-crypto asset
 				assetType = m.AssetType
 			}
 			if err != nil {
-				slog.Error("Error triangulated feeds info " + symT + " at " + path[k])
+				slog.Error("Error triangulated feeds info " + symT + " at " + path.Symbol[k])
 				continue outerLoop
 			}
 			isOpen = isOpen && m.MarketHours.IsOpen

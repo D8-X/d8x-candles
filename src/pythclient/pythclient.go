@@ -15,6 +15,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/D8-X/d8x-futures-go-sdk/pkg/d8x_futures"
 	"github.com/gorilla/websocket"
 	"github.com/redis/go-redis/v9"
 	"github.com/redis/rueidis"
@@ -54,7 +55,7 @@ type PriceUpdateResponse struct {
 
 type PriceMeta struct {
 	AffectedTriang map[string][]string
-	Triangulations map[string][]string
+	Triangulations map[string]d8x_futures.Triangulation
 	RedisClient    *redis.Client
 	RedisTSClient  *utils.RueidisClient
 	Ctx            context.Context
@@ -205,7 +206,7 @@ func onPriceUpdate(pxResp PriceUpdateResponse, sym string, lastPx map[string]flo
 	targetSymbols := meta.AffectedTriang[sym]
 	for _, tsym := range targetSymbols {
 		// if market closed for any of the items in the triangulation,
-		if isTriangulatedMarketClosed(tsym, meta.Triangulations[tsym], meta) {
+		if isTriangulatedMarketClosed(tsym, meta.Triangulations[tsym].Symbol, meta) {
 			slog.Info("-- triangulation price update: " + tsym + " - market closed")
 			continue
 		}
@@ -231,7 +232,7 @@ func onPriceUpdate(pxResp PriceUpdateResponse, sym string, lastPx map[string]flo
 func isTriangulatedMarketClosed(tsym string, symbols []string, meta PriceMeta) bool {
 	info, err := builder.GetMarketInfo(meta.Ctx, meta.RedisTSClient.Client, tsym)
 	if err != nil {
-		slog.Error("Error market-closed determination " + tsym + ":" + err.Error())
+		slog.Info("Market-closed determination " + tsym + ":" + err.Error())
 		return true
 	}
 	if !info.MarketHours.IsOpen {

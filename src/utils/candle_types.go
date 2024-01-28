@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	embed "github.com/D8-X/d8x-futures-go-sdk/config"
+	"github.com/D8-X/d8x-futures-go-sdk/pkg/d8x_futures"
 
 	"github.com/redis/rueidis"
 )
@@ -206,11 +207,11 @@ type CandlePeriod struct {
 
 type PriceConfig struct {
 	ConfigFile           ConfigFile
-	PythIdToSym          map[string]string       //pyth id (0xabc..) to symbol (btc-usd)
-	SymToPythOrigin      map[string]string       //symbol (btc-usd) to pyth origin ("Crypto.BTC/USD")
-	SymToDependentTriang map[string][]string     //sym to all dependent triangulations
-	SymToTriangPath      map[string][]string     //sym to triangulation path
-	CandlePeriodsMs      map[string]CandlePeriod //period 1m,5m,... to timeMs and displayRangeMs
+	PythIdToSym          map[string]string                    //pyth id (0xabc..) to symbol (btc-usd)
+	SymToPythOrigin      map[string]string                    //symbol (btc-usd) to pyth origin ("Crypto.BTC/USD")
+	SymToDependentTriang map[string][]string                  //sym to all dependent triangulations
+	SymToTriangPath      map[string]d8x_futures.Triangulation //sym to triangulation path
+	CandlePeriodsMs      map[string]CandlePeriod              //period 1m,5m,... to timeMs and displayRangeMs
 }
 
 type ConfigFile struct {
@@ -287,10 +288,17 @@ func (c *PriceConfig) extractSymbolToTriangTarget() {
 // get map for { "target": "btc-usdc", "path": ["*", "btc-usd", "/", "usdc-usd"] }
 // from target -> path (map[string][]string)
 func (c *PriceConfig) extractTriangulationMap() {
-	m := make(map[string][]string)
+	m := make(map[string]d8x_futures.Triangulation)
 	for k := 0; k < len(c.ConfigFile.Triangulations); k++ {
 		t := c.ConfigFile.Triangulations[k].Target
-		m[t] = c.ConfigFile.Triangulations[k].Path
+		path := c.ConfigFile.Triangulations[k].Path
+		var tri d8x_futures.Triangulation
+		for j := 0; j < len(path); j += 2 {
+			tri.IsInverse = append(tri.IsInverse, path[j] == "/")
+			sym := strings.ToLower(path[j+1])
+			tri.Symbol = append(tri.Symbol, sym)
+		}
+		m[t] = tri
 	}
 	c.SymToTriangPath = m
 }
@@ -304,15 +312,11 @@ func (c *PriceConfig) extractCandlePeriods() {
 
 func (c *PriceConfig) IsSymbolAvailable(sym string) bool {
 	// symbol is a triangulated symbol?
-	s := c.SymToTriangPath[sym]
-	if len(s) > 0 {
+	_, exists := c.SymToTriangPath[sym]
+	if exists {
 		return true
 	}
-	// symbol is part of a triangulation?
-	t := c.SymToTriangPath[sym]
-	if len(t) > 0 {
-		return true
-	}
+
 	// symbol is not used in triangulations but available
 	for _, val := range c.PythIdToSym {
 		if val == sym {
