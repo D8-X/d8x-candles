@@ -154,7 +154,7 @@ func (p *PythHistoryAPI) QueryPriceFeedInfo(sym string, id string) {
 		return
 	}
 	// check whether id provided is indeed for the symbol we aim to store
-	symSource := strings.ToLower(apiResponse.Attributes["generic_symbol"])
+	symSource := strings.ToUpper(apiResponse.Attributes["generic_symbol"])
 	if symSource != strings.ReplaceAll(sym, "-", "") {
 		slog.Error("Error: price_feeds GET id is for " + symSource +
 			" but symbol " + sym)

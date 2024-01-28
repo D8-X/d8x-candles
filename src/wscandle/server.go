@@ -57,7 +57,7 @@ type MarketResponse struct {
 	NxtCloseTsSec int64   `json:"nextClose"`
 }
 
-const MARKETS_TOPIC = "markets"
+const MARKETS_TOPIC = "MARKETS"
 
 func NewServer() *Server {
 	var s Server
@@ -102,9 +102,9 @@ func (s *Server) HandleRequest(conn *websocket.Conn, config utils.PriceConfig, c
 		// JSON parsing not successful
 		return
 	}
-	reqTopic := strings.TrimSpace(strings.ToLower(data.Topic))
-	reqType := strings.TrimSpace(strings.ToLower(data.Type))
-	if reqType == "subscribe" {
+	reqTopic := strings.TrimSpace(strings.ToUpper(data.Topic))
+	reqType := strings.TrimSpace(strings.ToUpper(data.Type))
+	if reqType == "SUBSCRIBE" {
 		if reqTopic == MARKETS_TOPIC {
 			msg := s.SubscribeMarkets(conn, clientID)
 			server.Send(conn, msg)
@@ -112,7 +112,7 @@ func (s *Server) HandleRequest(conn *websocket.Conn, config utils.PriceConfig, c
 			msg := s.SubscribeCandles(conn, clientID, reqTopic, config)
 			server.Send(conn, msg)
 		}
-	} else if reqType == "unsubscribe" {
+	} else if reqType == "UNSUBSCRIBE" {
 		// unsubscribe
 		if reqTopic == MARKETS_TOPIC {
 			delete(s.Subscriptions[reqTopic], clientID)
@@ -288,16 +288,17 @@ func (s *Server) SubscribeCandles(conn *websocket.Conn, clientID string, topic s
 }
 
 func isValidCandleTopic(topic string) bool {
-	pattern := "^[a-zA-Z]+-[a-zA-Z]+:[0-9]+[hmd]$" // Regular expression for candle topics
+	pattern := "^[a-zA-Z]+-[a-zA-Z]+:[0-9]+[HMD]$" // Regular expression for candle topics
 	regex, _ := regexp.Compile(pattern)
 	return regex.MatchString(topic)
 }
 
 // form initial response for candle subscription (e.g., eth-usd:5m)
 func (s *Server) candleResponse(sym string, p utils.CandlePeriod) []byte {
+	symDisplay := strings.ToLower(sym)
 	slog.Info("Subscription for symbol " + sym + " Period " + fmt.Sprint(p.TimeMs/60000) + "m")
 	data := GetInitialCandles(s.RedisTSClient, sym, p)
-	topic := sym + ":" + p.Name
+	topic := symDisplay + ":" + p.Name
 	res := ServerResponse{Type: "subscribe", Topic: topic, Data: data}
 	jsonData, err := json.Marshal(res)
 	if err != nil {

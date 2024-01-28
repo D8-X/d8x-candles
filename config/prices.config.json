@@ -3,14 +3,14 @@
     "pythAPIEndpoint": "https://benchmarks.pyth.network/",
     "priceServiceWSEndpoints": ["wss://hermes.pyth.network/ws"],
     "triangulations": [
-      { "target": "btc-usdc", "path": ["*", "btc-usd", "/", "usdc-usd"] },
-      { "target": "eth-usdc", "path": ["*", "eth-usd", "/", "usdc-usd"] },
-      { "target": "matic-usdc", "path": ["*", "matic-usd", "/", "usdc-usd"] },
-      { "target": "xau-usdc", "path": ["*", "xau-usd", "/", "usdc-usd"] },
-      { "target": "gbp-usdc", "path": ["*", "gbp-usd", "/", "usdc-usd"] },
-      { "target": "chf-usdc", "path": ["/", "usd-chf", "/", "usdc-usd"] },
-      { "target": "eur-usdc", "path": ["*", "eur-usd", "/", "usdc-usd"] },
-      { "target": "jpy-usdc", "path": ["/", "usd-jpy", "/", "usdc-usd"] }
+      { "target": "BTC-USDC" },
+      { "target": "ETH-USDC" },
+      { "target": "MATIC-USDC"},
+      { "target": "XAU-USDC" },
+      { "target": "GBP-USDC" },
+      { "target": "CHF-USDC" },
+      { "target": "EUR-USDC" },
+      { "target": "JPY-USDC" }
     ]
   }
 

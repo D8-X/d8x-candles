@@ -13,6 +13,7 @@ import (
 
 	embed "github.com/D8-X/d8x-futures-go-sdk/config"
 	"github.com/D8-X/d8x-futures-go-sdk/pkg/d8x_futures"
+	"github.com/D8-X/d8x-futures-go-sdk/utils"
 
 	"github.com/redis/rueidis"
 )
@@ -135,7 +136,7 @@ func (s *SymbolPyth) New(symbol string, id string) error {
 	if len(parts2) != 2 {
 		return fmt.Errorf("Symbol must contain '/'. E.g. Crypto.ETH/USD")
 	}
-	s.Symbol = strings.ToLower(parts2[0]) + "-" + strings.ToLower(parts2[1])
+	s.Symbol = strings.ToUpper(parts2[0]) + "-" + strings.ToUpper(parts2[1])
 	s.id = id
 	s.PythSymbol = symbol
 	return nil
@@ -208,6 +209,7 @@ type CandlePeriod struct {
 
 type PriceConfig struct {
 	ConfigFile           ConfigFile
+	PriceFeedIds         []utils.PriceFeedId
 	PythIdToSym          map[string]string                    //pyth id (0xabc..) to symbol (btc-usd)
 	SymToPythOrigin      map[string]string                    //symbol (btc-usd) to pyth origin ("Crypto.BTC/USD")
 	SymToDependentTriang map[string][]string                  //sym to all dependent triangulations
@@ -219,8 +221,7 @@ type ConfigFile struct {
 	PythAPIEndpoint      string   `json:"pythAPIEndpoint"`
 	PythPriceWSEndpoints []string `json:"priceServiceWSEndpoints"`
 	Triangulations       []struct {
-		Target string   `json:"target"`
-		Path   []string `json:"path"`
+		Target string `json:"target"`
 	} `json:"triangulations"`
 }
 
@@ -260,11 +261,12 @@ func (c *PriceConfig) extractPythIdToSymbolMap(network string) error {
 	mIdToSym := make(map[string]string, len(config.PriceFeedIds))
 	mSymToPythSym := make(map[string]string, len(config.PriceFeedIds))
 	for _, el := range config.PriceFeedIds {
-		s := strings.ToLower(el.Symbol)
+		s := strings.ToUpper(el.Symbol)
 		idTrim, _ := strings.CutPrefix(el.Id, "0x")
-		mIdToSym[idTrim] = strings.ToLower(s)
+		mIdToSym[idTrim] = s
 		mSymToPythSym[s] = el.Origin
 	}
+	c.PriceFeedIds = config.PriceFeedIds
 	c.PythIdToSym = mIdToSym
 	c.SymToPythOrigin = mSymToPythSym
 	return nil
@@ -276,9 +278,11 @@ func (c *PriceConfig) extractPythIdToSymbolMap(network string) error {
 func (c *PriceConfig) extractSymbolToTriangTarget() {
 	m := make(map[string][]string)
 	for k := 0; k < len(c.ConfigFile.Triangulations); k++ {
-		path := c.ConfigFile.Triangulations[k].Path
-		for j := 1; j < len(path); j = j + 2 {
-			m[path[j]] = append(m[path[j]], c.ConfigFile.Triangulations[k].Target)
+		//path := c.ConfigFile.Triangulations[k].Path
+		target := c.ConfigFile.Triangulations[k].Target
+		path := d8x_futures.Triangulate(strings.ToUpper(target), c.PriceFeedIds)
+		for j := 0; j < len(path.Symbol); j++ {
+			m[path.Symbol[j]] = append(m[path.Symbol[j]], target)
 		}
 	}
 	c.SymToDependentTriang = m
@@ -289,15 +293,9 @@ func (c *PriceConfig) extractSymbolToTriangTarget() {
 func (c *PriceConfig) extractTriangulationMap() {
 	m := make(map[string]d8x_futures.Triangulation)
 	for k := 0; k < len(c.ConfigFile.Triangulations); k++ {
-		t := c.ConfigFile.Triangulations[k].Target
-		path := c.ConfigFile.Triangulations[k].Path
-		var tri d8x_futures.Triangulation
-		for j := 0; j < len(path); j += 2 {
-			tri.IsInverse = append(tri.IsInverse, path[j] == "/")
-			sym := strings.ToLower(path[j+1])
-			tri.Symbol = append(tri.Symbol, sym)
-		}
-		m[t] = tri
+		target := c.ConfigFile.Triangulations[k].Target
+		tri := d8x_futures.Triangulate(target, c.PriceFeedIds)
+		m[target] = tri
 	}
 	c.SymToTriangPath = m
 }
@@ -310,7 +308,8 @@ func (c *PriceConfig) extractCandlePeriods() error {
 	}
 	c.CandlePeriodsMs = make(map[string]CandlePeriod, len(periods))
 	for _, el := range periods {
-		c.CandlePeriodsMs[el.Period] = CandlePeriod{Name: el.Period, TimeMs: el.TimeMs, DisplayRangeMs: el.DisplayRangeMs}
+		p := strings.ToUpper(el.Period)
+		c.CandlePeriodsMs[p] = CandlePeriod{Name: p, TimeMs: el.TimeMs, DisplayRangeMs: el.DisplayRangeMs}
 	}
 	return nil
 }

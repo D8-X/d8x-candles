@@ -25,7 +25,7 @@ The client requests candle subscriptions via
 ```
 {
   "type": "subscribe",
-  "topic": "btc-usd:1m",
+  "topic": "btc-usd:1m"
 }
 
 ```
@@ -87,7 +87,7 @@ The client requests market summaries via
 ```
 {
   "type": "subscribe",
-  "topic": "markets",
+  "topic": "markets"
 }
 ```
 
