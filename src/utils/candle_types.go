@@ -2,6 +2,7 @@ package utils
 
 import (
 	"context"
+	"d8x-candles/config"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -221,11 +222,6 @@ type ConfigFile struct {
 		Target string   `json:"target"`
 		Path   []string `json:"path"`
 	} `json:"triangulations"`
-	SupportedCandlePeriods []struct {
-		Period         string `json:"period"`
-		TimeMs         int    `json:"timeMs"`
-		DisplayRangeMs int    `json:"displayRangeMs"`
-	} `json:"supportedCandlePeriods"`
 }
 
 func (c *PriceConfig) LoadPriceConfig(fileName string, network string) error {
@@ -243,7 +239,10 @@ func (c *PriceConfig) LoadPriceConfig(fileName string, network string) error {
 	}
 	c.extractSymbolToTriangTarget()
 	c.extractTriangulationMap()
-	c.extractCandlePeriods()
+	err = c.extractCandlePeriods()
+	if err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -303,11 +302,17 @@ func (c *PriceConfig) extractTriangulationMap() {
 	c.SymToTriangPath = m
 }
 
-func (c *PriceConfig) extractCandlePeriods() {
-	c.CandlePeriodsMs = make(map[string]CandlePeriod, len(c.ConfigFile.SupportedCandlePeriods))
-	for _, el := range c.ConfigFile.SupportedCandlePeriods {
+func (c *PriceConfig) extractCandlePeriods() error {
+
+	periods, err := config.GetCandlePeriodsConfig()
+	if err != nil {
+		return err
+	}
+	c.CandlePeriodsMs = make(map[string]CandlePeriod, len(periods))
+	for _, el := range periods {
 		c.CandlePeriodsMs[el.Period] = CandlePeriod{Name: el.Period, TimeMs: el.TimeMs, DisplayRangeMs: el.DisplayRangeMs}
 	}
+	return nil
 }
 
 func (c *PriceConfig) IsSymbolAvailable(sym string) bool {

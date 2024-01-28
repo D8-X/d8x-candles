@@ -11,13 +11,6 @@
       { "target": "chf-usdc", "path": ["/", "usd-chf", "/", "usdc-usd"] },
       { "target": "eur-usdc", "path": ["*", "eur-usd", "/", "usdc-usd"] },
       { "target": "jpy-usdc", "path": ["/", "usd-jpy", "/", "usdc-usd"] }
-    ],
-    "supportedCandlePeriods": [
-      { "period": "1m", "timeMs": 60000, "displayRangeMs": 86400000 },
-      { "period": "5m", "timeMs": 300000, "displayRangeMs": 86400000 },
-      { "period": "15m", "timeMs": 900000, "displayRangeMs": 86400000 },
-      { "period": "1h", "timeMs": 3600000, "displayRangeMs": 2592000000 },
-      { "period": "1d", "timeMs": 86400000, "displayRangeMs": 0 }
     ]
   }
 
