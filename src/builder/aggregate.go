@@ -75,7 +75,7 @@ func AddPriceObs(client *utils.RueidisClient, sym string, timestampMs int64, val
 	return nil
 }
 
-func CreateTimeSeries(client *utils.RueidisClient, sym string) {
+func CreateRedisTimeSeries(client *utils.RueidisClient, sym string) {
 	slog.Info("create" + sym)
 	_, err := (*client.Client).Do(client.Ctx, (*client.Client).B().
 		TsInfo().Key(sym).Build()).AsMap()
