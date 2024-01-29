@@ -87,8 +87,9 @@ func StreamWs(config utils.PriceConfig, REDIS_ADDR string, REDIS_PW string, netw
 		Client: &client,
 		Ctx:    meta.Ctx,
 	}
+	//https://docs.pyth.network/benchmarks/rate-limits
 	capacity := 30
-	refillRate := 3.0 // 3 tokens per second
+	refillRate := 9.0
 	tb := builder.NewTokenBucket(capacity, refillRate)
 	ph := builder.PythHistoryAPI{
 		BaseUrl:     config.ConfigFile.PythAPIEndpoint,

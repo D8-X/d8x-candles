@@ -45,7 +45,7 @@ func (p *PythHistoryAPI) RetrieveCandlesFromPyth(sym utils.SymbolPyth, candleRes
 			break
 		}
 		slog.Info("too many requests, slowing down for " + sym.Symbol)
-		time.Sleep(time.Duration(rand.Intn(25)) * time.Millisecond)
+		time.Sleep(time.Duration(50+rand.Intn(250)) * time.Millisecond)
 	}
 
 	defer response.Body.Close()
@@ -83,7 +83,8 @@ func (p *PythHistoryAPI) PythDataToRedisPriceObs(symbols []utils.SymbolPyth) {
 				}
 				if trial < 10 {
 					slog.Info("pyth query failed for " + sym.ToString() + ":" + err.Error() + ". Retrying.")
-					time.Sleep(time.Duration(rand.Intn(250)+50) * time.Millisecond)
+					// https://docs.pyth.network/benchmarks/rate-limits
+					time.Sleep(time.Duration(rand.Intn(60_000)+60_000) * time.Millisecond)
 				} else {
 					slog.Error("pyth query failed for " + sym.ToString() + ":" + err.Error())
 					return
@@ -120,9 +121,9 @@ func (p *PythHistoryAPI) CandlesToTriangulatedCandles(client *utils.RueidisClien
 	slog.Info("History of Pyth sources complete")
 }
 
-// sym of the form eth-usd
+// sym of the form ETH-USD
 func (p *PythHistoryAPI) PricesToRedis(sym string, obs PriceObservations) {
-	CreateTimeSeries(p.RedisClient, sym)
+	CreateRedisTimeSeries(p.RedisClient, sym)
 	var wg sync.WaitGroup
 	for k := 0; k < len(obs.P); k++ {
 		// store prices in ms
