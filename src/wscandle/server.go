@@ -57,7 +57,7 @@ type MarketResponse struct {
 	NxtCloseTsSec int64   `json:"nextClose"`
 }
 
-const MARKETS_TOPIC = "markets"
+const MARKETS_TOPIC = "MARKETS"
 
 func NewServer() *Server {
 	var s Server
@@ -177,7 +177,7 @@ func (s *Server) buildMarketResponse(typeRes string) []byte {
 		m[k] = el
 		k += 1
 	}
-	r := ServerResponse{Type: typeRes, Topic: MARKETS_TOPIC, Data: m}
+	r := ServerResponse{Type: typeRes, Topic: strings.ToLower(MARKETS_TOPIC), Data: m}
 	jsonData, err := json.Marshal(r)
 	if err != nil {
 		slog.Error("forming market update")
