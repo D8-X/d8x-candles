@@ -329,7 +329,7 @@ func (s *Server) candleResponse(sym string, p utils.CandlePeriod) []byte {
 func errorResponse(reqType string, reqTopic string, msg string) []byte {
 
 	e := ErrorResponse{Error: msg}
-	res := ServerResponse{Type: reqType, Topic: reqTopic, Data: e}
+	res := ServerResponse{Type: reqType, Topic: strings.ToLower(reqTopic), Data: e}
 	jsonData, err := json.Marshal(res)
 	if err != nil {
 		slog.Error("forming error response")
