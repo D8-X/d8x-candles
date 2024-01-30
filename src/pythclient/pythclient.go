@@ -104,7 +104,7 @@ func StreamWs(symMngr *utils.SymbolManager, REDIS_ADDR string, REDIS_PW string) 
 	slog.Info("Building price history...")
 	ph.BuildHistory()
 	go ph.ScheduleMktInfoUpdate(15 * time.Minute)
-	go ph.ScheduleCompaction(30 * time.Minute)
+	go ph.ScheduleCompaction(15 * time.Minute)
 	var ids = make([]string, len(symMap))
 	k := 0
 	for id := range symMap {
@@ -124,7 +124,7 @@ func StreamWs(symMngr *utils.SymbolManager, REDIS_ADDR string, REDIS_PW string) 
 		IDs:  ids,
 	}
 	if err := c.WriteJSON(subscribeReq); err != nil {
-		slog.Error("WriteJSON:" + err.Error())
+		return errors.New("WriteJSON:" + err.Error())
 	}
 
 	go ph.SubscribeTickerRequest()
@@ -132,7 +132,13 @@ func StreamWs(symMngr *utils.SymbolManager, REDIS_ADDR string, REDIS_PW string) 
 		_, message, err := c.ReadMessage()
 		if err != nil {
 			slog.Info("Pyth Price Service Websocket Read:" + err.Error())
-			return err
+			slog.Info("Reconnecting...")
+			if c, err = connectToWebsocket(symMngr.ConfigFile.PythPriceWSEndpoints); err != nil {
+				return err
+			}
+			if err := c.WriteJSON(subscribeReq); err != nil {
+				return errors.New("WriteJSON:" + err.Error())
+			}
 		}
 		var resp map[string]interface{}
 		if err := json.Unmarshal(message, &resp); err != nil {

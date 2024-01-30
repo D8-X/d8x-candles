@@ -147,7 +147,7 @@ func (s *Server) SubscribeMarkets(conn *websocket.Conn, clientID string) []byte 
 
 func (s *Server) ScheduleUpdateMarketAndBroadcast(waitTime time.Duration, config utils.SymbolManager) {
 	tickerUpdate := time.NewTicker(waitTime)
-	s.UpdateMarketAndBroadcast(config)
+	s.UpdateMarketAndBroadcast()
 	for {
 		select {
 		case <-tickerUpdate.C:
@@ -157,15 +157,15 @@ func (s *Server) ScheduleUpdateMarketAndBroadcast(waitTime time.Duration, config
 				slog.Info("UpdateMarketAndBroadcast: no subscribers")
 				break
 			}
-			s.UpdateMarketAndBroadcast(config)
+			s.UpdateMarketAndBroadcast()
 			fmt.Println("Market info data updated.")
 		}
 	}
 
 }
 
-func (s *Server) UpdateMarketAndBroadcast(config utils.SymbolManager) {
-	s.UpdateMarketResponses(config)
+func (s *Server) UpdateMarketAndBroadcast() {
+	s.UpdateMarketResponses()
 	s.SendMarketResponses()
 }
 
@@ -199,18 +199,20 @@ func (s *Server) SendMarketResponses() {
 }
 
 // update market info for all symbols using Redis
-func (s *Server) UpdateMarketResponses(config utils.SymbolManager) {
+func (s *Server) UpdateMarketResponses() {
 
 	nowUTCms := time.Now().UTC().UnixNano() / int64(time.Millisecond)
 	//yesterday:
 	var anchorTime24hMs int64 = nowUTCms - 86400000
-	for _, sym := range config.PythIdToSym {
-		s.updtMarketForSym(sym, anchorTime24hMs)
+	// symbols
+	c := *s.RedisTSClient.Client
+	members, err := c.Do(context.Background(), c.B().Smembers().Key(utils.AVAIL_TICKER_SET).Build()).AsStrSlice()
+	if err != nil {
+		slog.Error("UpdateMarketResponses:" + err.Error())
+		return
 	}
-	//triangulations:
-	triang := config.ConfigFile.Triangulations
-	for k := 0; k < len(triang); k++ {
-		s.updtMarketForSym(triang[k].Target, anchorTime24hMs)
+	for _, sym := range members {
+		s.updtMarketForSym(sym, anchorTime24hMs)
 	}
 }
 

@@ -1,6 +1,8 @@
 package builder
 
 import (
+	"context"
+	"d8x-candles/src/utils"
 	"errors"
 	"log/slog"
 	"time"
@@ -20,22 +22,21 @@ func (p *PythHistoryAPI) ScheduleCompaction(waitTime time.Duration) {
 
 // Compact price observations so that aggregations needed for candles remain the same
 func (p *PythHistoryAPI) CompactAllPriceObs() {
-	config := p.SymbolMngr
-	for _, sym := range config.PythIdToSym {
+	p.SymbolMngr.SymConstructionMutx.Lock()
+	defer p.SymbolMngr.SymConstructionMutx.Unlock()
+	c := *p.RedisClient.Client
+	members, err := c.Do(context.Background(), c.B().Smembers().Key(utils.AVAIL_TICKER_SET).Build()).AsStrSlice()
+	if err != nil {
+		slog.Error("UpdateMarketResponses:" + err.Error())
+		return
+	}
+	for _, sym := range members {
 		err := p.CompactPriceObs(sym)
 		if err != nil {
 			slog.Error("Compaction failed for " + sym + ":" + err.Error())
 			continue
 		}
 		slog.Info("Compaction succeeded for " + sym)
-	}
-	for _, triang := range config.ConfigFile.Triangulations {
-		err := p.CompactPriceObs(triang.Target)
-		if err != nil {
-			slog.Error("Compaction failed for " + triang.Target + ":" + err.Error())
-			continue
-		}
-		slog.Info("Compaction succeeded for " + triang.Target)
 	}
 }
 

@@ -226,9 +226,6 @@ type SymbolManager struct {
 type ConfigFile struct {
 	PythAPIEndpoint      string   `json:"pythAPIEndpoint"`
 	PythPriceWSEndpoints []string `json:"priceServiceWSEndpoints"`
-	Triangulations       []struct {
-		Target string `json:"target"`
-	} `json:"triangulations"`
 }
 
 // New initializes a new SymbolManager
@@ -280,36 +277,10 @@ func (c *SymbolManager) extractPythIdToSymbolMap(network string) error {
 	return nil
 }
 
-// From the data of the form { "target": "btc-usdc", "path": ["*", "btc-usd", "/", "usdc-usd"] },
-// we create a mapping of the underlying symbols to the target.
-// This is to quickly find all affected triangulations on a price change
-func (c *SymbolManager) extractSymbolToTriangTarget() {
-	for k := 0; k < len(c.ConfigFile.Triangulations); k++ {
-		//path := c.ConfigFile.Triangulations[k].Path
-		target := c.ConfigFile.Triangulations[k].Target
-		path := d8x_futures.Triangulate(strings.ToUpper(target), c.PriceFeedIds)
-		for j := 0; j < len(path.Symbol); j++ {
-			c.SymToDependentTriang[path.Symbol[j]] = append(c.SymToDependentTriang[path.Symbol[j]], target)
-		}
-	}
-}
-
 func (c *SymbolManager) AddSymbolToTriangTarget(symT string, path *d8x_futures.Triangulation) {
 	for j := 0; j < len(path.Symbol); j++ {
 		c.SymToDependentTriang[path.Symbol[j]] = append(c.SymToDependentTriang[path.Symbol[j]], symT)
 	}
-}
-
-// get map for { "target": "btc-usdc", "path": ["*", "btc-usd", "/", "usdc-usd"] }
-// from target -> path (map[string][]string)
-func (c *SymbolManager) extractTriangulationMap() {
-	m := make(map[string]d8x_futures.Triangulation)
-	for k := 0; k < len(c.ConfigFile.Triangulations); k++ {
-		target := c.ConfigFile.Triangulations[k].Target
-		tri := d8x_futures.Triangulate(target, c.PriceFeedIds)
-		m[target] = tri
-	}
-	c.SymToTriangPath = m
 }
 
 func (c *SymbolManager) extractCandlePeriods() error {

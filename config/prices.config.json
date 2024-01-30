@@ -1,16 +1,6 @@
 
 {
     "pythAPIEndpoint": "https://benchmarks.pyth.network/",
-    "priceServiceWSEndpoints": ["wss://hermes.pyth.network/ws"],
-    "triangulations": [
-      { "target": "BTC-USDC" },
-      { "target": "ETH-USDC" },
-      { "target": "MATIC-USDC"},
-      { "target": "XAU-USDC" },
-      { "target": "GBP-USDC" },
-      { "target": "CHF-USDC" },
-      { "target": "EUR-USDC" },
-      { "target": "JPY-USDC" }
-    ]
+    "priceServiceWSEndpoints": ["wss://hermes.pyth.network/ws"]
   }
 
