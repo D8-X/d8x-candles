@@ -205,10 +205,7 @@ func onPriceUpdate(pxResp PriceUpdateResponse, sym string, lastPx map[string]flo
 		return
 	}
 	px := calcPrice(pxResp)
-	if px-lastPx[sym] == 0 {
-		// price identical
-		return
-	}
+	// no check whether price is identical, because we want the candles to potentially match open/close
 	lastPx[sym] = px
 	builder.AddPriceObs(meta.RedisTSClient, sym, pxResp.PriceFeed.Price.PublishTime*1000, px)
 
