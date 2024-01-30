@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"math"
 	"math/rand"
 	"net/http"
 	"strconv"
@@ -149,7 +150,7 @@ func (p *PythHistoryAPI) EnableTriangulation(symT string) bool {
 	p.SymbolMngr.SymConstructionMutx.Lock()
 	defer p.SymbolMngr.SymConstructionMutx.Unlock()
 	config := p.SymbolMngr
-	if _, exists := config.SymToTriangPath[symT]; exists {
+	if _, exists := (*config).SymToTriangPath[symT]; exists {
 		// already exists
 		return true
 	}
@@ -351,4 +352,79 @@ func (p *PythHistoryAPI) SubscribeTickerRequest() error {
 			fmt.Printf("\n")
 		})
 	return err
+}
+
+func (p *PythHistoryAPI) OnPriceUpdate(pxResp utils.PriceUpdateResponse, sym string, lastPx map[string]float64) {
+	if sym == "" {
+		return
+	}
+	px := CalcPrice(pxResp)
+	// no check whether price is identical, because we want the candles to potentially match open/close
+	lastPx[sym] = px
+	AddPriceObs(p.RedisClient, sym, pxResp.PriceFeed.Price.PublishTime*1000, px)
+
+	slog.Info("Received price update: " + sym + " price=" + fmt.Sprint(px) + fmt.Sprint(pxResp.PriceFeed))
+
+	pubMsg := sym
+	// triangulations
+	targetSymbols := p.SymbolMngr.SymToDependentTriang[sym]
+	for _, tsym := range targetSymbols {
+		// if market closed for any of the items in the triangulation,
+		if p.IsTriangulatedMarketClosed(tsym, p.SymbolMngr.SymToTriangPath[tsym].Symbol) {
+			slog.Info("-- triangulation price update: " + tsym + " - market closed")
+			continue
+		}
+		// we should not publish an update
+		pxTriang := utils.TriangulatedPx(p.SymbolMngr.SymToTriangPath[tsym], lastPx)
+		if pxTriang == 0 {
+			slog.Info("-- triangulation currently not possible: " + tsym)
+			continue
+		}
+		lastPx[tsym] = pxTriang
+		pubMsg += ";" + tsym
+		AddPriceObs(p.RedisClient, tsym, pxResp.PriceFeed.Price.PublishTime*1000, pxTriang)
+		slog.Info("-- triangulation price update: " + tsym + " price=" + fmt.Sprint(pxTriang))
+	}
+	// publish updates to listeners
+	client := *p.RedisClient.Client
+	err := client.Do(context.Background(), client.B().Publish().Channel(utils.PRICE_UPDATE_MSG).Message(pubMsg).Build()).Error()
+	if err != nil {
+		slog.Error("Redis Pub" + err.Error())
+	}
+}
+
+// check whether any of the symbols in the triangulation has a closed market
+func (p *PythHistoryAPI) IsTriangulatedMarketClosed(tsym string, symbols []string) bool {
+	client := p.RedisClient
+	info, err := GetMarketInfo(context.Background(), client.Client, tsym)
+	if err != nil {
+		slog.Info("Market-closed determination " + tsym + ":" + err.Error())
+		return true
+	}
+	if !info.MarketHours.IsOpen {
+		return true
+	}
+	for _, sym := range symbols {
+		info, err := GetMarketInfo(context.Background(), client.Client, tsym)
+		if err != nil {
+			slog.Error("Error market-closed determination " + tsym + "(" + sym + "):" + err.Error())
+			return true
+		}
+		if !info.MarketHours.IsOpen {
+			return true
+		}
+	}
+	return false
+}
+
+// calculate floating point price from 'price' and 'expo'
+func CalcPrice(pxResp utils.PriceUpdateResponse) float64 {
+	x, err := strconv.Atoi(pxResp.PriceFeed.Price.Price)
+	if err != nil {
+		slog.Error("onPriceUpdate error" + err.Error())
+		return 0
+	}
+	pw := float64(pxResp.PriceFeed.Price.Expo)
+	px := float64(x) * math.Pow(10, pw)
+	return px
 }

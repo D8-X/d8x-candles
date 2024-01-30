@@ -22,6 +22,7 @@ import (
 // REDIS set name
 const AVAIL_TICKER_SET string = "avail"
 const TICKER_REQUEST = "request"
+const PRICE_UPDATE_MSG = "px_update"
 
 type DataPoint struct {
 	Timestamp int64
@@ -31,6 +32,25 @@ type DataPoint struct {
 type RueidisClient struct {
 	Client *rueidis.Client
 	Ctx    context.Context
+}
+
+type PriceUpdateResponse struct {
+	Type      string `json:"type"`
+	PriceFeed struct {
+		ID    string `json:"id"`
+		Price struct {
+			Price       string `json:"price"`
+			Conf        string `json:"conf"`
+			Expo        int    `json:"expo"`
+			PublishTime int64  `json:"publish_time"`
+		} `json:"price"`
+		EMAPrice struct {
+			Price       string `json:"price"`
+			Conf        string `json:"conf"`
+			Expo        int    `json:"expo"`
+			PublishTime int64  `json:"publish_time"`
+		} `json:"ema_price"`
+	} `json:"price_feed"`
 }
 
 func (r *RueidisClient) Get(key string) (DataPoint, error) {
