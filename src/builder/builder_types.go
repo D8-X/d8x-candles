@@ -8,6 +8,7 @@ type PythHistoryAPI struct {
 	BaseUrl     string
 	RedisClient *utils.RueidisClient
 	TokenBucket *TokenBucket
+	SymbolMngr  *utils.SymbolManager
 }
 
 type PythHistoryAPIResponse struct {

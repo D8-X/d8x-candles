@@ -28,10 +28,10 @@ var upgrader = websocket.Upgrader{}
 
 // Initialize server with empty subscription
 var server = NewServer()
-var config utils.PriceConfig
+var config utils.SymbolManager
 var redisClient *redis.Client
 
-func StartWSServer(config_ utils.PriceConfig, WS_ADDR string, REDIS_ADDR string, REDIS_PW string, RedisDb int) error {
+func StartWSServer(config_ utils.SymbolManager, WS_ADDR string, REDIS_ADDR string, REDIS_PW string, RedisDb int) error {
 	config = config_
 
 	// Redis connection

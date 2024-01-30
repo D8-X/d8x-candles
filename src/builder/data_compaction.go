@@ -1,6 +1,7 @@
 package builder
 
 import (
+	"context"
 	"d8x-candles/src/utils"
 	"errors"
 	"log/slog"
@@ -8,34 +9,34 @@ import (
 )
 
 // Schedule regular calls of compaction (e.g. every hour)
-func (p *PythHistoryAPI) ScheduleCompaction(config *utils.PriceConfig, waitTime time.Duration) {
+func (p *PythHistoryAPI) ScheduleCompaction(waitTime time.Duration) {
 	tickerUpdate := time.NewTicker(waitTime)
 	for {
 		select {
 		case <-tickerUpdate.C:
-			p.CompactAllPriceObs(config)
+			p.CompactAllPriceObs()
 			slog.Info("Compaction completed.")
 		}
 	}
 }
 
 // Compact price observations so that aggregations needed for candles remain the same
-func (p *PythHistoryAPI) CompactAllPriceObs(config *utils.PriceConfig) {
-	for _, feed := range config.ConfigFile.PriceFeeds {
-		err := p.CompactPriceObs(feed.Symbol)
-		if err != nil {
-			slog.Error("Compaction failed for " + feed.Symbol + ":" + err.Error())
-			continue
-		}
-		slog.Info("Compaction succeeded for " + feed.Symbol)
+func (p *PythHistoryAPI) CompactAllPriceObs() {
+	p.SymbolMngr.SymConstructionMutx.Lock()
+	defer p.SymbolMngr.SymConstructionMutx.Unlock()
+	c := *p.RedisClient.Client
+	members, err := c.Do(context.Background(), c.B().Smembers().Key(utils.AVAIL_TICKER_SET).Build()).AsStrSlice()
+	if err != nil {
+		slog.Error("UpdateMarketResponses:" + err.Error())
+		return
 	}
-	for _, triang := range config.ConfigFile.Triangulations {
-		err := p.CompactPriceObs(triang.Target)
+	for _, sym := range members {
+		err := p.CompactPriceObs(sym)
 		if err != nil {
-			slog.Error("Compaction failed for " + triang.Target + ":" + err.Error())
+			slog.Error("Compaction failed for " + sym + ":" + err.Error())
 			continue
 		}
-		slog.Info("Compaction succeeded for " + triang.Target)
+		slog.Info("Compaction succeeded for " + sym)
 	}
 }
 

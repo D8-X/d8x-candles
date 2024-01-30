@@ -25,7 +25,7 @@ The client requests candle subscriptions via
 ```
 {
   "type": "subscribe",
-  "topic": "btc-usd:1m",
+  "topic": "btc-usd:1m"
 }
 
 ```
@@ -87,7 +87,7 @@ The client requests market summaries via
 ```
 {
   "type": "subscribe",
-  "topic": "markets",
+  "topic": "markets"
 }
 ```
 
@@ -150,15 +150,27 @@ docker run -d --name redis-stack -p 6379:6379 -e REDIS_ARGS="--requirepass yourp
 
 | **Pub/Sub Channel** | **Message Example** |
 |---------------------|---------------------|
-| px_update           | btc-usdc;btc-usd    |
+| px_update           | BTC-USDC;BTC-USD    |
+| ticker_request      | BTC-USDC            |
 
 Price observations are stored using the symbol of the format btc-usd as
 key. Prices for triangulated series are also stored in this format.
 
+When the websocket-service receives a ticker request that it is not already available,
+it will send a request `ticker_request` via pub channel and return "not available".
+
+**Availability on Demand:**
+If data is available, we set this in REDIS in the available ticker set: `SAdd(...)`. Index price feeds configured are always
+made available. Triangulated tickers can be made available. Once we make a triangulated key available,
+we also add the symbol to the available set.
+
+On `ticker_request` triangulations are made available if possible.
+
+
 **hset:**
 
 ```
-hgetall btc-usd:mkt_info 
+hgetall BTC-USD:mkt_info 
 1) "is_open"
 2) "true"
 3) "nxt_open"
@@ -167,7 +179,7 @@ hgetall btc-usd:mkt_info
 6) "null"
 ```
 ```
-hgetall xau-usd:mkt_info
+hgetall XAU-USD:mkt_info
 1) "is_open"
 2) "true"
 3) "nxt_open"

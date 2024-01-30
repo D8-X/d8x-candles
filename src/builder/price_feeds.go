@@ -35,14 +35,14 @@ type PriceFeedApiResponse struct {
 }
 
 // Runs FetchMktHours and schedules next runs
-func (p *PythHistoryAPI) ScheduleMktInfoUpdate(config *utils.PriceConfig, updtInterval time.Duration) {
-	p.FetchMktInfo(config)
+func (p *PythHistoryAPI) ScheduleMktInfoUpdate(updtInterval time.Duration) {
+	p.FetchMktInfo()
 	tickerUpdate := time.NewTicker(updtInterval)
 	for {
 		select {
 		case <-tickerUpdate.C:
 			slog.Info("Updating market info...")
-			p.FetchMktInfo(config)
+			p.FetchMktInfo()
 			fmt.Println("Market info updated.")
 		}
 	}
@@ -51,40 +51,39 @@ func (p *PythHistoryAPI) ScheduleMktInfoUpdate(config *utils.PriceConfig, updtIn
 // Goes through all symbols in the config files, including triangulated ones,
 // and fetches market hours (next open, next close). Stores in
 // Redis
-func (p *PythHistoryAPI) FetchMktInfo(config *utils.PriceConfig) {
+func (p *PythHistoryAPI) FetchMktInfo() {
 	// process base price feeds (no triangulation)
-	f := config.ConfigFile.PriceFeeds
-	for k := 0; k < len(f); k++ {
-		sym := f[k].Symbol
-		asset := strings.ToLower(strings.Split(f[k].SymbolPyth, ".")[0])
+	config := p.SymbolMngr
+	for id, sym := range config.PythIdToSym {
+		origin := config.SymToPythOrigin[sym]
+		asset := strings.ToLower(strings.Split(origin, ".")[0])
 		if asset == "crypto" {
 			// crypto markets are always open, huray
 			p.setMarketHours(sym, MarketHours{true, 0, 0}, "crypto")
 			continue
 		}
-		id := f[k].Id
 		p.QueryPriceFeedInfo(sym, id)
 	}
 	// construct info for triangulated price feeds, e.g. chf-usdc
 	p.fetchTriangulatedMktInfo(config)
 }
 
-func (p *PythHistoryAPI) fetchTriangulatedMktInfo(config *utils.PriceConfig) {
+func (p *PythHistoryAPI) fetchTriangulatedMktInfo(config *utils.SymbolManager) {
 	paths := config.SymToTriangPath
 outerLoop:
 	for symT, path := range paths {
 		isOpen := true
 		var nxtOpen, nxtClose int64 = 0, math.MaxInt64
 		var assetType string = "crypto"
-		for k := 1; k < len(path); k += 2 {
-			m, err := p.GetMarketInfo(path[k])
+		for k := 0; k < len(path.Symbol); k++ {
+			m, err := p.GetMarketInfo(path.Symbol[k])
 			if m.AssetType != "crypto" {
 				// dominant asset type for triangulations is
 				// the non-crypto asset
 				assetType = m.AssetType
 			}
 			if err != nil {
-				slog.Error("Error triangulated feeds info " + symT + " at " + path[k])
+				slog.Error("Error triangulated feeds info " + symT + " at " + path.Symbol[k])
 				continue outerLoop
 			}
 			isOpen = isOpen && m.MarketHours.IsOpen
@@ -156,7 +155,7 @@ func (p *PythHistoryAPI) QueryPriceFeedInfo(sym string, id string) {
 		return
 	}
 	// check whether id provided is indeed for the symbol we aim to store
-	symSource := strings.ToLower(apiResponse.Attributes["generic_symbol"])
+	symSource := strings.ToUpper(apiResponse.Attributes["generic_symbol"])
 	if symSource != strings.ReplaceAll(sym, "-", "") {
 		slog.Error("Error: price_feeds GET id is for " + symSource +
 			" but symbol " + sym)

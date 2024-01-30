@@ -57,7 +57,7 @@ type MarketResponse struct {
 	NxtCloseTsSec int64   `json:"nextClose"`
 }
 
-const MARKETS_TOPIC = "markets"
+const MARKETS_TOPIC = "MARKETS"
 
 func NewServer() *Server {
 	var s Server
@@ -94,7 +94,7 @@ func (s *Server) RemoveClient(clientID string) {
 
 // Process incoming websocket message
 // https://github.com/madeindra/golang-websocket/
-func (s *Server) HandleRequest(conn *websocket.Conn, config utils.PriceConfig, clientID string, message []byte) {
+func (s *Server) HandleRequest(conn *websocket.Conn, config utils.SymbolManager, clientID string, message []byte) {
 	slog.Info("request received")
 	var data ClientMessage
 	err := json.Unmarshal(message, &data)
@@ -102,9 +102,9 @@ func (s *Server) HandleRequest(conn *websocket.Conn, config utils.PriceConfig, c
 		// JSON parsing not successful
 		return
 	}
-	reqTopic := strings.TrimSpace(strings.ToLower(data.Topic))
-	reqType := strings.TrimSpace(strings.ToLower(data.Type))
-	if reqType == "subscribe" {
+	reqTopic := strings.TrimSpace(strings.ToUpper(data.Topic))
+	reqType := strings.TrimSpace(strings.ToUpper(data.Type))
+	if reqType == "SUBSCRIBE" {
 		if reqTopic == MARKETS_TOPIC {
 			msg := s.SubscribeMarkets(conn, clientID)
 			server.Send(conn, msg)
@@ -112,7 +112,7 @@ func (s *Server) HandleRequest(conn *websocket.Conn, config utils.PriceConfig, c
 			msg := s.SubscribeCandles(conn, clientID, reqTopic, config)
 			server.Send(conn, msg)
 		}
-	} else if reqType == "unsubscribe" {
+	} else if reqType == "UNSUBSCRIBE" {
 		// unsubscribe
 		if reqTopic == MARKETS_TOPIC {
 			delete(s.Subscriptions[reqTopic], clientID)
@@ -145,9 +145,9 @@ func (s *Server) SubscribeMarkets(conn *websocket.Conn, clientID string) []byte 
 	return s.buildMarketResponse("subscribe")
 }
 
-func (s *Server) ScheduleUpdateMarketAndBroadcast(waitTime time.Duration, config utils.PriceConfig) {
+func (s *Server) ScheduleUpdateMarketAndBroadcast(waitTime time.Duration, config utils.SymbolManager) {
 	tickerUpdate := time.NewTicker(waitTime)
-	s.UpdateMarketAndBroadcast(config)
+	s.UpdateMarketAndBroadcast()
 	for {
 		select {
 		case <-tickerUpdate.C:
@@ -157,15 +157,15 @@ func (s *Server) ScheduleUpdateMarketAndBroadcast(waitTime time.Duration, config
 				slog.Info("UpdateMarketAndBroadcast: no subscribers")
 				break
 			}
-			s.UpdateMarketAndBroadcast(config)
+			s.UpdateMarketAndBroadcast()
 			fmt.Println("Market info data updated.")
 		}
 	}
 
 }
 
-func (s *Server) UpdateMarketAndBroadcast(config utils.PriceConfig) {
-	s.UpdateMarketResponses(config)
+func (s *Server) UpdateMarketAndBroadcast() {
+	s.UpdateMarketResponses()
 	s.SendMarketResponses()
 }
 
@@ -199,18 +199,20 @@ func (s *Server) SendMarketResponses() {
 }
 
 // update market info for all symbols using Redis
-func (s *Server) UpdateMarketResponses(config utils.PriceConfig) {
-	feeds := config.ConfigFile.PriceFeeds
+func (s *Server) UpdateMarketResponses() {
+
 	nowUTCms := time.Now().UTC().UnixNano() / int64(time.Millisecond)
 	//yesterday:
 	var anchorTime24hMs int64 = nowUTCms - 86400000
-	for k := 0; k < len(feeds); k++ {
-		s.updtMarketForSym(feeds[k].Symbol, anchorTime24hMs)
+	// symbols
+	c := *s.RedisTSClient.Client
+	members, err := c.Do(context.Background(), c.B().Smembers().Key(utils.AVAIL_TICKER_SET).Build()).AsStrSlice()
+	if err != nil {
+		slog.Error("UpdateMarketResponses:" + err.Error())
+		return
 	}
-	//triangulations:
-	triang := config.ConfigFile.Triangulations
-	for k := 0; k < len(triang); k++ {
-		s.updtMarketForSym(triang[k].Target, anchorTime24hMs)
+	for _, sym := range members {
+		s.updtMarketForSym(sym, anchorTime24hMs)
 	}
 }
 
@@ -248,7 +250,7 @@ func (s *Server) updtMarketForSym(sym string, anchorTime24hMs int64) error {
 }
 
 // Subscribe the client to a candle-topic (e.g. btc-usd:15m)
-func (s *Server) SubscribeCandles(conn *websocket.Conn, clientID string, topic string, config utils.PriceConfig) []byte {
+func (s *Server) SubscribeCandles(conn *websocket.Conn, clientID string, topic string, config utils.SymbolManager) []byte {
 	if !isValidCandleTopic(topic) {
 		return errorResponse("subscribe", topic, "usage: symbol:period")
 	}
@@ -257,7 +259,7 @@ func (s *Server) SubscribeCandles(conn *websocket.Conn, clientID string, topic s
 		// usage: symbol:period
 		return errorResponse("subscribe", topic, "usage: symbol:period")
 	}
-	if !config.IsSymbolAvailable(sym) {
+	if !s.IsSymbolAvailable(sym, &config) {
 		// symbol not supported
 		return errorResponse("subscribe", topic, "symbol not supported")
 	}
@@ -287,17 +289,37 @@ func (s *Server) SubscribeCandles(conn *websocket.Conn, clientID string, topic s
 	return s.candleResponse(sym, p)
 }
 
+func (s *Server) IsSymbolAvailable(sym string, config *utils.SymbolManager) bool {
+	// check redis
+	c := *s.RedisTSClient.Client
+	isMember, err := c.Do(context.Background(), c.B().Sismember().Key(utils.AVAIL_TICKER_SET).Member(sym).Build()).AsBool()
+	if err != nil {
+		slog.Error("IsSymbolAvailable " + sym + "error:" + err.Error())
+		return false
+	}
+	if isMember {
+		return true
+	}
+	// if the symbol can be triangulated, we're doing this now:
+	err = c.Do(context.Background(), c.B().Publish().Channel(utils.TICKER_REQUEST).Message(sym).Build()).Error()
+	if err != nil {
+		slog.Error("IsSymbolAvailable " + sym + "error:" + err.Error())
+	}
+	return false
+}
+
 func isValidCandleTopic(topic string) bool {
-	pattern := "^[a-zA-Z]+-[a-zA-Z]+:[0-9]+[hmd]$" // Regular expression for candle topics
+	pattern := "^[a-zA-Z]+-[a-zA-Z]+:[0-9]+[HMD]$" // Regular expression for candle topics
 	regex, _ := regexp.Compile(pattern)
 	return regex.MatchString(topic)
 }
 
 // form initial response for candle subscription (e.g., eth-usd:5m)
 func (s *Server) candleResponse(sym string, p utils.CandlePeriod) []byte {
+	symDisplay := strings.ToLower(sym)
 	slog.Info("Subscription for symbol " + sym + " Period " + fmt.Sprint(p.TimeMs/60000) + "m")
 	data := GetInitialCandles(s.RedisTSClient, sym, p)
-	topic := sym + ":" + p.Name
+	topic := symDisplay + ":" + p.Name
 	res := ServerResponse{Type: "subscribe", Topic: topic, Data: data}
 	jsonData, err := json.Marshal(res)
 	if err != nil {
@@ -309,7 +331,7 @@ func (s *Server) candleResponse(sym string, p utils.CandlePeriod) []byte {
 func errorResponse(reqType string, reqTopic string, msg string) []byte {
 
 	e := ErrorResponse{Error: msg}
-	res := ServerResponse{Type: reqType, Topic: reqTopic, Data: e}
+	res := ServerResponse{Type: reqType, Topic: strings.ToLower(reqTopic), Data: e}
 	jsonData, err := json.Marshal(res)
 	if err != nil {
 		slog.Error("forming error response")
