@@ -259,7 +259,7 @@ func (s *Server) SubscribeCandles(conn *websocket.Conn, clientID string, topic s
 		// usage: symbol:period
 		return errorResponse("subscribe", topic, "usage: symbol:period")
 	}
-	if !s.IsSymbolAvailable(sym, &config) {
+	if !s.IsSymbolAvailable(sym) {
 		// symbol not supported
 		return errorResponse("subscribe", topic, "symbol not supported")
 	}
@@ -289,7 +289,7 @@ func (s *Server) SubscribeCandles(conn *websocket.Conn, clientID string, topic s
 	return s.candleResponse(sym, p)
 }
 
-func (s *Server) IsSymbolAvailable(sym string, config *utils.SymbolManager) bool {
+func (s *Server) IsSymbolAvailable(sym string) bool {
 	// check redis
 	c := *s.RedisTSClient.Client
 	isMember, err := c.Do(context.Background(), c.B().Sismember().Key(utils.AVAIL_TICKER_SET).Member(sym).Build()).AsBool()
