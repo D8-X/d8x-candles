@@ -57,7 +57,7 @@ type MarketResponse struct {
 	NxtCloseTsSec int64   `json:"nextClose"`
 }
 
-const MARKETS_TOPIC = "MARKETS"
+const MARKETS_TOPIC = "markets"
 
 func NewServer() *Server {
 	var s Server
@@ -316,11 +316,10 @@ func isValidCandleTopic(topic string) bool {
 
 // form initial response for candle subscription (e.g., eth-usd:5m)
 func (s *Server) candleResponse(sym string, p utils.CandlePeriod) []byte {
-	symDisplay := strings.ToLower(sym)
 	slog.Info("Subscription for symbol " + sym + " Period " + fmt.Sprint(p.TimeMs/60000) + "m")
 	data := GetInitialCandles(s.RedisTSClient, sym, p)
-	topic := symDisplay + ":" + p.Name
-	res := ServerResponse{Type: "subscribe", Topic: topic, Data: data}
+	topic := sym + ":" + p.Name
+	res := ServerResponse{Type: "subscribe", Topic: strings.ToLower(topic), Data: data}
 	jsonData, err := json.Marshal(res)
 	if err != nil {
 		slog.Error("candle res")
@@ -389,7 +388,7 @@ func (s *Server) candleUpdates(symbols []string) {
 			}
 			// update subscribers
 			clients := server.Subscriptions[key]
-			r := ServerResponse{Type: "update", Topic: key, Data: lastCandle}
+			r := ServerResponse{Type: "update", Topic: strings.ToLower(key), Data: lastCandle}
 			jsonData, err := json.Marshal(r)
 			if err != nil {
 				slog.Error("forming lastCandle update:" + err.Error())
