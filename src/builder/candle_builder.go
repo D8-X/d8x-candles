@@ -1,6 +1,7 @@
 package builder
 
 import (
+	"context"
 	"d8x-candles/src/utils"
 	"encoding/json"
 	"errors"
@@ -14,7 +15,24 @@ import (
 	"time"
 
 	"github.com/D8-X/d8x-futures-go-sdk/pkg/d8x_futures"
+	"github.com/redis/rueidis"
 )
+
+// buildHistory
+func (p *PythHistoryAPI) BuildHistory() {
+	var k int
+	config := p.SymbolMngr
+	pythSyms := make([]utils.SymbolPyth, len(config.PythIdToSym))
+	for id, sym := range config.PythIdToSym {
+		var symP utils.SymbolPyth
+		origin := config.SymToPythOrigin[sym]
+		symP.New(origin, id)
+		pythSyms[k] = symP
+		k++
+	}
+	slog.Info("-- building history from Pyth candles...")
+	p.PythDataToRedisPriceObs(pythSyms)
+}
 
 /*
 Available:
@@ -73,6 +91,7 @@ func (p *PythHistoryAPI) PythDataToRedisPriceObs(symbols []utils.SymbolPyth) {
 		wg.Add(1)
 		go func(sym utils.SymbolPyth) {
 			defer wg.Done()
+
 			trial := 0
 			var err error
 			var o PriceObservations
@@ -92,6 +111,7 @@ func (p *PythHistoryAPI) PythDataToRedisPriceObs(symbols []utils.SymbolPyth) {
 				trial++
 			}
 			p.PricesToRedis(sym.Symbol, o)
+
 			slog.Info("Processed history for " + sym.ToString())
 		}(sym)
 	}
@@ -101,7 +121,8 @@ func (p *PythHistoryAPI) PythDataToRedisPriceObs(symbols []utils.SymbolPyth) {
 
 // Extract candles to triangulated candles
 // symbols of the form eth-usd
-func (p *PythHistoryAPI) CandlesToTriangulatedCandles(client *utils.RueidisClient, config utils.PriceConfig) {
+// obsolete:
+func (p *PythHistoryAPI) CandlesToTriangulatedCandles(client *utils.RueidisClient, config utils.SymbolManager) {
 	var wg sync.WaitGroup
 
 	for sym, path := range config.SymToTriangPath {
@@ -121,6 +142,34 @@ func (p *PythHistoryAPI) CandlesToTriangulatedCandles(client *utils.RueidisClien
 	slog.Info("History of Pyth sources complete")
 }
 
+// EnableTriangulation constructs candles from existing candles
+// that correspond to a price source (e.g. BTC-USD but not BTC-USDC)
+// and enables that the candles will be maintained from this point on
+func (p *PythHistoryAPI) EnableTriangulation(symT string) bool {
+	p.SymbolMngr.SymConstructionMutx.Lock()
+	defer p.SymbolMngr.SymConstructionMutx.Unlock()
+	config := p.SymbolMngr
+	if _, exists := config.SymToTriangPath[symT]; exists {
+		// already exists
+		return true
+	}
+	path := d8x_futures.Triangulate(symT, config.PriceFeedIds)
+	if len(path.Symbol) == 0 {
+		slog.Info("Could not triangulate " + symT)
+		return false
+	}
+	config.AddSymbolToTriangTarget(symT, &path)
+	config.SymToTriangPath[symT] = path
+
+	o, err := p.ConstructPriceObsForTriang(p.RedisClient, symT, path)
+	if err != nil {
+		slog.Error("error for triangulation " + symT + ":" + err.Error())
+		return false
+	}
+	p.PricesToRedis(symT, o)
+	return true
+}
+
 // sym of the form ETH-USD
 func (p *PythHistoryAPI) PricesToRedis(sym string, obs PriceObservations) {
 	CreateRedisTimeSeries(p.RedisClient, sym)
@@ -135,6 +184,9 @@ func (p *PythHistoryAPI) PricesToRedis(sym string, obs PriceObservations) {
 			AddPriceObs(p.RedisClient, sym, t, val)
 		}(sym, t, val)
 	}
+	// set the symbol as available
+	c := *p.RedisClient.Client
+	c.Do(context.Background(), c.B().Sadd().Key(utils.AVAIL_TICKER_SET).Member(sym).Build())
 	wg.Wait()
 }
 
@@ -286,4 +338,17 @@ func (p *PythHistoryAPI) triangulateCandles(client *utils.RueidisClient, path d8
 		}
 	}
 	return ohlcRes, nil
+}
+
+// SubscribeTickerRequest the to redis pub/sub utils.TICKER_REQUEST
+// makes triangulation available if possible
+func (p *PythHistoryAPI) SubscribeTickerRequest() error {
+	client := *p.RedisClient.Client
+	err := client.Receive(context.Background(), client.B().Subscribe().Channel(utils.TICKER_REQUEST).Build(),
+		func(msg rueidis.PubSubMessage) {
+			slog.Info("Enabling Triangulation: " + msg.Message)
+			p.EnableTriangulation(msg.Message)
+			fmt.Printf("\n")
+		})
+	return err
 }

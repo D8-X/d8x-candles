@@ -35,14 +35,14 @@ type PriceFeedApiResponse struct {
 }
 
 // Runs FetchMktHours and schedules next runs
-func (p *PythHistoryAPI) ScheduleMktInfoUpdate(config *utils.PriceConfig, updtInterval time.Duration) {
-	p.FetchMktInfo(config)
+func (p *PythHistoryAPI) ScheduleMktInfoUpdate(updtInterval time.Duration) {
+	p.FetchMktInfo()
 	tickerUpdate := time.NewTicker(updtInterval)
 	for {
 		select {
 		case <-tickerUpdate.C:
 			slog.Info("Updating market info...")
-			p.FetchMktInfo(config)
+			p.FetchMktInfo()
 			fmt.Println("Market info updated.")
 		}
 	}
@@ -51,8 +51,9 @@ func (p *PythHistoryAPI) ScheduleMktInfoUpdate(config *utils.PriceConfig, updtIn
 // Goes through all symbols in the config files, including triangulated ones,
 // and fetches market hours (next open, next close). Stores in
 // Redis
-func (p *PythHistoryAPI) FetchMktInfo(config *utils.PriceConfig) {
+func (p *PythHistoryAPI) FetchMktInfo() {
 	// process base price feeds (no triangulation)
+	config := p.SymbolMngr
 	for id, sym := range config.PythIdToSym {
 		origin := config.SymToPythOrigin[sym]
 		asset := strings.ToLower(strings.Split(origin, ".")[0])
@@ -67,7 +68,7 @@ func (p *PythHistoryAPI) FetchMktInfo(config *utils.PriceConfig) {
 	p.fetchTriangulatedMktInfo(config)
 }
 
-func (p *PythHistoryAPI) fetchTriangulatedMktInfo(config *utils.PriceConfig) {
+func (p *PythHistoryAPI) fetchTriangulatedMktInfo(config *utils.SymbolManager) {
 	paths := config.SymToTriangPath
 outerLoop:
 	for symT, path := range paths {

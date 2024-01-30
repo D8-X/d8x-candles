@@ -2,9 +2,9 @@ package utils
 
 import "github.com/D8-X/d8x-futures-go-sdk/pkg/d8x_futures"
 
-// Triangulate calculates the triangulated price, given the triangulation path
+// TriangulatedPx calculates the triangulated price, given the triangulation path
 // and prices
-func Triangulate(path d8x_futures.Triangulation, prices map[string]float64) float64 {
+func TriangulatedPx(path d8x_futures.Triangulation, prices map[string]float64) float64 {
 	var px float64 = 1
 	for k := 0; k < len(path.Symbol); k++ {
 		sym := path.Symbol[k]

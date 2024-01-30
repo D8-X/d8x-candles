@@ -1,26 +1,26 @@
 package builder
 
 import (
-	"d8x-candles/src/utils"
 	"errors"
 	"log/slog"
 	"time"
 )
 
 // Schedule regular calls of compaction (e.g. every hour)
-func (p *PythHistoryAPI) ScheduleCompaction(config *utils.PriceConfig, waitTime time.Duration) {
+func (p *PythHistoryAPI) ScheduleCompaction(waitTime time.Duration) {
 	tickerUpdate := time.NewTicker(waitTime)
 	for {
 		select {
 		case <-tickerUpdate.C:
-			p.CompactAllPriceObs(config)
+			p.CompactAllPriceObs()
 			slog.Info("Compaction completed.")
 		}
 	}
 }
 
 // Compact price observations so that aggregations needed for candles remain the same
-func (p *PythHistoryAPI) CompactAllPriceObs(config *utils.PriceConfig) {
+func (p *PythHistoryAPI) CompactAllPriceObs() {
+	config := p.SymbolMngr
 	for _, sym := range config.PythIdToSym {
 		err := p.CompactPriceObs(sym)
 		if err != nil {

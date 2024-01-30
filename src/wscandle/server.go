@@ -94,7 +94,7 @@ func (s *Server) RemoveClient(clientID string) {
 
 // Process incoming websocket message
 // https://github.com/madeindra/golang-websocket/
-func (s *Server) HandleRequest(conn *websocket.Conn, config utils.PriceConfig, clientID string, message []byte) {
+func (s *Server) HandleRequest(conn *websocket.Conn, config utils.SymbolManager, clientID string, message []byte) {
 	slog.Info("request received")
 	var data ClientMessage
 	err := json.Unmarshal(message, &data)
@@ -145,7 +145,7 @@ func (s *Server) SubscribeMarkets(conn *websocket.Conn, clientID string) []byte 
 	return s.buildMarketResponse("subscribe")
 }
 
-func (s *Server) ScheduleUpdateMarketAndBroadcast(waitTime time.Duration, config utils.PriceConfig) {
+func (s *Server) ScheduleUpdateMarketAndBroadcast(waitTime time.Duration, config utils.SymbolManager) {
 	tickerUpdate := time.NewTicker(waitTime)
 	s.UpdateMarketAndBroadcast(config)
 	for {
@@ -164,7 +164,7 @@ func (s *Server) ScheduleUpdateMarketAndBroadcast(waitTime time.Duration, config
 
 }
 
-func (s *Server) UpdateMarketAndBroadcast(config utils.PriceConfig) {
+func (s *Server) UpdateMarketAndBroadcast(config utils.SymbolManager) {
 	s.UpdateMarketResponses(config)
 	s.SendMarketResponses()
 }
@@ -199,7 +199,7 @@ func (s *Server) SendMarketResponses() {
 }
 
 // update market info for all symbols using Redis
-func (s *Server) UpdateMarketResponses(config utils.PriceConfig) {
+func (s *Server) UpdateMarketResponses(config utils.SymbolManager) {
 
 	nowUTCms := time.Now().UTC().UnixNano() / int64(time.Millisecond)
 	//yesterday:
@@ -248,7 +248,7 @@ func (s *Server) updtMarketForSym(sym string, anchorTime24hMs int64) error {
 }
 
 // Subscribe the client to a candle-topic (e.g. btc-usd:15m)
-func (s *Server) SubscribeCandles(conn *websocket.Conn, clientID string, topic string, config utils.PriceConfig) []byte {
+func (s *Server) SubscribeCandles(conn *websocket.Conn, clientID string, topic string, config utils.SymbolManager) []byte {
 	if !isValidCandleTopic(topic) {
 		return errorResponse("subscribe", topic, "usage: symbol:period")
 	}
@@ -257,7 +257,7 @@ func (s *Server) SubscribeCandles(conn *websocket.Conn, clientID string, topic s
 		// usage: symbol:period
 		return errorResponse("subscribe", topic, "usage: symbol:period")
 	}
-	if !config.IsSymbolAvailable(sym) {
+	if !s.IsSymbolAvailable(sym, &config) {
 		// symbol not supported
 		return errorResponse("subscribe", topic, "symbol not supported")
 	}
@@ -285,6 +285,25 @@ func (s *Server) SubscribeCandles(conn *websocket.Conn, clientID string, topic s
 	// add the client to the topic
 	s.Subscriptions[topic][clientID] = conn
 	return s.candleResponse(sym, p)
+}
+
+func (s *Server) IsSymbolAvailable(sym string, config *utils.SymbolManager) bool {
+	// check redis
+	c := *s.RedisTSClient.Client
+	isMember, err := c.Do(context.Background(), c.B().Sismember().Key(utils.AVAIL_TICKER_SET).Member(sym).Build()).AsBool()
+	if err != nil {
+		slog.Error("IsSymbolAvailable " + sym + "error:" + err.Error())
+		return false
+	}
+	if isMember {
+		return true
+	}
+	// if the symbol can be triangulated, we're doing this now:
+	err = c.Do(context.Background(), c.B().Publish().Channel(utils.TICKER_REQUEST).Message(sym).Build()).Error()
+	if err != nil {
+		slog.Error("IsSymbolAvailable " + sym + "error:" + err.Error())
+	}
+	return false
 }
 
 func isValidCandleTopic(topic string) bool {
