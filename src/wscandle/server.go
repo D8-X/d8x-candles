@@ -237,7 +237,7 @@ func (s *Server) updtMarketForSym(sym string, anchorTime24hMs int64) error {
 	}
 
 	var mr = MarketResponse{
-		Sym:           sym,
+		Sym:           strings.ToLower(sym),
 		AssetType:     m.AssetType,
 		Ret24hPerc:    ret * 100,
 		CurrentPx:     px.Value,
