@@ -5,8 +5,6 @@ import (
 	"log/slog"
 	"strconv"
 	"time"
-
-	"math"
 )
 
 // Ohlc queries OHLC data from REDIS price cache, timestamps in ms
@@ -81,8 +79,10 @@ func CreateRedisTimeSeries(client *utils.RueidisClient, sym string) {
 		TsInfo().Key(sym).Build()).AsMap()
 	if err == nil {
 		// key exists, we purge the timeseries
-		(*client.Client).Do(client.Ctx, (*client.Client).B().TsDel().
-			Key(sym).FromTimestamp(0).ToTimestamp(math.MaxInt64).Build())
+		if err = (*client.Client).Do(client.Ctx, (*client.Client).B().Del().
+			Key(sym).Build()).Error(); err != nil {
+			slog.Error("CreateRedisTimeSeries, failed deleting time series " + sym + ":" + err.Error())
+		}
 	}
 	// key does not exist, create series
 	(*client.Client).Do(client.Ctx, (*client.Client).B().TsCreate().Key(sym).DuplicatePolicyLast().Build())
