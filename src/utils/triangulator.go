@@ -1,6 +1,8 @@
 package utils
 
-import "github.com/D8-X/d8x-futures-go-sdk/pkg/d8x_futures"
+import (
+	"github.com/D8-X/d8x-futures-go-sdk/pkg/d8x_futures"
+)
 
 // TriangulatedPx calculates the triangulated price, given the triangulation path
 // and prices
