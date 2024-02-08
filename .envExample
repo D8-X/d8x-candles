@@ -1,7 +1,7 @@
 
 # Network relevant for VAAs from Pyth (either mainnet or testnet)
-NETWORK_NAME=testnet
-#NETWORK_NAME=mainnet
+#NETWORK_NAME=testnet
+NETWORK_NAME=mainnet
 
 REDIS_PW=thisismypassword
 # run via docker compose

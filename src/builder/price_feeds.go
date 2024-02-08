@@ -128,6 +128,8 @@ func nilMax(a *int64, b *int64) int64 {
 
 func (p *PythHistoryAPI) QueryPriceFeedInfo(sym string, id string) {
 	const endpoint = "/v1/price_feeds/"
+	// we need the mainnet id
+	id = p.SymbolMngr.GetPythIdMainnet(id)
 	url := strings.TrimSuffix(p.BaseUrl, "/") + endpoint + id
 	// Send a GET request
 	var response *http.Response
