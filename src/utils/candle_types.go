@@ -244,6 +244,7 @@ type SymbolManager struct {
 	SymToTriangPath      map[string]d8x_futures.Triangulation //sym to triangulation path
 	CandlePeriodsMs      map[string]CandlePeriod              //period 1m,5m,... to timeMs and displayRangeMs
 	SymConstructionMutx  *sync.Mutex                          //mutex when data for a symbol is being constructed
+	TestToMainPythId     map[string]string                    // map testnet id to mainnet id
 }
 
 type ConfigFile struct {
@@ -275,6 +276,36 @@ func (sm *SymbolManager) New(fileName string, network string) error {
 	return nil
 }
 
+// initPythIdMapping initializes the map TestToMainPythId
+func (c *SymbolManager) initPythIdMapping() {
+	configMain, _ := embed.GetDefaultPriceConfigByName("PythEVMStable")
+	configTest, _ := embed.GetDefaultPriceConfigByName("PythEVMBeta")
+	c.TestToMainPythId = make(map[string]string)
+	for _, el := range configTest.PriceFeedIds {
+		for _, elM := range configMain.PriceFeedIds {
+			if el.Origin == elM.Origin {
+				m, _ := strings.CutPrefix(elM.Id, "0x")
+				t, _ := strings.CutPrefix(el.Id, "0x")
+				c.TestToMainPythId[t] = m
+				break
+			}
+		}
+	}
+}
+
+// GetPythIdMainnet returns the mainnet id corresponding to the given
+// id. If the ID is not found in the testnet to mainnet mapping,
+// we assume this is already the mainnet id and return the mainnet id
+func (c *SymbolManager) GetPythIdMainnet(id string) string {
+	idM, exists := c.TestToMainPythId[id]
+	if !exists {
+		// assuming we provide a mainnet id
+		return id
+	}
+	// return mapped id
+	return idM
+}
+
 // creates a map from ids "0x32121..." to symbols "xau-usd"
 func (c *SymbolManager) extractPythIdToSymbolMap(network string) error {
 	slog.Info("Loading VAA ids for network " + network)
@@ -282,6 +313,7 @@ func (c *SymbolManager) extractPythIdToSymbolMap(network string) error {
 	if network != "mainnet" {
 		pSource = "PythEVMBeta"
 	}
+	c.initPythIdMapping()
 	config, err := embed.GetDefaultPriceConfigByName(pSource)
 	if err != nil {
 		return err
