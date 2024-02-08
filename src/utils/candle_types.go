@@ -58,6 +58,9 @@ func (r *RueidisClient) Get(key string) (DataPoint, error) {
 	if err != nil {
 		return DataPoint{}, err
 	}
+	if len(vlast) < 2 {
+		return DataPoint{}, errors.New("Could not find ts for " + key)
+	}
 	ts, _ := vlast[0].AsInt64()
 	v, _ := vlast[1].AsFloat64()
 	d := DataPoint{Timestamp: ts, Value: v}
