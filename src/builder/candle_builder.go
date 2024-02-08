@@ -398,7 +398,7 @@ func (p *PythHistoryAPI) IsTriangulatedMarketClosed(tsym string, symbols []strin
 	client := p.RedisClient
 	info, err := GetMarketInfo(context.Background(), client.Client, tsym)
 	if err != nil {
-		slog.Info("Market-closed determination " + tsym + ":" + err.Error())
+		slog.Info("Market-closed info " + tsym + ":" + err.Error())
 		return true
 	}
 	if !info.MarketHours.IsOpen {
@@ -407,7 +407,7 @@ func (p *PythHistoryAPI) IsTriangulatedMarketClosed(tsym string, symbols []strin
 	for _, sym := range symbols {
 		info, err := GetMarketInfo(context.Background(), client.Client, tsym)
 		if err != nil {
-			slog.Error("Error market-closed determination " + tsym + "(" + sym + "):" + err.Error())
+			slog.Error("Error market-closed info " + tsym + "(" + sym + "):" + err.Error())
 			return true
 		}
 		if !info.MarketHours.IsOpen {
