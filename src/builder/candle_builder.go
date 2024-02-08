@@ -161,7 +161,7 @@ func (p *PythHistoryAPI) EnableTriangulation(symT string) bool {
 	}
 	config.AddSymbolToTriangTarget(symT, &path)
 	config.SymToTriangPath[symT] = path
-
+	p.fetchTriangulatedMktInfo(config)
 	o, err := p.ConstructPriceObsForTriang(p.RedisClient, symT, path)
 	if err != nil {
 		slog.Error("error for triangulation " + symT + ":" + err.Error())
