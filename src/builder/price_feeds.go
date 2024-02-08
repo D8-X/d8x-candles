@@ -147,7 +147,7 @@ func (p *PythHistoryAPI) QueryPriceFeedInfo(sym string, id string) {
 	defer response.Body.Close()
 	// Check response status code
 	if response.StatusCode != http.StatusOK {
-		slog.Error("unexpected status code[PriceFeed]: " + fmt.Sprintf("%d", response.StatusCode))
+		slog.Error("unexpected status code[PriceFeed]: " + fmt.Sprintf("%d for url %s", response.StatusCode, url))
 		return
 	}
 	// Read the response body
