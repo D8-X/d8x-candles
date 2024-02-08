@@ -26,6 +26,7 @@ func RunCandleCharts() {
 		return
 	}
 	c, err := loadConfig()
+
 	if err != nil {
 		fmt.Println("Error:", err.Error())
 		return
