@@ -48,7 +48,7 @@ func (p *PythHistoryAPI) ScheduleMktInfoUpdate(updtInterval time.Duration) {
 	}
 }
 
-// Goes through all symbols in the config files, including triangulated ones,
+// FetchMktInfo goes through all symbols in the config, including triangulated ones,
 // and fetches market hours (next open, next close). Stores in
 // Redis
 func (p *PythHistoryAPI) FetchMktInfo() {
@@ -62,6 +62,7 @@ func (p *PythHistoryAPI) FetchMktInfo() {
 			p.setMarketHours(sym, MarketHours{true, 0, 0}, "crypto")
 			continue
 		}
+		slog.Info("Fetching market info for " + sym)
 		p.QueryPriceFeedInfo(sym, id)
 	}
 	// construct info for triangulated price feeds, e.g. chf-usdc
@@ -77,15 +78,17 @@ outerLoop:
 		var assetType string = "crypto"
 		for k := 0; k < len(path.Symbol); k++ {
 			m, err := p.GetMarketInfo(path.Symbol[k])
+			if err != nil {
+				p.FetchMktInfo()
+				slog.Error("Error triangulated feeds info " + symT + " at " + path.Symbol[k])
+				continue outerLoop
+			}
 			if m.AssetType != "crypto" {
 				// dominant asset type for triangulations is
 				// the non-crypto asset
 				assetType = m.AssetType
 			}
-			if err != nil {
-				slog.Error("Error triangulated feeds info " + symT + " at " + path.Symbol[k])
-				continue outerLoop
-			}
+
 			isOpen = isOpen && m.MarketHours.IsOpen
 			if m.MarketHours.NextOpen != 0 {
 				if m.MarketHours.NextOpen > nxtOpen {
