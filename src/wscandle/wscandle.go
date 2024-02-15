@@ -73,28 +73,28 @@ func HandleWs(w http.ResponseWriter, r *http.Request) {
 
 	//log new client
 	slog.Info("Server: new client connected, ID is " + clientID)
-
+	conn := ClientConn{Conn: c}
 	// create channel to signal client health
 	done := make(chan struct{})
 
 	go writePump(c, clientID, done)
-	readPump(c, clientID, done)
+	readPump(&conn, clientID, done)
 }
 
 // readPump process incoming messages and set the settings
-func readPump(conn *websocket.Conn, clientID string, done chan<- struct{}) {
+func readPump(conn *ClientConn, clientID string, done chan<- struct{}) {
 	// set limit, deadline to read & pong handler
-	conn.SetReadLimit(maxMessageSize)
-	conn.SetReadDeadline(time.Now().Add(pongWait))
-	conn.SetPongHandler(func(string) error {
-		conn.SetReadDeadline(time.Now().Add(pongWait))
+	conn.Conn.SetReadLimit(maxMessageSize)
+	conn.Conn.SetReadDeadline(time.Now().Add(pongWait))
+	conn.Conn.SetPongHandler(func(string) error {
+		conn.Conn.SetReadDeadline(time.Now().Add(pongWait))
 		return nil
 	})
 
 	// message handling
 	for {
 		// read incoming message
-		_, msg, err := conn.ReadMessage()
+		_, msg, err := conn.Conn.ReadMessage()
 		// if error occured
 		if err != nil {
 			// remove from the client

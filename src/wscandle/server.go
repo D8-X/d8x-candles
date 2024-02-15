@@ -22,7 +22,12 @@ import (
 type Subscriptions map[string]Clients
 
 // Clients is a type that describe the clients' ID and their connection
-type Clients map[string]*websocket.Conn
+type Clients map[string]*ClientConn
+
+type ClientConn struct {
+	Conn *websocket.Conn
+	Mu   sync.Mutex
+}
 
 // Server is the struct to handle the Server functions & manage the Subscriptions
 type Server struct {
@@ -69,15 +74,19 @@ func NewServer() *Server {
 }
 
 // Send simply sends message to the websocket client
-func (s *Server) Send(conn *websocket.Conn, message []byte) {
+func (s *Server) Send(conn *ClientConn, message []byte) {
 	// send simple message
-	conn.WriteMessage(websocket.TextMessage, message)
+	conn.Mu.Lock()
+	defer conn.Mu.Unlock()
+	conn.Conn.WriteMessage(websocket.TextMessage, message)
 }
 
 // SendWithWait sends message to the websocket client using wait group, allowing usage with goroutines
-func (s *Server) SendWithWait(conn *websocket.Conn, message []byte, wg *sync.WaitGroup) {
+func (s *Server) SendWithWait(conn *ClientConn, message []byte, wg *sync.WaitGroup) {
 	// send simple message
-	conn.WriteMessage(websocket.TextMessage, message)
+	conn.Mu.Lock()
+	defer conn.Mu.Unlock()
+	conn.Conn.WriteMessage(websocket.TextMessage, message)
 
 	// set the task as done
 	wg.Done()
@@ -94,7 +103,7 @@ func (s *Server) RemoveClient(clientID string) {
 
 // Process incoming websocket message
 // https://github.com/madeindra/golang-websocket/
-func (s *Server) HandleRequest(conn *websocket.Conn, config utils.SymbolManager, clientID string, message []byte) {
+func (s *Server) HandleRequest(conn *ClientConn, config utils.SymbolManager, clientID string, message []byte) {
 	slog.Info("request received")
 	var data ClientMessage
 	err := json.Unmarshal(message, &data)
@@ -133,7 +142,7 @@ func (s *Server) UnsubscribeCandles(clientID string, topic string) {
 }
 
 // Subscribe the client to market updates (markets)
-func (s *Server) SubscribeMarkets(conn *websocket.Conn, clientID string) []byte {
+func (s *Server) SubscribeMarkets(conn *ClientConn, clientID string) []byte {
 	clients := s.Subscriptions[MARKETS_TOPIC]
 	// if client already subscribed, stop the process
 	if _, subbed := clients[clientID]; subbed {
@@ -250,7 +259,7 @@ func (s *Server) updtMarketForSym(sym string, anchorTime24hMs int64) error {
 }
 
 // Subscribe the client to a candle-topic (e.g. btc-usd:15m)
-func (s *Server) SubscribeCandles(conn *websocket.Conn, clientID string, topic string, config utils.SymbolManager) []byte {
+func (s *Server) SubscribeCandles(conn *ClientConn, clientID string, topic string, config utils.SymbolManager) []byte {
 	if !isValidCandleTopic(topic) {
 		return errorResponse("subscribe", topic, "usage: symbol:period")
 	}
