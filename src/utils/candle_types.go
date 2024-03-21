@@ -2,17 +2,27 @@ package utils
 
 import (
 	"context"
+	"d8x-candles/config"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 
-	"log/slog"
+	embed "github.com/D8-X/d8x-futures-go-sdk/config"
+	"github.com/D8-X/d8x-futures-go-sdk/pkg/d8x_futures"
+	"github.com/D8-X/d8x-futures-go-sdk/utils"
 
 	"github.com/redis/rueidis"
 )
+
+// REDIS set name
+const AVAIL_TICKER_SET string = "avail"
+const TICKER_REQUEST = "request"
+const PRICE_UPDATE_MSG = "px_update"
 
 type DataPoint struct {
 	Timestamp int64
@@ -24,10 +34,32 @@ type RueidisClient struct {
 	Ctx    context.Context
 }
 
+type PriceUpdateResponse struct {
+	Type      string `json:"type"`
+	PriceFeed struct {
+		ID    string `json:"id"`
+		Price struct {
+			Price       string `json:"price"`
+			Conf        string `json:"conf"`
+			Expo        int    `json:"expo"`
+			PublishTime int64  `json:"publish_time"`
+		} `json:"price"`
+		EMAPrice struct {
+			Price       string `json:"price"`
+			Conf        string `json:"conf"`
+			Expo        int    `json:"expo"`
+			PublishTime int64  `json:"publish_time"`
+		} `json:"ema_price"`
+	} `json:"price_feed"`
+}
+
 func (r *RueidisClient) Get(key string) (DataPoint, error) {
 	vlast, err := (*r.Client).Do(r.Ctx, (*r.Client).B().TsGet().Key(key).Build()).ToArray()
 	if err != nil {
 		return DataPoint{}, err
+	}
+	if len(vlast) < 2 {
+		return DataPoint{}, errors.New("Could not find ts for " + key)
 	}
 	ts, _ := vlast[0].AsInt64()
 	v, _ := vlast[1].AsFloat64()
@@ -132,7 +164,7 @@ func (s *SymbolPyth) New(symbol string, id string) error {
 	if len(parts2) != 2 {
 		return fmt.Errorf("Symbol must contain '/'. E.g. Crypto.ETH/USD")
 	}
-	s.Symbol = strings.ToLower(parts2[0]) + "-" + strings.ToLower(parts2[1])
+	s.Symbol = strings.ToUpper(parts2[0]) + "-" + strings.ToUpper(parts2[1])
 	s.id = id
 	s.PythSymbol = symbol
 	return nil
@@ -203,115 +235,119 @@ type CandlePeriod struct {
 	DisplayRangeMs int
 }
 
-type PriceConfig struct {
+type SymbolManager struct {
 	ConfigFile           ConfigFile
-	PythIdToSym          map[string]string       //pyth id (0xabc..) to symbol (btc-usd)
-	SymToDependentTriang map[string][]string     //sym to all dependent triangulations
-	SymToTriangPath      map[string][]string     //sym to triangulation path
-	CandlePeriodsMs      map[string]CandlePeriod //period 1m,5m,... to timeMs and displayRangeMs
+	PriceFeedIds         []utils.PriceFeedId
+	PythIdToSym          map[string]string                    //pyth id (0xabc..) to symbol (btc-usd)
+	SymToPythOrigin      map[string]string                    //symbol (btc-usd) to pyth origin ("Crypto.BTC/USD")
+	SymToDependentTriang map[string][]string                  //sym to all dependent triangulations
+	SymToTriangPath      map[string]d8x_futures.Triangulation //sym to triangulation path
+	CandlePeriodsMs      map[string]CandlePeriod              //period 1m,5m,... to timeMs and displayRangeMs
+	SymConstructionMutx  *sync.Mutex                          //mutex when data for a symbol is being constructed
+	TestToMainPythId     map[string]string                    // map testnet id to mainnet id
 }
 
 type ConfigFile struct {
 	PythAPIEndpoint      string   `json:"pythAPIEndpoint"`
 	PythPriceWSEndpoints []string `json:"priceServiceWSEndpoints"`
-	PriceFeeds           []struct {
-		Symbol     string `json:"symbol"`
-		SymbolPyth string `json:"symbolPyth"`
-		IdVaaTest  string `json:"idVaaTestnet"` // id used for vaa (testnet - otherwise identical to id)
-		Id         string `json:"id"`           // id used for benchmarks/price_feeds-endpoint (mainnet)
-	} `json:"priceFeeds"`
-	Triangulations []struct {
-		Target string   `json:"target"`
-		Path   []string `json:"path"`
-	} `json:"triangulations"`
-	SupportedCandlePeriods []struct {
-		Period         string `json:"period"`
-		TimeMs         int    `json:"timeMs"`
-		DisplayRangeMs int    `json:"displayRangeMs"`
-	} `json:"supportedCandlePeriods"`
 }
 
-func (c *PriceConfig) LoadPriceConfig(fileName string, network string) error {
+// New initializes a new SymbolManager
+func (sm *SymbolManager) New(fileName string, network string) error {
 	data, err := os.ReadFile(fileName)
 	if err != nil {
 		return err
 	}
-	err = json.Unmarshal(data, &c.ConfigFile)
+	err = json.Unmarshal(data, &sm.ConfigFile)
 	if err != nil {
 		return err
 	}
-	c.extractPythIdToSymbolMap(network)
-	c.extractSymbolToTriangTarget()
-	c.extractTriangulationMap()
-	c.extractCandlePeriods()
+	err = sm.extractPythIdToSymbolMap(network)
+	if err != nil {
+		return err
+	}
+	sm.SymToDependentTriang = make(map[string][]string)
+	sm.SymToTriangPath = make(map[string]d8x_futures.Triangulation)
+	sm.SymConstructionMutx = &sync.Mutex{}
+	err = sm.extractCandlePeriods()
+	if err != nil {
+		return err
+	}
 	return nil
 }
 
+// initPythIdMapping initializes the map TestToMainPythId
+func (c *SymbolManager) initPythIdMapping() {
+	configMain, _ := embed.GetDefaultPriceConfigByName("PythEVMStable")
+	configTest, _ := embed.GetDefaultPriceConfigByName("PythEVMBeta")
+	c.TestToMainPythId = make(map[string]string)
+	for _, el := range configTest.PriceFeedIds {
+		for _, elM := range configMain.PriceFeedIds {
+			if el.Origin == elM.Origin {
+				m, _ := strings.CutPrefix(elM.Id, "0x")
+				t, _ := strings.CutPrefix(el.Id, "0x")
+				c.TestToMainPythId[t] = m
+				break
+			}
+		}
+	}
+}
+
+// GetPythIdMainnet returns the mainnet id corresponding to the given
+// id. If the ID is not found in the testnet to mainnet mapping,
+// we assume this is already the mainnet id and return the mainnet id
+func (c *SymbolManager) GetPythIdMainnet(id string) string {
+	idM, exists := c.TestToMainPythId[id]
+	if !exists {
+		// assuming we provide a mainnet id
+		return id
+	}
+	// return mapped id
+	return idM
+}
+
 // creates a map from ids "0x32121..." to symbols "xau-usd"
-func (c *PriceConfig) extractPythIdToSymbolMap(network string) {
+func (c *SymbolManager) extractPythIdToSymbolMap(network string) error {
 	slog.Info("Loading VAA ids for network " + network)
-	m := make(map[string]string, len(c.ConfigFile.PriceFeeds))
-	for _, el := range c.ConfigFile.PriceFeeds {
-		var idTrim string
-		if network == "testnet" {
-			idTrim, _ = strings.CutPrefix(el.IdVaaTest, "0x")
-		} else {
-			idTrim, _ = strings.CutPrefix(el.Id, "0x")
-		}
-
-		m[idTrim] = el.Symbol
+	pSource := "PythEVMStable"
+	if network != "mainnet" {
+		pSource = "PythEVMBeta"
 	}
-	c.PythIdToSym = m
+	c.initPythIdMapping()
+	config, err := embed.GetDefaultPriceConfigByName(pSource)
+	if err != nil {
+		return err
+	}
+	mIdToSym := make(map[string]string, len(config.PriceFeedIds))
+	mSymToPythSym := make(map[string]string, len(config.PriceFeedIds))
+	for _, el := range config.PriceFeedIds {
+		s := strings.ToUpper(el.Symbol)
+		idTrim, _ := strings.CutPrefix(el.Id, "0x")
+		mIdToSym[idTrim] = s
+		mSymToPythSym[s] = el.Origin
+	}
+	c.PriceFeedIds = config.PriceFeedIds
+	c.PythIdToSym = mIdToSym
+	c.SymToPythOrigin = mSymToPythSym
+	return nil
 }
 
-// From the data of the form { "target": "btc-usdc", "path": ["*", "btc-usd", "/", "usdc-usd"] },
-// we create a mapping of the underlying symbols to the target.
-// This is to quickly find all affected triangulations on a price change
-func (c *PriceConfig) extractSymbolToTriangTarget() {
-	m := make(map[string][]string)
-	for k := 0; k < len(c.ConfigFile.Triangulations); k++ {
-		path := c.ConfigFile.Triangulations[k].Path
-		for j := 1; j < len(path); j = j + 2 {
-			m[path[j]] = append(m[path[j]], c.ConfigFile.Triangulations[k].Target)
-		}
-	}
-	c.SymToDependentTriang = m
-}
-
-// get map for { "target": "btc-usdc", "path": ["*", "btc-usd", "/", "usdc-usd"] }
-// from target -> path (map[string][]string)
-func (c *PriceConfig) extractTriangulationMap() {
-	m := make(map[string][]string)
-	for k := 0; k < len(c.ConfigFile.Triangulations); k++ {
-		t := c.ConfigFile.Triangulations[k].Target
-		m[t] = c.ConfigFile.Triangulations[k].Path
-	}
-	c.SymToTriangPath = m
-}
-
-func (c *PriceConfig) extractCandlePeriods() {
-	c.CandlePeriodsMs = make(map[string]CandlePeriod, len(c.ConfigFile.SupportedCandlePeriods))
-	for _, el := range c.ConfigFile.SupportedCandlePeriods {
-		c.CandlePeriodsMs[el.Period] = CandlePeriod{Name: el.Period, TimeMs: el.TimeMs, DisplayRangeMs: el.DisplayRangeMs}
+func (c *SymbolManager) AddSymbolToTriangTarget(symT string, path *d8x_futures.Triangulation) {
+	for j := 0; j < len(path.Symbol); j++ {
+		c.SymToDependentTriang[path.Symbol[j]] = append(c.SymToDependentTriang[path.Symbol[j]], symT)
 	}
 }
 
-func (c *PriceConfig) IsSymbolAvailable(sym string) bool {
-	// symbol is a triangulated symbol?
-	s := c.SymToTriangPath[sym]
-	if len(s) > 0 {
-		return true
+func (c *SymbolManager) extractCandlePeriods() error {
+
+	periods, err := config.GetCandlePeriodsConfig()
+	if err != nil {
+		return err
 	}
-	// symbol is part of a triangulation?
-	t := c.SymToTriangPath[sym]
-	if len(t) > 0 {
-		return true
+	c.CandlePeriodsMs = make(map[string]CandlePeriod, len(periods))
+	for _, el := range periods {
+		p := strings.ToUpper(el.Period)
+		c.CandlePeriodsMs[p] = CandlePeriod{Name: p, TimeMs: el.TimeMs, DisplayRangeMs: el.DisplayRangeMs}
 	}
-	// symbol is not used in triangulations but available
-	for _, el := range c.ConfigFile.PriceFeeds {
-		if el.Symbol == sym {
-			return true
-		}
-	}
-	return false
+	return nil
 }

@@ -35,58 +35,60 @@ type PriceFeedApiResponse struct {
 }
 
 // Runs FetchMktHours and schedules next runs
-func (p *PythHistoryAPI) ScheduleMktInfoUpdate(config *utils.PriceConfig, updtInterval time.Duration) {
-	p.FetchMktInfo(config)
+func (p *PythHistoryAPI) ScheduleMktInfoUpdate(updtInterval time.Duration) {
+	p.FetchMktInfo()
 	tickerUpdate := time.NewTicker(updtInterval)
 	for {
 		select {
 		case <-tickerUpdate.C:
 			slog.Info("Updating market info...")
-			p.FetchMktInfo(config)
+			p.FetchMktInfo()
 			fmt.Println("Market info updated.")
 		}
 	}
 }
 
-// Goes through all symbols in the config files, including triangulated ones,
+// FetchMktInfo goes through all symbols in the config, including triangulated ones,
 // and fetches market hours (next open, next close). Stores in
 // Redis
-func (p *PythHistoryAPI) FetchMktInfo(config *utils.PriceConfig) {
+func (p *PythHistoryAPI) FetchMktInfo() {
 	// process base price feeds (no triangulation)
-	f := config.ConfigFile.PriceFeeds
-	for k := 0; k < len(f); k++ {
-		sym := f[k].Symbol
-		asset := strings.ToLower(strings.Split(f[k].SymbolPyth, ".")[0])
+	config := p.SymbolMngr
+	for id, sym := range config.PythIdToSym {
+		origin := config.SymToPythOrigin[sym]
+		asset := strings.ToLower(strings.Split(origin, ".")[0])
 		if asset == "crypto" {
 			// crypto markets are always open, huray
 			p.setMarketHours(sym, MarketHours{true, 0, 0}, "crypto")
 			continue
 		}
-		id := f[k].Id
+		slog.Info("Fetching market info for " + sym)
 		p.QueryPriceFeedInfo(sym, id)
 	}
 	// construct info for triangulated price feeds, e.g. chf-usdc
 	p.fetchTriangulatedMktInfo(config)
 }
 
-func (p *PythHistoryAPI) fetchTriangulatedMktInfo(config *utils.PriceConfig) {
+func (p *PythHistoryAPI) fetchTriangulatedMktInfo(config *utils.SymbolManager) {
 	paths := config.SymToTriangPath
 outerLoop:
 	for symT, path := range paths {
 		isOpen := true
 		var nxtOpen, nxtClose int64 = 0, math.MaxInt64
 		var assetType string = "crypto"
-		for k := 1; k < len(path); k += 2 {
-			m, err := p.GetMarketInfo(path[k])
+		for k := 0; k < len(path.Symbol); k++ {
+			m, err := p.GetMarketInfo(path.Symbol[k])
+			if err != nil {
+				p.FetchMktInfo()
+				slog.Error("Error triangulated feeds info " + symT + " at " + path.Symbol[k])
+				continue outerLoop
+			}
 			if m.AssetType != "crypto" {
 				// dominant asset type for triangulations is
 				// the non-crypto asset
 				assetType = m.AssetType
 			}
-			if err != nil {
-				slog.Error("Error triangulated feeds info " + symT + " at " + path[k])
-				continue outerLoop
-			}
+
 			isOpen = isOpen && m.MarketHours.IsOpen
 			if m.MarketHours.NextOpen != 0 {
 				if m.MarketHours.NextOpen > nxtOpen {
@@ -126,6 +128,8 @@ func nilMax(a *int64, b *int64) int64 {
 
 func (p *PythHistoryAPI) QueryPriceFeedInfo(sym string, id string) {
 	const endpoint = "/v1/price_feeds/"
+	// we need the mainnet id
+	id = p.SymbolMngr.GetPythIdMainnet(id)
 	url := strings.TrimSuffix(p.BaseUrl, "/") + endpoint + id
 	// Send a GET request
 	var response *http.Response
@@ -145,7 +149,7 @@ func (p *PythHistoryAPI) QueryPriceFeedInfo(sym string, id string) {
 	defer response.Body.Close()
 	// Check response status code
 	if response.StatusCode != http.StatusOK {
-		slog.Error("unexpected status code[PriceFeed]: " + fmt.Sprintf("%d", response.StatusCode))
+		slog.Error("unexpected status code[PriceFeed]: " + fmt.Sprintf("%d for url %s", response.StatusCode, url))
 		return
 	}
 	// Read the response body
@@ -156,7 +160,7 @@ func (p *PythHistoryAPI) QueryPriceFeedInfo(sym string, id string) {
 		return
 	}
 	// check whether id provided is indeed for the symbol we aim to store
-	symSource := strings.ToLower(apiResponse.Attributes["generic_symbol"])
+	symSource := strings.ToUpper(apiResponse.Attributes["generic_symbol"])
 	if symSource != strings.ReplaceAll(sym, "-", "") {
 		slog.Error("Error: price_feeds GET id is for " + symSource +
 			" but symbol " + sym)
@@ -201,11 +205,11 @@ func GetMarketInfo(ctx context.Context, client *rueidis.Client, ticker string) (
 	// next close ts (can be outdated as long as not outdated for more than
 	// closing period)
 	now := time.Now().UTC().Unix()
-	isOpen = nxtClose == 0 ||
-		(nxtOpen < now && now < nxtClose) ||
-		(now < nxtClose && nxtClose < nxtOpen)
+	isClosed := nxtClose != 0 &&
+		((!isOpen && now < nxtOpen) ||
+			(isOpen && now > nxtClose))
 	var mh = MarketHours{
-		IsOpen:    isOpen,
+		IsOpen:    !isClosed,
 		NextOpen:  nxtOpen,
 		NextClose: nxtClose,
 	}

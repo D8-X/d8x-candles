@@ -36,6 +36,9 @@ jobs:
         uses: docker/metadata-action@v4
         with:
           images: ${{matrix.image}}
+      - name: Set build date
+        id: build_date
+        run: echo "BUILD_DATE=$(date +'%Y-%m-%d %H:%M:%S')" >> "$GITHUB_OUTPUT"
       - name: Build and push ${{ matrix.image }}
         uses: docker/build-push-action@v4
         with:
@@ -44,3 +47,5 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            BUILD_VERSION=${{ steps.build_date.outputs.BUILD_DATE }}-${{ github.sha }}

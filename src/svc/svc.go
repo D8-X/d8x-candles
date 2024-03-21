@@ -26,6 +26,7 @@ func RunCandleCharts() {
 		return
 	}
 	c, err := loadConfig()
+
 	if err != nil {
 		fmt.Println("Error:", err.Error())
 		return
@@ -51,19 +52,19 @@ func StreamPyth() {
 		return
 	}
 
-	err = pythclient.StreamWs(c, viper.GetString(env.REDIS_ADDR), viper.GetString(env.REDIS_PW), viper.GetString(env.NETWORK_NAME))
+	err = pythclient.StreamWs(&c, viper.GetString(env.REDIS_ADDR), viper.GetString(env.REDIS_PW))
 	if err != nil {
 		slog.Error(err.Error())
 	}
 }
 
-func loadConfig() (utils.PriceConfig, error) {
+func loadConfig() (utils.SymbolManager, error) {
 	fileName := viper.GetString(env.CONFIG_PATH)
 	network := viper.GetString(env.NETWORK_NAME)
-	var c utils.PriceConfig
-	err := c.LoadPriceConfig(fileName, network)
+	var c utils.SymbolManager
+	err := c.New(fileName, network)
 	if err != nil {
-		return utils.PriceConfig{}, err
+		return utils.SymbolManager{}, err
 	}
 	return c, nil
 }

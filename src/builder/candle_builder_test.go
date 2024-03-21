@@ -125,14 +125,14 @@ func TestQueryPriceFeedInfo(t *testing.T) {
 }
 
 func TestFetchMktInfo(t *testing.T) {
-	var c utils.PriceConfig
-	err := c.LoadPriceConfig("../../config/prices.config.json", "testnet")
+	var c utils.SymbolManager
+	err := c.New("../../config/prices.config.json", "testnet")
 	if err != nil {
 		t.Errorf("Error:%v", err)
 		return
 	}
 	api := createHistApi(t)
-	api.FetchMktInfo(&c)
+	api.FetchMktInfo()
 	a, err := GetMarketInfo(api.RedisClient.Ctx, api.RedisClient.Client, "chf-usdc")
 	fmt.Print(a)
 	a, err = GetMarketInfo(api.RedisClient.Ctx, api.RedisClient.Client, "bs-ws")
