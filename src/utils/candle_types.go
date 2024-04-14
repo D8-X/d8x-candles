@@ -147,24 +147,24 @@ func (s *SymbolPyth) PairString() string {
 
 // Create a new Pyth symbol from a string such as Crypto.ETH/USD
 // and the id
-func (s *SymbolPyth) New(symbol string, id string) error {
+func (s *SymbolPyth) New(symbol, id, ourSymbol string) error {
 	parts := strings.Split(symbol, ".")
 	if len(parts) != 2 {
-		return fmt.Errorf("Symbol must contain '.'. E.g. Crypto.ETH/USD")
+		return fmt.Errorf("symbol must contain '.'. E.g. Crypto.ETH/USD")
 	}
 	parts[0] = strings.ToLower(parts[0])
 	switch parts[0] {
 	case `crypto`, `equity`, `fx`, `metal`, `rates`:
 	default:
-		return fmt.Errorf("Invalid asset type. Possible values are `crypto`, `equity`, `fx`, `metal`, `rates`.")
+		return fmt.Errorf("invalid asset type. Possible values are `crypto`, `equity`, `fx`, `metal`, `rates`")
 	}
 
 	s.AssetType = strings.ToLower(parts[0])
 	parts2 := strings.Split(parts[1], "/")
 	if len(parts2) != 2 {
-		return fmt.Errorf("Symbol must contain '/'. E.g. Crypto.ETH/USD")
+		return fmt.Errorf("symbol must contain '/'. E.g. Crypto.ETH/USD")
 	}
-	s.Symbol = strings.ToUpper(parts2[0]) + "-" + strings.ToUpper(parts2[1])
+	s.Symbol = ourSymbol
 	s.id = id
 	s.PythSymbol = symbol
 	return nil

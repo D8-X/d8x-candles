@@ -13,7 +13,7 @@ import (
 func TestRetrieveCandle(t *testing.T) {
 	api := PythHistoryAPI{BaseUrl: "https://benchmarks.pyth.network/"}
 	var sym utils.SymbolPyth
-	sym.New("Crypto.ETH/USD", "")
+	sym.New("Crypto.ETH/USD", "", "ETH/USD")
 	var resol utils.PythCandleResolution
 	err := resol.New(1, utils.MinuteCandle)
 	if err != nil {
@@ -45,7 +45,7 @@ func TestConcatCandles(t *testing.T) {
 	api := PythHistoryAPI{BaseUrl: "https://benchmarks.pyth.network/"}
 	var sym utils.SymbolPyth
 	//sym.New("Crypto.ETH/USD")
-	sym.New("Fx.USD/CHF", "")
+	sym.New("Fx.USD/CHF", "", "ETH/USD")
 	var resol utils.PythCandleResolution
 	_ = resol.New(1, utils.MinuteCandle)
 	candles1min, err := api.RetrieveCandlesFromPyth(sym, resol, fromTs, toTs)
@@ -71,8 +71,8 @@ func TestConcatCandles(t *testing.T) {
 func TestPythDataToRedisPriceObs(t *testing.T) {
 	api := createHistApi(t)
 	var sym1, sym2 utils.SymbolPyth
-	sym1.New("Crypto.ETH/USD", "")
-	sym2.New("Fx.USD/CHF", "")
+	sym1.New("Crypto.ETH/USD", "", "ETH/USD")
+	sym2.New("Fx.USD/CHF", "", "USD/CHF")
 	symbols := []utils.SymbolPyth{sym1, sym2}
 	api.PythDataToRedisPriceObs(symbols)
 	vlast, _ := api.RedisClient.Get(sym1.Symbol)

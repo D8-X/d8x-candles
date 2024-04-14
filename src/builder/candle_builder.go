@@ -27,7 +27,7 @@ func (p *PythHistoryAPI) BuildHistory() {
 	for id, sym := range config.PythIdToSym {
 		var symP utils.SymbolPyth
 		origin := config.SymToPythOrigin[sym]
-		symP.New(origin, id)
+		symP.New(origin, id, sym)
 		pythSyms[k] = symP
 		k++
 	}
