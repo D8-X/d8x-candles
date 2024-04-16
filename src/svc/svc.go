@@ -81,7 +81,7 @@ func loadEnv() error {
 	viper.SetDefault(env.REDIS_ADDR, "localhost:6379")
 	viper.SetDefault(env.WS_ADDR, "localhost:8080")
 	viper.SetDefault(env.REDIS_DB_NUM, 0)
-	viper.SetDefault(env.NETWORK_NAME, "testnet")
+	viper.SetDefault(env.NETWORK_NAME, "mainnet")
 	requiredEnvs := []string{
 		env.CONFIG_PATH,
 	}
