@@ -320,13 +320,21 @@ func (c *SymbolManager) extractPythIdToSymbolMap(network string) error {
 	}
 	mIdToSym := make(map[string]string, len(config.PriceFeedIds))
 	mSymToPythSym := make(map[string]string, len(config.PriceFeedIds))
-	for _, el := range config.PriceFeedIds {
+	irrelevantSyms := make(map[string]struct{})
+	for _, sym := range config.CandleIrrelevant {
+		irrelevantSyms[strings.ToUpper(sym)] = struct{}{}
+	}
+	c.PriceFeedIds = make([]utils.PriceFeedId, 0, len(config.PriceFeedIds))
+	for k, el := range config.PriceFeedIds {
 		s := strings.ToUpper(el.Symbol)
+		if _, ok := irrelevantSyms[s]; ok {
+			continue
+		}
 		idTrim, _ := strings.CutPrefix(el.Id, "0x")
 		mIdToSym[idTrim] = s
 		mSymToPythSym[s] = el.Origin
+		c.PriceFeedIds = append(c.PriceFeedIds, config.PriceFeedIds[k])
 	}
-	c.PriceFeedIds = config.PriceFeedIds
 	c.PythIdToSym = mIdToSym
 	c.SymToPythOrigin = mSymToPythSym
 	return nil
