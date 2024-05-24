@@ -59,7 +59,7 @@ func (p *PythHistoryAPI) RetrieveCandlesFromPyth(sym utils.SymbolPyth, candleRes
 		if p.TokenBucket.Take() {
 			response, err = http.Get(url)
 			if err != nil {
-				return PythHistoryAPIResponse{}, fmt.Errorf("Error making GET request: %v", err)
+				return PythHistoryAPIResponse{}, fmt.Errorf("error making GET request: %v", err)
 			}
 			break
 		}
@@ -78,7 +78,10 @@ func (p *PythHistoryAPI) RetrieveCandlesFromPyth(sym utils.SymbolPyth, candleRes
 	var apiResponse PythHistoryAPIResponse
 	err = json.NewDecoder(response.Body).Decode(&apiResponse)
 	if err != nil {
-		return PythHistoryAPIResponse{}, fmt.Errorf("Error parsing GET request: %v", err)
+		return PythHistoryAPIResponse{}, fmt.Errorf("error parsing GET request: %v", err)
+	}
+	if apiResponse.S == "error" {
+		return PythHistoryAPIResponse{}, fmt.Errorf("error in benchmarks GET request: %s", apiResponse.ErrMsg)
 	}
 
 	return apiResponse, nil
@@ -208,8 +211,9 @@ func (p *PythHistoryAPI) ConstructPriceObsFromPythCandles(sym utils.SymbolPyth) 
 		return PriceObservations{}, err
 	}
 	candleRes.New(1, utils.DayCandle)
-	// jan1 2022: 1640995200
-	allTimeResolution1D, err := p.RetrieveCandlesFromPyth(sym, candleRes, 1640995200, currentTimeSec)
+	// only one year allowed
+	dateTs := uint32(time.Now().Unix() - 3.15e7)
+	allTimeResolution1D, err := p.RetrieveCandlesFromPyth(sym, candleRes, dateTs, currentTimeSec)
 	if err != nil {
 		return PriceObservations{}, err
 	}
