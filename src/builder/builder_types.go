@@ -12,13 +12,14 @@ type PythHistoryAPI struct {
 }
 
 type PythHistoryAPIResponse struct {
-	S string    `json:"s"` // "ok"
-	T []uint32  `json:"t"` // bar time (ts seconds, start)
-	O []float64 `json:"o"` // open
-	H []float64 `json:"h"` // high
-	L []float64 `json:"l"` // low
-	C []float64 `json:"c"` // close
-	V []float64 `json:"v"` // volume (empty)
+	S      string    `json:"s"`      // "ok", "error"
+	T      []uint32  `json:"t"`      // bar time (ts seconds, start)
+	O      []float64 `json:"o"`      // open
+	H      []float64 `json:"h"`      // high
+	L      []float64 `json:"l"`      // low
+	C      []float64 `json:"c"`      // close
+	V      []float64 `json:"v"`      // volume (empty)
+	ErrMsg string    `json:"errmsg"` // "" or error
 }
 
 type PriceObservations struct {
