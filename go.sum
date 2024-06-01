@@ -1,5 +1,5 @@
-github.com/D8-X/d8x-futures-go-sdk v0.5.7 h1:cNI4I8AdY18so19aKncUlWaqLUaJOlnbL7KxHzcYslU=
-github.com/D8-X/d8x-futures-go-sdk v0.5.7/go.mod h1:+GkjN/sW/4WS463LXkKU7xgxJ7+bltrRGVCcUcM68w4=
+github.com/D8-X/d8x-futures-go-sdk v0.6.2 h1:WRlXxOX9UBw7S9t9kQ9/SCvJuUu8/aH3+IHfXJFI7VA=
+github.com/D8-X/d8x-futures-go-sdk v0.6.2/go.mod h1:sCP5h1Ep7kq/U1jqJdXtgalc5x7OPZb2rWDAUdY8YfI=
 github.com/DataDog/zstd v1.4.5 h1:EndNeuB0l9syBZhut0wns3gV1hL8zX8LIu6ZiVHWLIQ=
 github.com/DataDog/zstd v1.4.5/go.mod h1:1jcaCB/ufaK+sKp1NBhlGmpz41jOoPQ35bpF36t7BBo=
 github.com/Microsoft/go-winio v0.6.1 h1:9/kr64B9VUZrLm5YYwbGtUJnMgqWVOdUAXu6Migciow=
