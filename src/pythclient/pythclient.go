@@ -1,19 +1,19 @@
 package pythclient
 
 import (
+	"bufio"
 	"context"
 	"d8x-candles/src/builder"
 	"d8x-candles/src/utils"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"log/slog"
 	"math/rand"
-	"net/url"
+	"net/http"
+	"os"
 	"strings"
 	"time"
 
-	"github.com/gorilla/websocket"
 	"github.com/redis/rueidis"
 )
 
@@ -34,8 +34,6 @@ type SubscribeRequest struct {
 func StreamWs(symMngr *utils.SymbolManager, REDIS_ADDR string, REDIS_PW string) error {
 	symMap := symMngr.PythIdToSym
 
-	// keep track of latest price
-	var lastPx = make(map[string]float64, len(symMap))
 	fmt.Print("REDIS ADDR = ", REDIS_ADDR)
 	fmt.Print("REDIS_PW=", REDIS_PW)
 
@@ -66,91 +64,122 @@ func StreamWs(symMngr *utils.SymbolManager, REDIS_ADDR string, REDIS_PW string) 
 	ph.BuildHistory()
 	go ph.ScheduleMktInfoUpdate(15 * time.Minute)
 	go ph.ScheduleCompaction(15 * time.Minute)
-	var ids = make([]string, len(symMap))
-	k := 0
-	for id := range symMap {
-		ids[k] = "0x" + id
-		k++
-	}
 
-	c, err := connectToWebsocket(symMngr.ConfigFile.PythPriceWSEndpoints)
+	err = streamHttp(symMngr.ConfigFile.PythPriceEndpoints, symMap, &ph)
 	if err != nil {
 		return err
 	}
-	defer c.Close()
-
-	// Construct and send the subscribe request
-	subscribeReq := SubscribeRequest{
-		Type: "subscribe",
-		IDs:  ids,
-	}
-	if err := c.WriteJSON(subscribeReq); err != nil {
-		return errors.New("WriteJSON:" + err.Error())
-	}
-
-	go ph.SubscribeTickerRequest()
-	for {
-		_, message, err := c.ReadMessage()
-		if err != nil {
-			slog.Info("Pyth Price Service Websocket Read:" + err.Error())
-			slog.Info("Reconnecting...")
-			if c, err = connectToWebsocket(symMngr.ConfigFile.PythPriceWSEndpoints); err != nil {
-				return err
-			}
-			if err := c.WriteJSON(subscribeReq); err != nil {
-				return errors.New("WriteJSON:" + err.Error())
-			}
+	/*
+		// Construct and send the subscribe request
+		subscribeReq := SubscribeRequest{
+			Type: "subscribe",
+			IDs:  ids,
 		}
-		var resp map[string]interface{}
-		if err := json.Unmarshal(message, &resp); err != nil {
-			slog.Info("JSON Unmarshal:" + err.Error())
-			continue
-		}
-		switch resp["type"] {
-		case "response":
-			if resp["status"] == "success" {
-				//{"type":"response","status":"success"}
+
+		go ph.SubscribeTickerRequest()
+		for {
+			_, message, err := c.ReadMessage()
+			if err != nil {
+				slog.Info("Pyth Price Service Websocket Read:" + err.Error())
+				slog.Info("Reconnecting...")
+				if err = streamHttp(symMngr.ConfigFile.PythPriceEndpoints, ids); err != nil {
+					return err
+				}
+
+			}
+			var resp map[string]interface{}
+			if err := json.Unmarshal(message, &resp); err != nil {
+				slog.Info("JSON Unmarshal:" + err.Error())
 				continue
 			}
-			msg := fmt.Sprintf("%s : %s", resp["status"], resp["error"])
-			slog.Error("Pyth response " + msg)
-			break
-		case "price_update":
-			break
-		default:
-			continue
-		}
-		var pxResp utils.PriceUpdateResponse
-		if err := json.Unmarshal(message, &pxResp); err != nil {
-			slog.Info("JSON Unmarshal:" + err.Error())
-			continue
-		}
+			switch resp["type"] {
+			case "response":
+				if resp["status"] == "success" {
+					//{"type":"response","status":"success"}
+					continue
+				}
+				msg := fmt.Sprintf("%s : %s", resp["status"], resp["error"])
+				slog.Error("Pyth response " + msg)
+				break
+			case "price_update":
+				break
+			default:
+				continue
+			}
+			var pxResp utils.PriceUpdateResponse
+			if err := json.Unmarshal(message, &pxResp); err != nil {
+				slog.Info("JSON Unmarshal:" + err.Error())
+				continue
+			}
 
-		if pxResp.Type == "price_update" {
-			// Handle price update response
-			ph.OnPriceUpdate(pxResp, symMap[pxResp.PriceFeed.ID], lastPx)
+			if pxResp.Type == "price_update" {
+				// Handle price update response
+				ph.OnPriceUpdate(pxResp, symMap[pxResp.PriceFeed.ID], lastPx)
+			}
 		}
-	}
+	*/
+	return nil
 }
 
-func connectToWebsocket(endpoints []string) (*websocket.Conn, error) {
+func streamHttp(endpoints []string, symMap map[string]string, ph *builder.PythHistoryAPI) error {
 	shuffleSlice(endpoints)
-	var c *websocket.Conn
+
+	//https://hermes.pyth.network/docs/#/
+	postfix := "/v2/updates/price/stream?parsed=true&allow_unordered=true&benchmarks_only=true&encoding=base64"
+	for id := range symMap {
+		postfix += "&ids[]=" + "0x" + id
+	}
+
 	var err error
-	for _, wsUrl := range endpoints {
-		slog.Info("Using wsUrl=" + wsUrl)
-		wsUrl = strings.TrimPrefix(wsUrl, "wss://")
-		wsUrl, pathUrl, _ := strings.Cut(wsUrl, "/")
-		u := url.URL{Scheme: "wss", Host: wsUrl, Path: pathUrl}
-		slog.Info("Connecting to " + u.String())
-		c, _, err = websocket.DefaultDialer.Dial(u.String(), nil)
+	var resp *http.Response
+	for _, url := range endpoints {
+		url, _ := strings.CutSuffix(url, "/")
+		url += postfix
+		slog.Info("Connecting to " + url)
+		resp, err = http.Get(url)
 		if err != nil {
-			slog.Info("Dial not successful:" + err.Error())
+			slog.Info("streaming not successful:" + err.Error())
 			continue
 		}
-		return c, nil
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			err = fmt.Errorf("received non-200 status code %d", resp.StatusCode)
+		}
 	}
-	return nil, errors.New("Could not connect to any price-service websocket endpoint")
+	if err != nil {
+		return err
+	}
+
+	// keep track of latest price for triangulations
+	var lastPx = make(map[string]float64, len(symMap))
+
+	// Create a buffered reader to read the response body as a stream
+	reader := bufio.NewReader(resp.Body)
+	for {
+		line, err := reader.ReadBytes('\n')
+		if err != nil {
+			if err.Error() == "EOF" {
+				// End of stream
+				break
+			}
+			fmt.Fprintf(os.Stderr, "error reading stream: %v\n", err)
+		}
+		if len(line) > 3 && string(line[0:3]) == ":No" || len(line) < 3 {
+			continue
+		}
+		var response utils.PythStreamData
+		jsonData := string(line[5:])
+		err = json.Unmarshal([]byte(jsonData), &response)
+		if err != nil {
+			fmt.Println("Error unmarshalling JSON:", err)
+			continue
+		}
+		// Process the data
+		for _, parsed := range response.Parsed {
+			ph.OnPriceUpdate(parsed.Price, parsed.Id, symMap[parsed.Id], lastPx)
+		}
+	}
+	return nil
 }
 
 func shuffleSlice(slice []string) {
