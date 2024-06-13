@@ -358,16 +358,16 @@ func (p *PythHistoryAPI) SubscribeTickerRequest() error {
 	return err
 }
 
-func (p *PythHistoryAPI) OnPriceUpdate(pxResp utils.PriceUpdateResponse, sym string, lastPx map[string]float64) {
+func (p *PythHistoryAPI) OnPriceUpdate(pxData utils.PriceData, id, sym string, lastPx map[string]float64) {
 	if sym == "" {
 		return
 	}
-	px := CalcPrice(pxResp)
+	px := CalcPrice(pxData)
 	// no check whether price is identical, because we want the candles to potentially match open/close
 	lastPx[sym] = px
-	AddPriceObs(p.RedisClient, sym, pxResp.PriceFeed.Price.PublishTime*1000, px)
+	AddPriceObs(p.RedisClient, sym, pxData.PublishTime*1000, px)
 
-	slog.Info("Received price update: " + sym + " price=" + fmt.Sprint(px) + fmt.Sprint(pxResp.PriceFeed))
+	slog.Info("Received price update: " + sym + " price=" + fmt.Sprint(px))
 
 	pubMsg := sym
 	// triangulations
@@ -386,12 +386,13 @@ func (p *PythHistoryAPI) OnPriceUpdate(pxResp utils.PriceUpdateResponse, sym str
 		}
 		lastPx[tsym] = pxTriang
 		pubMsg += ";" + tsym
-		AddPriceObs(p.RedisClient, tsym, pxResp.PriceFeed.Price.PublishTime*1000, pxTriang)
+		AddPriceObs(p.RedisClient, tsym, pxData.PublishTime*1000, pxTriang)
 		slog.Info("-- triangulation price update: " + tsym + " price=" + fmt.Sprint(pxTriang))
 	}
 	// publish updates to listeners
 	client := *p.RedisClient.Client
-	err := client.Do(context.Background(), client.B().Publish().Channel(utils.PRICE_UPDATE_MSG).Message(pubMsg).Build()).Error()
+	err := client.Do(context.Background(),
+		client.B().Publish().Channel(utils.PRICE_UPDATE_MSG).Message(pubMsg).Build()).Error()
 	if err != nil {
 		slog.Error("Redis Pub" + err.Error())
 	}
@@ -422,13 +423,13 @@ func (p *PythHistoryAPI) IsTriangulatedMarketClosed(tsym string, symbols []strin
 }
 
 // calculate floating point price from 'price' and 'expo'
-func CalcPrice(pxResp utils.PriceUpdateResponse) float64 {
-	x, err := strconv.Atoi(pxResp.PriceFeed.Price.Price)
+func CalcPrice(pxResp utils.PriceData) float64 {
+	x, err := strconv.Atoi(pxResp.Price)
 	if err != nil {
 		slog.Error("onPriceUpdate error" + err.Error())
 		return 0
 	}
-	pw := float64(pxResp.PriceFeed.Price.Expo)
+	pw := float64(pxResp.Expo)
 	px := float64(x) * math.Pow(10, pw)
 	return px
 }

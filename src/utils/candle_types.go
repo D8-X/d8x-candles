@@ -53,6 +53,36 @@ type PriceUpdateResponse struct {
 	} `json:"price_feed"`
 }
 
+type PythStreamData struct {
+	Binary PythStreamBinaryData   `json:"binary"`
+	Parsed []PythStreamParsedData `json:"parsed"`
+}
+
+type PythStreamBinaryData struct {
+	Encoding string   `json:"encoding"`
+	Data     []string `json:"data"`
+}
+
+type PythStreamParsedData struct {
+	Id       string    `json:"id"`
+	Price    PriceData `json:"price"`
+	EMAPrice PriceData `json:"ema_price"`
+	Metadata Metadata  `json:"metadata"`
+}
+
+type PriceData struct {
+	Price       string `json:"price"`
+	Conf        string `json:"conf"`
+	Expo        int    `json:"expo"`
+	PublishTime int64  `json:"publish_time"`
+}
+
+type Metadata struct {
+	Slot               int   `json:"slot"`
+	ProofAvailableTime int64 `json:"proof_available_time"`
+	PrevPublishTime    int64 `json:"prev_publish_time"`
+}
+
 func (r *RueidisClient) Get(key string) (DataPoint, error) {
 	vlast, err := (*r.Client).Do(r.Ctx, (*r.Client).B().TsGet().Key(key).Build()).ToArray()
 	if err != nil {
@@ -248,8 +278,8 @@ type SymbolManager struct {
 }
 
 type ConfigFile struct {
-	PythAPIEndpoint      string   `json:"pythAPIEndpoint"`
-	PythPriceWSEndpoints []string `json:"priceServiceWSEndpoints"`
+	PythAPIEndpoint    string   `json:"pythAPIEndpoint"`
+	PythPriceEndpoints []string `json:"priceServiceEndpoints"`
 }
 
 // New initializes a new SymbolManager
