@@ -55,6 +55,7 @@ func StreamWs(symMngr *utils.SymbolManager, REDIS_ADDR string, REDIS_PW string) 
 		RedisClient: redisTSClient,
 		TokenBucket: tb,
 		SymbolMngr:  symMngr,
+		MsgCount:    make(map[string]int),
 	}
 	// clean ticker availability
 	cl := *redisTSClient.Client
