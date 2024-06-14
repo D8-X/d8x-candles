@@ -367,7 +367,10 @@ func (p *PythHistoryAPI) OnPriceUpdate(pxResp utils.PriceUpdateResponse, sym str
 	lastPx[sym] = px
 	AddPriceObs(p.RedisClient, sym, pxResp.PriceFeed.Price.PublishTime*1000, px)
 
-	slog.Info("Received price update: " + sym + " price=" + fmt.Sprint(px) + fmt.Sprint(pxResp.PriceFeed))
+	p.MsgCount["px"] = (p.MsgCount["px"] + 1) % 500
+	if p.MsgCount["px"] == 0 {
+		slog.Info(fmt.Sprintf("Received 500 price updates since last report. Now %s, price=%.4f", sym, px))
+	}
 
 	pubMsg := sym
 	// triangulations
@@ -375,7 +378,10 @@ func (p *PythHistoryAPI) OnPriceUpdate(pxResp utils.PriceUpdateResponse, sym str
 	for _, tsym := range targetSymbols {
 		// if market closed for any of the items in the triangulation,
 		if p.IsTriangulatedMarketClosed(tsym, p.SymbolMngr.SymToTriangPath[tsym].Symbol) {
-			slog.Info("-- triangulation price update: " + tsym + " - market closed")
+			p.MsgCount["tclosed"] = (p.MsgCount["tclosed"] + 1) % 500
+			if p.MsgCount["tclosed"] == 0 {
+				slog.Info("-- triangulation price update: " + tsym + " - market closed")
+			}
 			continue
 		}
 		// we should not publish an update
@@ -387,7 +393,10 @@ func (p *PythHistoryAPI) OnPriceUpdate(pxResp utils.PriceUpdateResponse, sym str
 		lastPx[tsym] = pxTriang
 		pubMsg += ";" + tsym
 		AddPriceObs(p.RedisClient, tsym, pxResp.PriceFeed.Price.PublishTime*1000, pxTriang)
-		slog.Info("-- triangulation price update: " + tsym + " price=" + fmt.Sprint(pxTriang))
+		p.MsgCount["t"] = (p.MsgCount["t"] + 1) % 500
+		if p.MsgCount["t"] == 0 {
+			slog.Info("-- 500 triangulation price updates, now: " + tsym + " price=" + fmt.Sprint(pxTriang))
+		}
 	}
 	// publish updates to listeners
 	client := *p.RedisClient.Client
