@@ -280,6 +280,7 @@ type SymbolManager struct {
 type ConfigFile struct {
 	PythAPIEndpoint    string   `json:"pythAPIEndpoint"`
 	PythPriceEndpoints []string `json:"priceServiceEndpoints"`
+	ObsoleteWS         []string `json:"priceServiceWSEndpoints"`
 }
 
 // New initializes a new SymbolManager
@@ -291,6 +292,17 @@ func (sm *SymbolManager) New(fileName string, network string) error {
 	err = json.Unmarshal(data, &sm.ConfigFile)
 	if err != nil {
 		return err
+	}
+	if len(sm.ConfigFile.PythPriceEndpoints) == 0 {
+		// legacy config
+		sm.ConfigFile.PythPriceEndpoints = make([]string, len(sm.ConfigFile.ObsoleteWS))
+		for k, ws := range sm.ConfigFile.ObsoleteWS {
+			httpsAddr, _ := strings.CutPrefix(ws, "wss")
+			httpsAddr, _ = strings.CutSuffix(httpsAddr, "/ws")
+			httpsAddr = "https" + httpsAddr
+			slog.Info(fmt.Sprintf("switching provided address %s to http-stream address %s", ws, httpsAddr))
+			sm.ConfigFile.PythPriceEndpoints[k] = httpsAddr
+		}
 	}
 	err = sm.extractPythIdToSymbolMap(network)
 	if err != nil {
