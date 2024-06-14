@@ -35,6 +35,7 @@ type Server struct {
 	LastCandles     map[string]*builder.OhlcData //symbol:period->OHLC
 	MarketResponses map[string]MarketResponse    //symbol->market response
 	RedisTSClient   *utils.RueidisClient
+	MsgCount        int
 }
 
 type ClientMessage struct {
@@ -354,7 +355,12 @@ func (s *Server) SubscribePxUpdate(sub *redis.PubSub, ctx context.Context) {
 		if err != nil {
 			panic(err)
 		}
-		slog.Info("REDIS received message:" + msg.Payload)
+		s.MsgCount++
+		if s.MsgCount%500 == 0 {
+			slog.Info(fmt.Sprintf("REDIS received %d messages since last report (now: %s)", s.MsgCount, msg.Payload))
+			s.MsgCount = 0
+		}
+
 		symbols := strings.Split(msg.Payload, ";")
 		s.candleUpdates(symbols)
 	}

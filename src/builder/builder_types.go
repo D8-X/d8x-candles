@@ -9,6 +9,7 @@ type PythHistoryAPI struct {
 	RedisClient *utils.RueidisClient
 	TokenBucket *TokenBucket
 	SymbolMngr  *utils.SymbolManager
+	MsgCount    map[string]int
 }
 
 type PythHistoryAPIResponse struct {
