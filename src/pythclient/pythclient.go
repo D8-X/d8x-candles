@@ -65,7 +65,7 @@ func StreamWs(symMngr *utils.SymbolManager, REDIS_ADDR string, REDIS_PW string) 
 	ph.BuildHistory()
 	go ph.ScheduleMktInfoUpdate(15 * time.Minute)
 	go ph.ScheduleCompaction(15 * time.Minute)
-
+	go ph.SubscribeTickerRequest()
 	err = streamHttp(symMngr.ConfigFile.PythPriceEndpoints, symMap, &ph)
 	if err != nil {
 		return err
