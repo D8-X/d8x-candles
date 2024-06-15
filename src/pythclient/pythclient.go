@@ -70,55 +70,6 @@ func StreamWs(symMngr *utils.SymbolManager, REDIS_ADDR string, REDIS_PW string) 
 	if err != nil {
 		return err
 	}
-	/*
-		// Construct and send the subscribe request
-		subscribeReq := SubscribeRequest{
-			Type: "subscribe",
-			IDs:  ids,
-		}
-
-		go ph.SubscribeTickerRequest()
-		for {
-			_, message, err := c.ReadMessage()
-			if err != nil {
-				slog.Info("Pyth Price Service Websocket Read:" + err.Error())
-				slog.Info("Reconnecting...")
-				if err = streamHttp(symMngr.ConfigFile.PythPriceEndpoints, ids); err != nil {
-					return err
-				}
-
-			}
-			var resp map[string]interface{}
-			if err := json.Unmarshal(message, &resp); err != nil {
-				slog.Info("JSON Unmarshal:" + err.Error())
-				continue
-			}
-			switch resp["type"] {
-			case "response":
-				if resp["status"] == "success" {
-					//{"type":"response","status":"success"}
-					continue
-				}
-				msg := fmt.Sprintf("%s : %s", resp["status"], resp["error"])
-				slog.Error("Pyth response " + msg)
-				break
-			case "price_update":
-				break
-			default:
-				continue
-			}
-			var pxResp utils.PriceUpdateResponse
-			if err := json.Unmarshal(message, &pxResp); err != nil {
-				slog.Info("JSON Unmarshal:" + err.Error())
-				continue
-			}
-
-			if pxResp.Type == "price_update" {
-				// Handle price update response
-				ph.OnPriceUpdate(pxResp, symMap[pxResp.PriceFeed.ID], lastPx)
-			}
-		}
-	*/
 	return nil
 }
 
