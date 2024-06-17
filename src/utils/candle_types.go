@@ -279,7 +279,7 @@ type SymbolManager struct {
 
 type ConfigFile struct {
 	PythAPIEndpoint    string   `json:"pythAPIEndpoint"`
-	PythPriceEndpoints []string `json:"priceServiceEndpoints"`
+	PythPriceEndpoints []string `json:"priceServiceHTTPSEndpoints"`
 	ObsoleteWS         []string `json:"priceServiceWSEndpoints"`
 }
 
