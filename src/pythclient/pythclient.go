@@ -10,7 +10,6 @@ import (
 	"log/slog"
 	"math/rand"
 	"net/http"
-	"os"
 	"strings"
 	"time"
 
@@ -114,7 +113,7 @@ func streamHttp(endpoints []string, symMap map[string]string, ph *builder.PythHi
 				// End of stream
 				break
 			}
-			fmt.Fprintf(os.Stderr, "error reading stream: %v\n", err)
+			return fmt.Errorf("error reading stream: %v", err)
 		}
 		if len(line) > 3 && string(line[0:3]) == ":No" || len(line) < 3 {
 			continue
