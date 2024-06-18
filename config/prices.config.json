@@ -1,6 +1,6 @@
 
 {
     "pythAPIEndpoint": "https://benchmarks.pyth.network/",
-    "priceServiceEndpoints": ["https://hermes.pyth.network/"]
+    "priceServiceHTTPSEndpoints": ["https://hermes.pyth.network/"]
 }
 
