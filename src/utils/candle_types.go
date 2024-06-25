@@ -127,7 +127,7 @@ func (r *RueidisClient) RangeAggr(key string, fromTs int64, toTs int64, bucketDu
 			Align("-").
 			Build()
 	default:
-		return []DataPoint{}, errors.New("Invalid aggr type")
+		return []DataPoint{}, errors.New("invalid aggr type")
 	}
 	raw, err := (*r.Client).Do(r.Ctx, cmd).ToAny()
 	if err != nil {
@@ -284,7 +284,7 @@ type ConfigFile struct {
 }
 
 // New initializes a new SymbolManager
-func (sm *SymbolManager) New(fileName string, network string) error {
+func (sm *SymbolManager) New(fileName string) error {
 	data, err := os.ReadFile(fileName)
 	if err != nil {
 		return err
@@ -304,7 +304,7 @@ func (sm *SymbolManager) New(fileName string, network string) error {
 			sm.ConfigFile.PythPriceEndpoints[k] = httpsAddr
 		}
 	}
-	err = sm.extractPythIdToSymbolMap(network)
+	err = sm.extractPythIdToSymbolMap()
 	if err != nil {
 		return err
 	}
@@ -349,14 +349,10 @@ func (c *SymbolManager) GetPythIdMainnet(id string) string {
 }
 
 // creates a map from ids "0x32121..." to symbols "xau-usd"
-func (c *SymbolManager) extractPythIdToSymbolMap(network string) error {
-	slog.Info("Loading VAA ids for network " + network)
-	pSource := "PythEVMStable"
-	if network != "mainnet" {
-		pSource = "PythEVMBeta"
-	}
+func (c *SymbolManager) extractPythIdToSymbolMap() error {
+	slog.Info("Loading VAA ids for network PythEVMStable")
 	c.initPythIdMapping()
-	config, err := embed.GetDefaultPriceConfigByName(pSource)
+	config, err := embed.GetDefaultPriceConfigByName("PythEVMStable")
 	if err != nil {
 		return err
 	}

@@ -7,7 +7,6 @@ services:
     environment:
       - REDIS_PW=${REDIS_PW}
       - REDIS_ADDR=${REDIS_ADDR}
-      - NETWORK_NAME=${NETWORK_NAME}
       - CONFIG_PATH=/prices_conf
     depends_on:
       - redis-timeseries
@@ -27,7 +26,6 @@ services:
     environment:
       - REDIS_PW=${REDIS_PW}
       - REDIS_ADDR=${REDIS_ADDR}
-      - NETWORK_NAME=${NETWORK_NAME}
       - CONFIG_PATH=/prices_conf
     depends_on:
       - redis-timeseries

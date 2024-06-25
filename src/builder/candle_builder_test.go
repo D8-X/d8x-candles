@@ -126,7 +126,7 @@ func TestQueryPriceFeedInfo(t *testing.T) {
 
 func TestFetchMktInfo(t *testing.T) {
 	var c utils.SymbolManager
-	err := c.New("../../config/prices.config.json", "testnet")
+	err := c.New("../../config/prices.config.json")
 	if err != nil {
 		t.Errorf("Error:%v", err)
 		return
