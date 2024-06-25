@@ -60,9 +60,8 @@ func StreamPyth() {
 
 func loadConfig() (utils.SymbolManager, error) {
 	fileName := viper.GetString(env.CONFIG_PATH)
-	network := viper.GetString(env.NETWORK_NAME)
 	var c utils.SymbolManager
-	err := c.New(fileName, network)
+	err := c.New(fileName)
 	if err != nil {
 		return utils.SymbolManager{}, err
 	}
@@ -81,7 +80,6 @@ func loadEnv() error {
 	viper.SetDefault(env.REDIS_ADDR, "localhost:6379")
 	viper.SetDefault(env.WS_ADDR, "localhost:8080")
 	viper.SetDefault(env.REDIS_DB_NUM, 0)
-	viper.SetDefault(env.NETWORK_NAME, "mainnet")
 	requiredEnvs := []string{
 		env.CONFIG_PATH,
 	}

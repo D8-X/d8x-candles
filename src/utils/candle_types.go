@@ -53,6 +53,36 @@ type PriceUpdateResponse struct {
 	} `json:"price_feed"`
 }
 
+type PythStreamData struct {
+	Binary PythStreamBinaryData   `json:"binary"`
+	Parsed []PythStreamParsedData `json:"parsed"`
+}
+
+type PythStreamBinaryData struct {
+	Encoding string   `json:"encoding"`
+	Data     []string `json:"data"`
+}
+
+type PythStreamParsedData struct {
+	Id       string    `json:"id"`
+	Price    PriceData `json:"price"`
+	EMAPrice PriceData `json:"ema_price"`
+	Metadata Metadata  `json:"metadata"`
+}
+
+type PriceData struct {
+	Price       string `json:"price"`
+	Conf        string `json:"conf"`
+	Expo        int    `json:"expo"`
+	PublishTime int64  `json:"publish_time"`
+}
+
+type Metadata struct {
+	Slot               int   `json:"slot"`
+	ProofAvailableTime int64 `json:"proof_available_time"`
+	PrevPublishTime    int64 `json:"prev_publish_time"`
+}
+
 func (r *RueidisClient) Get(key string) (DataPoint, error) {
 	vlast, err := (*r.Client).Do(r.Ctx, (*r.Client).B().TsGet().Key(key).Build()).ToArray()
 	if err != nil {
@@ -97,7 +127,7 @@ func (r *RueidisClient) RangeAggr(key string, fromTs int64, toTs int64, bucketDu
 			Align("-").
 			Build()
 	default:
-		return []DataPoint{}, errors.New("Invalid aggr type")
+		return []DataPoint{}, errors.New("invalid aggr type")
 	}
 	raw, err := (*r.Client).Do(r.Ctx, cmd).ToAny()
 	if err != nil {
@@ -248,12 +278,13 @@ type SymbolManager struct {
 }
 
 type ConfigFile struct {
-	PythAPIEndpoint      string   `json:"pythAPIEndpoint"`
-	PythPriceWSEndpoints []string `json:"priceServiceWSEndpoints"`
+	PythAPIEndpoint    string   `json:"pythAPIEndpoint"`
+	PythPriceEndpoints []string `json:"priceServiceHTTPSEndpoints"`
+	ObsoleteWS         []string `json:"priceServiceWSEndpoints"`
 }
 
 // New initializes a new SymbolManager
-func (sm *SymbolManager) New(fileName string, network string) error {
+func (sm *SymbolManager) New(fileName string) error {
 	data, err := os.ReadFile(fileName)
 	if err != nil {
 		return err
@@ -262,7 +293,18 @@ func (sm *SymbolManager) New(fileName string, network string) error {
 	if err != nil {
 		return err
 	}
-	err = sm.extractPythIdToSymbolMap(network)
+	if len(sm.ConfigFile.PythPriceEndpoints) == 0 {
+		// legacy config
+		sm.ConfigFile.PythPriceEndpoints = make([]string, len(sm.ConfigFile.ObsoleteWS))
+		for k, ws := range sm.ConfigFile.ObsoleteWS {
+			httpsAddr, _ := strings.CutPrefix(ws, "wss")
+			httpsAddr, _ = strings.CutSuffix(httpsAddr, "/ws")
+			httpsAddr = "https" + httpsAddr
+			slog.Info(fmt.Sprintf("switching provided address %s to http-stream address %s", ws, httpsAddr))
+			sm.ConfigFile.PythPriceEndpoints[k] = httpsAddr
+		}
+	}
+	err = sm.extractPythIdToSymbolMap()
 	if err != nil {
 		return err
 	}
@@ -307,14 +349,10 @@ func (c *SymbolManager) GetPythIdMainnet(id string) string {
 }
 
 // creates a map from ids "0x32121..." to symbols "xau-usd"
-func (c *SymbolManager) extractPythIdToSymbolMap(network string) error {
-	slog.Info("Loading VAA ids for network " + network)
-	pSource := "PythEVMStable"
-	if network != "mainnet" {
-		pSource = "PythEVMBeta"
-	}
+func (c *SymbolManager) extractPythIdToSymbolMap() error {
+	slog.Info("Loading VAA ids for network PythEVMStable")
 	c.initPythIdMapping()
-	config, err := embed.GetDefaultPriceConfigByName(pSource)
+	config, err := embed.GetDefaultPriceConfigByName("PythEVMStable")
 	if err != nil {
 		return err
 	}
