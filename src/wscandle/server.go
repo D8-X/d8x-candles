@@ -2,7 +2,7 @@ package wscandle
 
 import (
 	"context"
-	"d8x-candles/src/builder"
+	"d8x-candles/src/pythclient"
 	"d8x-candles/src/utils"
 	"encoding/json"
 	"fmt"
@@ -32,8 +32,8 @@ type ClientConn struct {
 // Server is the struct to handle the Server functions & manage the Subscriptions
 type Server struct {
 	Subscriptions   Subscriptions
-	LastCandles     map[string]*builder.OhlcData //symbol:period->OHLC
-	MarketResponses map[string]MarketResponse    //symbol->market response
+	LastCandles     map[string]*pythclient.OhlcData //symbol:period->OHLC
+	MarketResponses map[string]MarketResponse       //symbol->market response
 	RedisTSClient   *utils.RueidisClient
 	MsgCount        int
 }
@@ -69,7 +69,7 @@ func NewServer() *Server {
 	var s Server
 	s.Subscriptions = make(Subscriptions)
 	s.Subscriptions[MARKETS_TOPIC] = make(Clients)
-	s.LastCandles = make(map[string]*builder.OhlcData)
+	s.LastCandles = make(map[string]*pythclient.OhlcData)
 	s.MarketResponses = make(map[string]MarketResponse)
 	return &s
 }
@@ -227,7 +227,7 @@ func (s *Server) UpdateMarketResponses() {
 }
 
 func (s *Server) updtMarketForSym(sym string, anchorTime24hMs int64) error {
-	m, err := builder.GetMarketInfo(s.RedisTSClient.Ctx, s.RedisTSClient.Client, sym)
+	m, err := pythclient.GetMarketInfo(s.RedisTSClient.Ctx, s.RedisTSClient.Client, sym)
 	if err != nil {
 		return err
 	}
@@ -383,7 +383,7 @@ func (s *Server) candleUpdates(symbols []string) {
 			key := sym + ":" + prd.Name
 			lastCandle := s.LastCandles[key]
 			if lastCandle == nil {
-				s.LastCandles[key] = &builder.OhlcData{}
+				s.LastCandles[key] = &pythclient.OhlcData{}
 				lastCandle = s.LastCandles[key]
 			}
 			if pxLast.Timestamp > lastCandle.TsMs+int64(prd.TimeMs) {
@@ -394,7 +394,7 @@ func (s *Server) candleUpdates(symbols []string) {
 				lastCandle.C = pxLast.Value
 				nextTs := (pxLast.Timestamp / int64(prd.TimeMs)) * int64(prd.TimeMs)
 				lastCandle.TsMs = nextTs
-				lastCandle.Time = builder.ConvertTimestampToISO8601(nextTs)
+				lastCandle.Time = pythclient.ConvertTimestampToISO8601(nextTs)
 			} else {
 				// update existing candle
 				lastCandle.C = pxLast.Value

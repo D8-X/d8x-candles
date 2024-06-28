@@ -13,7 +13,6 @@ import (
 	"sync"
 
 	embed "github.com/D8-X/d8x-futures-go-sdk/config"
-	"github.com/D8-X/d8x-futures-go-sdk/pkg/d8x_futures"
 	"github.com/D8-X/d8x-futures-go-sdk/utils"
 
 	"github.com/redis/rueidis"
@@ -266,15 +265,12 @@ type CandlePeriod struct {
 }
 
 type SymbolManager struct {
-	ConfigFile           ConfigFile
-	PriceFeedIds         []utils.PriceFeedId
-	PythIdToSym          map[string]string                    //pyth id (0xabc..) to symbol (btc-usd)
-	SymToPythOrigin      map[string]string                    //symbol (btc-usd) to pyth origin ("Crypto.BTC/USD")
-	SymToDependentTriang map[string][]string                  //sym to all dependent triangulations
-	SymToTriangPath      map[string]d8x_futures.Triangulation //sym to triangulation path
-	CandlePeriodsMs      map[string]CandlePeriod              //period 1m,5m,... to timeMs and displayRangeMs
-	SymConstructionMutx  *sync.Mutex                          //mutex when data for a symbol is being constructed
-	TestToMainPythId     map[string]string                    // map testnet id to mainnet id
+	ConfigFile          ConfigFile
+	PriceFeedIds        []utils.PriceFeedId
+	PythIdToSym         map[string]string       //pyth id (0xabc..) to symbol (btc-usd)
+	SymToPythOrigin     map[string]string       //symbol (btc-usd) to pyth origin ("Crypto.BTC/USD")
+	CandlePeriodsMs     map[string]CandlePeriod //period 1m,5m,... to timeMs and displayRangeMs
+	SymConstructionMutx *sync.Mutex             //mutex when data for a symbol is being constructed
 }
 
 type ConfigFile struct {
@@ -308,8 +304,6 @@ func (sm *SymbolManager) New(fileName string) error {
 	if err != nil {
 		return err
 	}
-	sm.SymToDependentTriang = make(map[string][]string)
-	sm.SymToTriangPath = make(map[string]d8x_futures.Triangulation)
 	sm.SymConstructionMutx = &sync.Mutex{}
 	err = sm.extractCandlePeriods()
 	if err != nil {
@@ -318,40 +312,9 @@ func (sm *SymbolManager) New(fileName string) error {
 	return nil
 }
 
-// initPythIdMapping initializes the map TestToMainPythId
-func (c *SymbolManager) initPythIdMapping() {
-	configMain, _ := embed.GetDefaultPriceConfigByName("PythEVMStable")
-	configTest, _ := embed.GetDefaultPriceConfigByName("PythEVMBeta")
-	c.TestToMainPythId = make(map[string]string)
-	for _, el := range configTest.PriceFeedIds {
-		for _, elM := range configMain.PriceFeedIds {
-			if el.Origin == elM.Origin {
-				m, _ := strings.CutPrefix(elM.Id, "0x")
-				t, _ := strings.CutPrefix(el.Id, "0x")
-				c.TestToMainPythId[t] = m
-				break
-			}
-		}
-	}
-}
-
-// GetPythIdMainnet returns the mainnet id corresponding to the given
-// id. If the ID is not found in the testnet to mainnet mapping,
-// we assume this is already the mainnet id and return the mainnet id
-func (c *SymbolManager) GetPythIdMainnet(id string) string {
-	idM, exists := c.TestToMainPythId[id]
-	if !exists {
-		// assuming we provide a mainnet id
-		return id
-	}
-	// return mapped id
-	return idM
-}
-
 // creates a map from ids "0x32121..." to symbols "xau-usd"
 func (c *SymbolManager) extractPythIdToSymbolMap() error {
 	slog.Info("Loading VAA ids for network PythEVMStable")
-	c.initPythIdMapping()
 	config, err := embed.GetDefaultPriceConfigByName("PythEVMStable")
 	if err != nil {
 		return err
@@ -376,12 +339,6 @@ func (c *SymbolManager) extractPythIdToSymbolMap() error {
 	c.PythIdToSym = mIdToSym
 	c.SymToPythOrigin = mSymToPythSym
 	return nil
-}
-
-func (c *SymbolManager) AddSymbolToTriangTarget(symT string, path *d8x_futures.Triangulation) {
-	for j := 0; j < len(path.Symbol); j++ {
-		c.SymToDependentTriang[path.Symbol[j]] = append(c.SymToDependentTriang[path.Symbol[j]], symT)
-	}
 }
 
 func (c *SymbolManager) extractCandlePeriods() error {

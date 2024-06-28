@@ -52,7 +52,7 @@ func StreamPyth() {
 		return
 	}
 
-	err = pythclient.StreamWs(&c, viper.GetString(env.REDIS_ADDR), viper.GetString(env.REDIS_PW))
+	err = pythclient.Run(&c, viper.GetString(env.REDIS_ADDR), viper.GetString(env.REDIS_PW))
 	if err != nil {
 		slog.Error(err.Error())
 	}

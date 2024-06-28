@@ -1,14 +1,14 @@
 package wscandle
 
 import (
-	"d8x-candles/src/builder"
+	"d8x-candles/src/pythclient"
 	"d8x-candles/src/utils"
 	"log/slog"
 	"time"
 )
 
 // construct candle stick data from redis
-func GetInitialCandles(client *utils.RueidisClient, sym string, p utils.CandlePeriod) []builder.OhlcData {
+func GetInitialCandles(client *utils.RueidisClient, sym string, p utils.CandlePeriod) []pythclient.OhlcData {
 	t := time.Now().UTC()
 	tMs := t.UnixNano() / int64(time.Millisecond)
 	tMs = (tMs / int64(p.TimeMs)) * int64(p.TimeMs) //floor
@@ -19,7 +19,7 @@ func GetInitialCandles(client *utils.RueidisClient, sym string, p utils.CandlePe
 			TsInfo().Key(sym).Build()).AsMap()
 		if err != nil {
 			slog.Error("Error initial candles for sym " + sym)
-			return []builder.OhlcData{}
+			return []pythclient.OhlcData{}
 		}
 		m := a["firstTimestamp"]
 		fromTsMs, _ = (&m).AsInt64()
@@ -28,10 +28,10 @@ func GetInitialCandles(client *utils.RueidisClient, sym string, p utils.CandlePe
 	}
 
 	resolSec := uint32(p.TimeMs / 1000)
-	data, err := builder.Ohlc(client, sym, fromTsMs, tMs, resolSec)
+	data, err := pythclient.Ohlc(client, sym, fromTsMs, tMs, resolSec)
 	if err != nil {
 		slog.Error("Error initial candles for sym " + sym)
-		return []builder.OhlcData{}
+		return []pythclient.OhlcData{}
 	}
 	return data
 }
