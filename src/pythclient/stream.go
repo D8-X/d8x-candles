@@ -45,7 +45,7 @@ func (p *PythClientApp) SubscribeTickerRequest(errChan chan error) {
 	client := *p.RedisClient.Client
 	err := client.Receive(context.Background(), client.B().Subscribe().Channel(utils.TICKER_REQUEST).Build(),
 		func(msg rueidis.PubSubMessage) {
-			p.enableTicker(msg.Message, errChan)
+			p.enableTicker(msg.Message)
 		})
 	if err != nil {
 		errChan <- err
@@ -53,7 +53,7 @@ func (p *PythClientApp) SubscribeTickerRequest(errChan chan error) {
 }
 
 // enableTicker makes triangulation and/or base ticker available
-func (ph *PythClientApp) enableTicker(sym string, errChan chan error) {
+func (ph *PythClientApp) enableTicker(sym string) {
 	ph.StreamMngr.asymRWMu.RLock()
 	_, exists := ph.StreamMngr.activeSyms[sym]
 	ph.StreamMngr.asymRWMu.RUnlock()
