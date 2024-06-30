@@ -1,18 +1,13 @@
 package pythclient
 
 import (
-	"bufio"
 	"context"
-	"d8x-candles/src/builder"
 	"d8x-candles/src/utils"
-	"encoding/json"
 	"fmt"
-	"log/slog"
-	"math/rand"
-	"net/http"
-	"strings"
+	"sync"
 	"time"
 
+	"github.com/D8-X/d8x-futures-go-sdk/pkg/d8x_futures"
 	"github.com/redis/rueidis"
 )
 
@@ -30,8 +25,7 @@ type SubscribeRequest struct {
 }
 
 // symMap maps pyth ids to internal symbol (btc-usd)
-func StreamWs(symMngr *utils.SymbolManager, REDIS_ADDR string, REDIS_PW string) error {
-	symMap := symMngr.PythIdToSym
+func Run(symMngr *utils.SymbolManager, REDIS_ADDR string, REDIS_PW string) error {
 
 	fmt.Print("REDIS ADDR = ", REDIS_ADDR)
 	fmt.Print("REDIS_PW=", REDIS_PW)
@@ -39,7 +33,7 @@ func StreamWs(symMngr *utils.SymbolManager, REDIS_ADDR string, REDIS_PW string) 
 	client, err := rueidis.NewClient(
 		rueidis.ClientOption{InitAddress: []string{REDIS_ADDR}, Password: REDIS_PW})
 	if err != nil {
-		return err
+		return fmt.Errorf("redis connection %s", err.Error())
 	}
 	redisTSClient := &utils.RueidisClient{
 		Client: &client,
@@ -48,95 +42,46 @@ func StreamWs(symMngr *utils.SymbolManager, REDIS_ADDR string, REDIS_PW string) 
 	//https://docs.pyth.network/benchmarks/rate-limits
 	capacity := 30
 	refillRate := 9.0
-	tb := builder.NewTokenBucket(capacity, refillRate)
-	ph := builder.PythHistoryAPI{
+	tb := NewTokenBucket(capacity, refillRate)
+	ph := PythClientApp{
 		BaseUrl:     symMngr.ConfigFile.PythAPIEndpoint,
 		RedisClient: redisTSClient,
 		TokenBucket: tb,
 		SymbolMngr:  symMngr,
 		MsgCount:    make(map[string]int),
+		StreamMngr: StreamManager{
+			mu:                   &sync.Mutex{},
+			asymRWMu:             &sync.RWMutex{},
+			lastPxRWMu:           &sync.RWMutex{},
+			s2DTRWMu:             &sync.RWMutex{},
+			symToTriangPathRWMu:  &sync.RWMutex{},
+			activeSyms:           make(map[string]int64),
+			lastPx:               make(map[string]float64),
+			symToDependentTriang: make(map[string][]string),
+			SymToTriangPath:      make(map[string]d8x_futures.Triangulation),
+		},
 	}
 	// clean ticker availability
 	cl := *redisTSClient.Client
 	cl.Do(context.Background(), cl.B().Del().Key(utils.AVAIL_TICKER_SET).Build())
 
-	slog.Info("Building price history...")
-	ph.BuildHistory()
 	go ph.ScheduleMktInfoUpdate(15 * time.Minute)
-	go ph.ScheduleCompaction(15 * time.Minute)
-	go ph.SubscribeTickerRequest()
-	err = streamHttp(symMngr.ConfigFile.PythPriceEndpoints, symMap, &ph)
-	if err != nil {
-		return err
-	}
-	return nil
-}
+	go ph.ScheduleCompaction(20 * time.Minute)
 
-func streamHttp(endpoints []string, symMap map[string]string, ph *builder.PythHistoryAPI) error {
-	shuffleSlice(endpoints)
+	errChan := make(chan error)
+	go ph.SubscribeTickerRequest(errChan)
+	err = <-errChan
+	return err
+	/*
+		slog.Info("Building price history...")
+		ph.BuildHistory()
+		go ph.ScheduleMktInfoUpdate(15 * time.Minute)
+		go ph.ScheduleCompaction(15 * time.Minute)
 
-	//https://hermes.pyth.network/docs/#/
-	postfix := "/v2/updates/price/stream?parsed=true&allow_unordered=true&benchmarks_only=true&encoding=base64"
-	for id := range symMap {
-		postfix += "&ids[]=" + "0x" + id
-	}
-
-	var err error
-	var resp *http.Response
-	for _, url := range endpoints {
-		url, _ := strings.CutSuffix(url, "/")
-		url += postfix
-		slog.Info("Connecting to " + url)
-		resp, err = http.Get(url)
+		err = ph.streamHttp(symMngr.ConfigFile.PythPriceEndpoints, symMap)
 		if err != nil {
-			slog.Info("streaming not successful:" + err.Error())
-			continue
+			return err
 		}
-		defer resp.Body.Close()
-		if resp.StatusCode != http.StatusOK {
-			err = fmt.Errorf("received non-200 status code %d", resp.StatusCode)
-		}
-	}
-	if err != nil {
-		return err
-	}
-
-	// keep track of latest price for triangulations
-	var lastPx = make(map[string]float64, len(symMap))
-
-	// Create a buffered reader to read the response body as a stream
-	reader := bufio.NewReader(resp.Body)
-	for {
-		line, err := reader.ReadBytes('\n')
-		if err != nil {
-			if err.Error() == "EOF" {
-				// End of stream
-				break
-			}
-			return fmt.Errorf("error reading stream: %v", err)
-		}
-		if len(line) > 3 && string(line[0:3]) == ":No" || len(line) < 3 {
-			continue
-		}
-		var response utils.PythStreamData
-		jsonData := string(line[5:])
-		err = json.Unmarshal([]byte(jsonData), &response)
-		if err != nil {
-			fmt.Println("Error unmarshalling JSON:", err)
-			continue
-		}
-		// Process the data
-		for _, parsed := range response.Parsed {
-			ph.OnPriceUpdate(parsed.Price, parsed.Id, symMap[parsed.Id], lastPx)
-		}
-	}
-	return nil
-}
-
-func shuffleSlice(slice []string) {
-	n := len(slice)
-	for i := 0; i < n-1; i++ {
-		j := rand.Intn(n)
-		slice[i], slice[j] = slice[j], slice[i]
-	}
+		return nil
+	*/
 }

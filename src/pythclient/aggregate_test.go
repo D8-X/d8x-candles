@@ -1,4 +1,4 @@
-package builder
+package pythclient
 
 import (
 	"context"
@@ -54,6 +54,9 @@ func TestRueidis(t *testing.T) {
 	ctx := context.Background()
 	r, err := client.Do(ctx, client.B().TsRange().Key("btc-usd").
 		Fromtimestamp("1693809900000").Totimestamp("1693896300000").Build()).ToAny()
+	if err != nil {
+		panic(err)
+	}
 	//	r.val.values[0].values[0].integer
 	//	1693809900000
 	// r.val.values[0].values[1].string
@@ -64,11 +67,17 @@ func TestRueidis(t *testing.T) {
 	r, err = client.Do(ctx, client.B().TsRange().Key("btc-usd").
 		Fromtimestamp("1693809900000").Totimestamp("1693896300000").
 		AggregationMax().Bucketduration(300000).Build()).ToAny()
+	if err != nil {
+		panic(err)
+	}
 	fmt.Print(r)
 	dp := utils.ParseTsRange(r)
 	fmt.Print(dp)
 	rc := utils.RueidisClient{Client: &client, Ctx: ctx}
 	dp2, err := rc.RangeAggr("btc-usd", 1693809900000, 1693896300000, 300000, "max")
+	if err != nil {
+		panic(err)
+	}
 	fmt.Print(dp[0])
 	fmt.Print(dp2[0])
 	client.Close()
@@ -96,7 +105,13 @@ func TestRedisAggr(t *testing.T) {
 	fmt.Println(obs)
 	var bucket int64 = 10000
 	aF, err := rc.RangeAggr(sym, 0, 50000, bucket, "first")
+	if err != nil {
+		panic(err)
+	}
 	aL, err := rc.RangeAggr(sym, 0, 50000, bucket, "last")
+	if err != nil {
+		panic(err)
+	}
 	// 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, ...
 	// bucket size 10 will take 10 elements and each of it counts for
 	// the aggregation, next bucket is non-overlapping

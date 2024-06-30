@@ -146,6 +146,16 @@ docker run -d --name redis-stack -p 6379:6379 -e REDIS_ARGS="--requirepass yourp
 
 ### REDIS
 
+**stream universe**
+
+
+**prices**
+On price updates, we add the price and all affected triangulations to Redis:
+```
+resp := (*client.Client).Do(client.Ctx,
+		(*client.Client).B().TsAdd().Key(sym).Timestamp(ts).Value(value).Build())
+```
+
 **pub/sub:**
 
 | **Pub/Sub Channel** | **Message Example** |
@@ -160,7 +170,8 @@ When the websocket-service receives a ticker request that it is not already avai
 it will send a request `ticker_request` via pub channel and return "not available".
 
 **Availability on Demand:**
-If data is available, we set this in REDIS in the available ticker set: `SAdd(...)`. Index price feeds configured are always
+If data is available, we set this in REDIS in the available ticker set `const AVAIL_TICKER_SET string = "avail"`: 
+`SAdd(...)`. Index price feeds configured are always
 made available. Triangulated tickers can be made available. Once we make a triangulated key available,
 we also add the symbol to the available set.
 

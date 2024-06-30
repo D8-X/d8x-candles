@@ -1,4 +1,4 @@
-package builder
+package pythclient
 
 import (
 	"context"
@@ -16,23 +16,31 @@ import (
 	"time"
 
 	"github.com/D8-X/d8x-futures-go-sdk/pkg/d8x_futures"
-	"github.com/redis/rueidis"
 )
 
 // buildHistory
-func (p *PythHistoryAPI) BuildHistory() {
-	var k int
+func (p *PythClientApp) BuildHistory(symbols []string) error {
 	config := p.SymbolMngr
-	pythSyms := make([]utils.SymbolPyth, len(config.PythIdToSym))
-	for id, sym := range config.PythIdToSym {
+	pythSyms := make([]utils.SymbolPyth, 0, len(symbols))
+	for _, sym := range symbols {
+		id := ""
+		for id0, sym0 := range config.PythIdToSym {
+			if sym0 == sym {
+				id = id0
+				break
+			}
+		}
+		if id == "" {
+			return fmt.Errorf("symbol %s not available in config", sym)
+		}
 		var symP utils.SymbolPyth
 		origin := config.SymToPythOrigin[sym]
 		symP.New(origin, id, sym)
-		pythSyms[k] = symP
-		k++
+		pythSyms = append(pythSyms, symP)
 	}
 	slog.Info("-- building history from Pyth candles...")
 	p.PythDataToRedisPriceObs(pythSyms)
+	return nil
 }
 
 /*
@@ -47,7 +55,7 @@ Process
 1h -> 1 month OK
 1 day -> all history
 */
-func (p *PythHistoryAPI) RetrieveCandlesFromPyth(sym utils.SymbolPyth, candleRes utils.PythCandleResolution, fromTSSec uint32, toTsSec uint32) (PythHistoryAPIResponse, error) {
+func (p *PythClientApp) RetrieveCandlesFromPyth(sym utils.SymbolPyth, candleRes utils.PythCandleResolution, fromTSSec uint32, toTsSec uint32) (PythHistoryAPIResponse, error) {
 	const endpoint = "/v1/shims/tradingview/history"
 	query := "?symbol=" + sym.ToString() + "&resolution=" + candleRes.ToPythString() + "&from=" + strconv.Itoa(int(fromTSSec)) + "&to=" + strconv.Itoa(int(toTsSec))
 
@@ -89,7 +97,7 @@ func (p *PythHistoryAPI) RetrieveCandlesFromPyth(sym utils.SymbolPyth, candleRes
 
 // Query Pyth Candle API and construct artificial price data which
 // is stored to Redis
-func (p *PythHistoryAPI) PythDataToRedisPriceObs(symbols []utils.SymbolPyth) {
+func (p *PythClientApp) PythDataToRedisPriceObs(symbols []utils.SymbolPyth) {
 	var wg sync.WaitGroup
 	for _, sym := range symbols {
 		wg.Add(1)
@@ -126,11 +134,19 @@ func (p *PythHistoryAPI) PythDataToRedisPriceObs(symbols []utils.SymbolPyth) {
 // Extract candles to triangulated candles
 // symbols of the form eth-usd
 // obsolete:
-func (p *PythHistoryAPI) CandlesToTriangulatedCandles(client *utils.RueidisClient, config utils.SymbolManager) {
+func (p *PythClientApp) CandlesToTriangulatedCandles(client *utils.RueidisClient, config utils.SymbolManager) {
 	var wg sync.WaitGroup
 
-	for sym, path := range config.SymToTriangPath {
+	p.StreamMngr.symToTriangPathRWMu.RLock()
+	for sym, path := range p.StreamMngr.SymToTriangPath {
 		wg.Add(1)
+		// copy to avoid concurrency issues
+		pathCp := d8x_futures.Triangulation{
+			IsInverse: make([]bool, len(path.IsInverse)),
+			Symbol:    make([]string, len(path.Symbol)),
+		}
+		copy(pathCp.IsInverse, path.IsInverse)
+		copy(pathCp.Symbol, path.Symbol)
 		go func(sym string, path d8x_futures.Triangulation) {
 			defer wg.Done()
 			o, err := p.ConstructPriceObsForTriang(client, sym, path)
@@ -140,42 +156,15 @@ func (p *PythHistoryAPI) CandlesToTriangulatedCandles(client *utils.RueidisClien
 			}
 			p.PricesToRedis(sym, o)
 			slog.Info("Processed history for " + sym)
-		}(sym, path)
+		}(sym, pathCp)
 	}
+	p.StreamMngr.symToTriangPathRWMu.RUnlock()
 	wg.Wait()
 	slog.Info("History of Pyth sources complete")
 }
 
-// EnableTriangulation constructs candles from existing candles
-// that correspond to a price source (e.g. BTC-USD but not BTC-USDC)
-// and enables that the candles will be maintained from this point on
-func (p *PythHistoryAPI) EnableTriangulation(symT string) bool {
-	p.SymbolMngr.SymConstructionMutx.Lock()
-	defer p.SymbolMngr.SymConstructionMutx.Unlock()
-	config := p.SymbolMngr
-	if _, exists := (*config).SymToTriangPath[symT]; exists {
-		// already exists
-		return true
-	}
-	path := d8x_futures.Triangulate(symT, config.PriceFeedIds)
-	if len(path.Symbol) == 0 {
-		slog.Info("Could not triangulate " + symT)
-		return false
-	}
-	config.AddSymbolToTriangTarget(symT, &path)
-	config.SymToTriangPath[symT] = path
-	p.fetchTriangulatedMktInfo(config)
-	o, err := p.ConstructPriceObsForTriang(p.RedisClient, symT, path)
-	if err != nil {
-		slog.Error("error for triangulation " + symT + ":" + err.Error())
-		return false
-	}
-	p.PricesToRedis(symT, o)
-	return true
-}
-
 // sym of the form ETH-USD
-func (p *PythHistoryAPI) PricesToRedis(sym string, obs PriceObservations) {
+func (p *PythClientApp) PricesToRedis(sym string, obs PriceObservations) {
 	CreateRedisTimeSeries(p.RedisClient, sym)
 	var wg sync.WaitGroup
 	for k := 0; k < len(obs.P); k++ {
@@ -196,7 +185,7 @@ func (p *PythHistoryAPI) PricesToRedis(sym string, obs PriceObservations) {
 
 // Query specific candle resolutions and time ranges from the Pyth-API
 // and construct artificial data
-func (p *PythHistoryAPI) ConstructPriceObsFromPythCandles(sym utils.SymbolPyth) (PriceObservations, error) {
+func (p *PythClientApp) ConstructPriceObsFromPythCandles(sym utils.SymbolPyth) (PriceObservations, error) {
 	var candleRes utils.PythCandleResolution
 	candleRes.New(1, utils.MinuteCandle)
 	currentTimeSec := uint32(time.Now().UTC().Unix())
@@ -229,11 +218,11 @@ func (p *PythHistoryAPI) ConstructPriceObsFromPythCandles(sym utils.SymbolPyth) 
 
 // Construct price observations for triangulated currencies
 // symT is of the form btc-usd, path a Triangulation type
-func (p *PythHistoryAPI) ConstructPriceObsForTriang(client *utils.RueidisClient, symT string, path d8x_futures.Triangulation) (PriceObservations, error) {
+func (p *PythClientApp) ConstructPriceObsForTriang(client *utils.RueidisClient, symT string, path d8x_futures.Triangulation) (PriceObservations, error) {
 	currentTimeSec := uint32(time.Now().UTC().Unix())
 	// find starting time
 	var timeStart, timeEnd int64 = 0, int64(currentTimeSec) * 1000
-	for k := 1; k < len(path.Symbol); k++ {
+	for k := 0; k < len(path.Symbol); k++ {
 		sym := path.Symbol[k]
 		info, err := (*client.Client).Do(client.Ctx, (*client.Client).B().
 			TsInfo().Key(sym).Build()).AsMap()
@@ -280,7 +269,7 @@ func (p *PythHistoryAPI) ConstructPriceObsForTriang(client *utils.RueidisClient,
 	return obs, nil
 }
 
-func (p *PythHistoryAPI) triangulateCandles(client *utils.RueidisClient, path d8x_futures.Triangulation, fromTsMs int64, toTsMs int64, resolSec uint32) ([]OhlcData, error) {
+func (p *PythClientApp) triangulateCandles(client *utils.RueidisClient, path d8x_futures.Triangulation, fromTsMs int64, toTsMs int64, resolSec uint32) ([]OhlcData, error) {
 	var ohlcPath []*[]OhlcData
 	var maxStart int64 = 0
 	for k := 0; k < len(path.Symbol); k++ {
@@ -311,7 +300,7 @@ func (p *PythHistoryAPI) triangulateCandles(client *utils.RueidisClient, path d8
 		}
 
 	}
-	if (*ohlcPath[0])[0].TsMs != (*ohlcPath[1])[0].TsMs {
+	if len(ohlcPath) > 1 && (*ohlcPath[0])[0].TsMs != (*ohlcPath[1])[0].TsMs {
 		panic("triangulateCandles mismatch")
 	}
 	T := len(*ohlcPath[0])
@@ -345,26 +334,17 @@ func (p *PythHistoryAPI) triangulateCandles(client *utils.RueidisClient, path d8
 	return ohlcRes, nil
 }
 
-// SubscribeTickerRequest the to redis pub/sub utils.TICKER_REQUEST
-// makes triangulation available if possible
-func (p *PythHistoryAPI) SubscribeTickerRequest() error {
-	client := *p.RedisClient.Client
-	err := client.Receive(context.Background(), client.B().Subscribe().Channel(utils.TICKER_REQUEST).Build(),
-		func(msg rueidis.PubSubMessage) {
-			slog.Info("Enabling Triangulation: " + msg.Message)
-			p.EnableTriangulation(msg.Message)
-			fmt.Printf("\n")
-		})
-	return err
-}
-
-func (p *PythHistoryAPI) OnPriceUpdate(pxData utils.PriceData, id, sym string, lastPx map[string]float64) {
+func (p *PythClientApp) OnPriceUpdate(pxData utils.PriceData, id string) {
+	sym := p.SymbolMngr.PythIdToSym[id]
 	if sym == "" {
 		return
 	}
 	px := CalcPrice(pxData)
 	// no check whether price is identical, because we want the candles to potentially match open/close
-	lastPx[sym] = px
+	p.StreamMngr.lastPxRWMu.Lock()
+	p.StreamMngr.lastPx[sym] = px
+	p.StreamMngr.lastPxRWMu.Unlock()
+
 	AddPriceObs(p.RedisClient, sym, pxData.PublishTime*1000, px)
 
 	p.MsgCount["px"] = (p.MsgCount["px"] + 1) % 500
@@ -373,11 +353,21 @@ func (p *PythHistoryAPI) OnPriceUpdate(pxData utils.PriceData, id, sym string, l
 	}
 
 	pubMsg := sym
+
 	// triangulations
-	targetSymbols := p.SymbolMngr.SymToDependentTriang[sym]
-	for _, tsym := range targetSymbols {
+	p.StreamMngr.s2DTRWMu.RLock()
+	targetSymbols := p.StreamMngr.symToDependentTriang[sym]
+	// copy concurrent data into new slice
+	symbols := make([]string, len(targetSymbols))
+	copy(symbols, targetSymbols)
+	p.StreamMngr.s2DTRWMu.RUnlock()
+
+	p.StreamMngr.symToTriangPathRWMu.RLock()
+	defer p.StreamMngr.symToTriangPathRWMu.RUnlock()
+	for _, tsym := range symbols {
 		// if market closed for any of the items in the triangulation,
-		if p.IsTriangulatedMarketClosed(tsym, p.SymbolMngr.SymToTriangPath[tsym].Symbol) {
+
+		if p.IsTriangulatedMarketClosed(tsym, p.StreamMngr.SymToTriangPath[tsym].Symbol) {
 			p.MsgCount["tclosed"] = (p.MsgCount["tclosed"] + 1) % 500
 			if p.MsgCount["tclosed"] == 0 {
 				slog.Info("-- triangulation price update: " + tsym + " - market closed")
@@ -385,12 +375,18 @@ func (p *PythHistoryAPI) OnPriceUpdate(pxData utils.PriceData, id, sym string, l
 			continue
 		}
 		// we should not publish an update
-		pxTriang := utils.TriangulatedPx(p.SymbolMngr.SymToTriangPath[tsym], lastPx)
+		p.StreamMngr.lastPxRWMu.RLock()
+		pxTriang := utils.TriangulatedPx(p.StreamMngr.SymToTriangPath[tsym], p.StreamMngr.lastPx)
+		p.StreamMngr.lastPxRWMu.RUnlock()
+
 		if pxTriang == 0 {
 			slog.Info("-- triangulation currently not possible: " + tsym)
 			continue
 		}
-		lastPx[tsym] = pxTriang
+		p.StreamMngr.lastPxRWMu.Lock()
+		p.StreamMngr.lastPx[tsym] = pxTriang
+		p.StreamMngr.lastPxRWMu.Unlock()
+
 		pubMsg += ";" + tsym
 		AddPriceObs(p.RedisClient, tsym, pxData.PublishTime*1000, pxTriang)
 		p.MsgCount["t"] = (p.MsgCount["t"] + 1) % 500
@@ -398,6 +394,7 @@ func (p *PythHistoryAPI) OnPriceUpdate(pxData utils.PriceData, id, sym string, l
 			slog.Info("-- 500 triangulation price updates, now: " + tsym + " price=" + fmt.Sprint(pxTriang))
 		}
 	}
+
 	// publish updates to listeners
 	client := *p.RedisClient.Client
 	err := client.Do(context.Background(),
@@ -408,7 +405,7 @@ func (p *PythHistoryAPI) OnPriceUpdate(pxData utils.PriceData, id, sym string, l
 }
 
 // check whether any of the symbols in the triangulation has a closed market
-func (p *PythHistoryAPI) IsTriangulatedMarketClosed(tsym string, symbols []string) bool {
+func (p *PythClientApp) IsTriangulatedMarketClosed(tsym string, symbols []string) bool {
 	client := p.RedisClient
 	info, err := GetMarketInfo(context.Background(), client.Client, tsym)
 	if err != nil {

@@ -1,15 +1,16 @@
-package builder
+package pythclient
 
 import (
 	"d8x-candles/src/utils"
 )
 
-type PythHistoryAPI struct {
+type PythClientApp struct {
 	BaseUrl     string
 	RedisClient *utils.RueidisClient
 	TokenBucket *TokenBucket
 	SymbolMngr  *utils.SymbolManager
 	MsgCount    map[string]int
+	StreamMngr  StreamManager
 }
 
 type PythHistoryAPIResponse struct {

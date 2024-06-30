@@ -1,4 +1,4 @@
-package builder
+package pythclient
 
 import (
 	"errors"

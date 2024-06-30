@@ -1,8 +1,7 @@
-package builder
+package pythclient
 
 import (
 	"context"
-	"d8x-candles/src/utils"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -35,26 +34,41 @@ type PriceFeedApiResponse struct {
 }
 
 // Runs FetchMktHours and schedules next runs
-func (p *PythHistoryAPI) ScheduleMktInfoUpdate(updtInterval time.Duration) {
-	p.FetchMktInfo()
+func (p *PythClientApp) ScheduleMktInfoUpdate(updtInterval time.Duration) {
 	tickerUpdate := time.NewTicker(updtInterval)
 	for {
-		select {
-		case <-tickerUpdate.C:
-			slog.Info("Updating market info...")
-			p.FetchMktInfo()
-			fmt.Println("Market info updated.")
+		<-tickerUpdate.C
+
+		slog.Info("Updating market info...")
+		p.StreamMngr.asymRWMu.RLock()
+		syms := make([]string, 0, len(p.StreamMngr.activeSyms))
+		for s := range p.StreamMngr.activeSyms {
+			syms = append(syms, s)
 		}
+		p.StreamMngr.asymRWMu.RUnlock()
+		p.FetchMktInfo(syms)
+		fmt.Println("Market info updated.")
+
 	}
 }
 
 // FetchMktInfo goes through all symbols in the config, including triangulated ones,
 // and fetches market hours (next open, next close). Stores in
 // Redis
-func (p *PythHistoryAPI) FetchMktInfo() {
+func (p *PythClientApp) FetchMktInfo(symbols []string) {
 	// process base price feeds (no triangulation)
 	config := p.SymbolMngr
-	for id, sym := range config.PythIdToSym {
+	for _, sym := range symbols {
+		id := ""
+		for id0, sym0 := range config.PythIdToSym {
+			if sym0 == sym {
+				id = id0
+				break
+			}
+		}
+		if id == "" {
+			continue
+		}
 		origin := config.SymToPythOrigin[sym]
 		asset := strings.ToLower(strings.Split(origin, ".")[0])
 		if asset == "crypto" {
@@ -65,21 +79,23 @@ func (p *PythHistoryAPI) FetchMktInfo() {
 		slog.Info("Fetching market info for " + sym)
 		p.QueryPriceFeedInfo(sym, id)
 	}
-	// construct info for triangulated price feeds, e.g. chf-usdc
-	p.fetchTriangulatedMktInfo(config)
+	// construct info for all triangulated price feeds, e.g. chf-usdc
+	p.fetchTriangulatedMktInfo()
 }
 
-func (p *PythHistoryAPI) fetchTriangulatedMktInfo(config *utils.SymbolManager) {
-	paths := config.SymToTriangPath
+// set market hours in redis for all triangulations
+func (p *PythClientApp) fetchTriangulatedMktInfo() {
+	p.StreamMngr.symToTriangPathRWMu.RLock()
+	defer p.StreamMngr.symToTriangPathRWMu.RUnlock()
 outerLoop:
-	for symT, path := range paths {
+	for symT, path := range p.StreamMngr.SymToTriangPath {
 		isOpen := true
 		var nxtOpen, nxtClose int64 = 0, math.MaxInt64
 		var assetType string = "crypto"
 		for k := 0; k < len(path.Symbol); k++ {
 			m, err := p.GetMarketInfo(path.Symbol[k])
 			if err != nil {
-				p.FetchMktInfo()
+				p.FetchMktInfo([]string{path.Symbol[k]})
 				slog.Error("Error triangulated feeds info " + symT + " at " + path.Symbol[k])
 				continue outerLoop
 			}
@@ -113,23 +129,9 @@ outerLoop:
 	}
 }
 
-func nilMax(a *int64, b *int64) int64 {
-	if a == nil {
-		return *b
-	}
-	if b == nil {
-		return *a
-	}
-	if *a > *b {
-		return *a
-	}
-	return *b
-}
-
-func (p *PythHistoryAPI) QueryPriceFeedInfo(sym string, id string) {
+func (p *PythClientApp) QueryPriceFeedInfo(sym string, id string) {
 	const endpoint = "/v1/price_feeds/"
 	// we need the mainnet id
-	id = p.SymbolMngr.GetPythIdMainnet(id)
 	url := strings.TrimSuffix(p.BaseUrl, "/") + endpoint + id
 	// Send a GET request
 	var response *http.Response
@@ -169,7 +171,7 @@ func (p *PythHistoryAPI) QueryPriceFeedInfo(sym string, id string) {
 	p.setMarketHours(sym, apiResponse.MarketHours, apiResponse.Attributes["asset_type"])
 }
 
-func (p *PythHistoryAPI) setMarketHours(ticker string, mh MarketHours, assetType string) error {
+func (p *PythClientApp) setMarketHours(ticker string, mh MarketHours, assetType string) error {
 	assetType = strings.ToLower(assetType)
 	c := *p.RedisClient.Client
 	var nxto, nxtc string
@@ -184,7 +186,7 @@ func (p *PythHistoryAPI) setMarketHours(ticker string, mh MarketHours, assetType
 		FieldValue("asset_type", assetType).Build())
 	return nil
 }
-func (p *PythHistoryAPI) GetMarketInfo(ticker string) (MarketInfo, error) {
+func (p *PythClientApp) GetMarketInfo(ticker string) (MarketInfo, error) {
 	return GetMarketInfo(p.RedisClient.Ctx, p.RedisClient.Client, ticker)
 }
 

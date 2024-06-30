@@ -1,4 +1,4 @@
-package builder
+package pythclient
 
 import (
 	"context"
@@ -11,7 +11,7 @@ import (
 )
 
 func TestRetrieveCandle(t *testing.T) {
-	api := PythHistoryAPI{BaseUrl: "https://benchmarks.pyth.network/"}
+	api := PythClientApp{BaseUrl: "https://benchmarks.pyth.network/"}
 	var sym utils.SymbolPyth
 	sym.New("Crypto.ETH/USD", "", "ETH/USD")
 	var resol utils.PythCandleResolution
@@ -42,7 +42,7 @@ func TestRetrieveCandle(t *testing.T) {
 func TestConcatCandles(t *testing.T) {
 	fromTs, _ := timestampFromTimeString("2023-05-14 08:20")
 	toTs, _ := timestampFromTimeString("2023-08-14 08:35")
-	api := PythHistoryAPI{BaseUrl: "https://benchmarks.pyth.network/"}
+	api := PythClientApp{BaseUrl: "https://benchmarks.pyth.network/"}
 	var sym utils.SymbolPyth
 	//sym.New("Crypto.ETH/USD")
 	sym.New("Fx.USD/CHF", "", "ETH/USD")
@@ -79,7 +79,7 @@ func TestPythDataToRedisPriceObs(t *testing.T) {
 	fmt.Print(vlast)
 }
 
-func createHistApi(t *testing.T) PythHistoryAPI {
+func createHistApi(t *testing.T) PythClientApp {
 	REDIS_ADDR := "localhost:6379"
 	REDIS_PW := "23_*PAejOanJma"
 	ctx := context.Background()
@@ -87,7 +87,7 @@ func createHistApi(t *testing.T) PythHistoryAPI {
 		rueidis.ClientOption{InitAddress: []string{REDIS_ADDR}, Password: REDIS_PW})
 	if err != nil {
 		t.Errorf("Error :%v", err)
-		return PythHistoryAPI{}
+		return PythClientApp{}
 	}
 	redisTSClient := utils.RueidisClient{
 		Client: &client,
@@ -96,7 +96,7 @@ func createHistApi(t *testing.T) PythHistoryAPI {
 	capacity := 30
 	refillRate := 3.0 // 3 tokens per second
 	tb := NewTokenBucket(capacity, refillRate)
-	api := PythHistoryAPI{
+	api := PythClientApp{
 		BaseUrl:     "https://benchmarks.pyth.network/",
 		RedisClient: &redisTSClient,
 		TokenBucket: tb,
@@ -132,10 +132,14 @@ func TestFetchMktInfo(t *testing.T) {
 		return
 	}
 	api := createHistApi(t)
-	api.FetchMktInfo()
+	api.FetchMktInfo([]string{"chf-usdc"})
 	a, err := GetMarketInfo(api.RedisClient.Ctx, api.RedisClient.Client, "chf-usdc")
+	if err != nil {
+		panic(err)
+	}
 	fmt.Print(a)
-	a, err = GetMarketInfo(api.RedisClient.Ctx, api.RedisClient.Client, "bs-ws")
+	_, err = GetMarketInfo(api.RedisClient.Ctx, api.RedisClient.Client, "bs-ws")
+
 	if err != nil {
 		fmt.Print("intended error" + err.Error())
 	}

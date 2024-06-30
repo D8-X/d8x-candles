@@ -1,4 +1,4 @@
-package builder
+package pythclient
 
 import (
 	"context"
@@ -9,19 +9,17 @@ import (
 )
 
 // Schedule regular calls of compaction (e.g. every hour)
-func (p *PythHistoryAPI) ScheduleCompaction(waitTime time.Duration) {
+func (p *PythClientApp) ScheduleCompaction(waitTime time.Duration) {
 	tickerUpdate := time.NewTicker(waitTime)
 	for {
-		select {
-		case <-tickerUpdate.C:
-			p.CompactAllPriceObs()
-			slog.Info("Compaction completed.")
-		}
+		<-tickerUpdate.C
+		p.CompactAllPriceObs()
+		slog.Info("Compaction completed.")
 	}
 }
 
 // Compact price observations so that aggregations needed for candles remain the same
-func (p *PythHistoryAPI) CompactAllPriceObs() {
+func (p *PythClientApp) CompactAllPriceObs() {
 	p.SymbolMngr.SymConstructionMutx.Lock()
 	defer p.SymbolMngr.SymConstructionMutx.Unlock()
 	c := *p.RedisClient.Client
@@ -42,7 +40,7 @@ func (p *PythHistoryAPI) CompactAllPriceObs() {
 
 // Reduce the data in REDIS for the given symbol, so that
 // we are able to still display the same candles
-func (p *PythHistoryAPI) CompactPriceObs(sym string) error {
+func (p *PythClientApp) CompactPriceObs(sym string) error {
 	client := *p.RedisClient.Client
 	info, err := (client).Do(p.RedisClient.Ctx, client.B().
 		TsInfo().Key(sym).Build()).AsMap()
@@ -68,7 +66,7 @@ func (p *PythHistoryAPI) CompactPriceObs(sym string) error {
 // Construct price observations from OHLC data sourced from REDIS,
 // used to clean-up high granularity data. To do so, we retain 1 day data up to 1 month before 'last',
 // 1h data for the current month, 1min data for the last 3 days
-func (p *PythHistoryAPI) ExtractCompactedPriceObs(sym string, first int64, last int64) (PriceObservations, error) {
+func (p *PythClientApp) ExtractCompactedPriceObs(sym string, first int64, last int64) (PriceObservations, error) {
 	client := p.RedisClient
 
 	last1D := last - 86400000*30

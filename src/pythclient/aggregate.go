@@ -1,4 +1,4 @@
-package builder
+package pythclient
 
 import (
 	"d8x-candles/src/utils"
@@ -74,7 +74,7 @@ func AddPriceObs(client *utils.RueidisClient, sym string, timestampMs int64, val
 }
 
 func CreateRedisTimeSeries(client *utils.RueidisClient, sym string) {
-	slog.Info("create" + sym)
+	slog.Info("create " + sym)
 	_, err := (*client.Client).Do(client.Ctx, (*client.Client).B().
 		TsInfo().Key(sym).Build()).AsMap()
 	if err == nil {
