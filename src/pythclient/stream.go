@@ -149,11 +149,9 @@ func (p *PythClientApp) StartStream() {
 	p.StreamMngr.cancelFunc = cancel
 	p.StreamMngr.mu.Unlock()
 
-	go func() {
-		if err := p.streamHttpWithRetry(ctx); err != nil {
-			slog.Info("Stream: " + err.Error())
-		}
-	}()
+	if err := p.streamHttpWithRetry(ctx); err != nil {
+		slog.Info("Stream: " + err.Error())
+	}
 }
 
 // streamHttpWithRetry handles the HTTP stream with retry logic
@@ -192,6 +190,7 @@ func (ph *PythClientApp) streamHttp(ctx context.Context, endpoint string) error 
 			}
 		}
 		if id == "" {
+			ph.StreamMngr.asymRWMu.RUnlock()
 			return fmt.Errorf("streamHttp: no id for symbol %s", sym)
 		}
 		postfix += "&ids[]=" + "0x" + id
@@ -217,27 +216,42 @@ func (ph *PythClientApp) streamHttp(ctx context.Context, endpoint string) error 
 			slog.Info("Stream canceled")
 			return ctx.Err()
 		default:
-			line, err := reader.ReadBytes('\n')
-			if err != nil {
-				if err.Error() == "EOF" {
-					// End of stream
-					return nil
+			// readbytes with a timeout
+			readTimeout := 5 * time.Second
+			lineCh := make(chan []byte, 1)
+			errCh := make(chan error, 1)
+			go func() {
+				line, err := reader.ReadBytes('\n')
+				if err != nil {
+					errCh <- err
+				} else {
+					lineCh <- line
 				}
+			}()
+			select {
+			case line := <-lineCh:
+				// handle the read line
+				if len(line) > 3 && string(line[0:3]) == ":No" || len(line) < 3 {
+					continue
+				}
+				var response utils.PythStreamData
+				jsonData := string(line[5:])
+				err = json.Unmarshal([]byte(jsonData), &response)
+				if err != nil {
+					fmt.Println("Error unmarshalling JSON:", err)
+					continue
+				}
+				// Process the data
+				for _, parsed := range response.Parsed {
+					ph.OnPriceUpdate(parsed.Price, parsed.Id)
+				}
+
+			case err := <-errCh:
+				// handle error of reading line
 				return fmt.Errorf("error reading stream: %v", err)
-			}
-			if len(line) > 3 && string(line[0:3]) == ":No" || len(line) < 3 {
-				continue
-			}
-			var response utils.PythStreamData
-			jsonData := string(line[5:])
-			err = json.Unmarshal([]byte(jsonData), &response)
-			if err != nil {
-				fmt.Println("Error unmarshalling JSON:", err)
-				continue
-			}
-			// Process the data
-			for _, parsed := range response.Parsed {
-				ph.OnPriceUpdate(parsed.Price, parsed.Id)
+
+			case <-time.After(readTimeout):
+				return fmt.Errorf("read timeout")
 			}
 		}
 	}
