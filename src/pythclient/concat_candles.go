@@ -2,6 +2,7 @@ package pythclient
 
 import (
 	"errors"
+	"fmt"
 	"log/slog"
 )
 
@@ -35,7 +36,7 @@ func PythCandlesToPriceObs(candles []PythHistoryAPIResponse) (PriceObservations,
 }
 
 // Analogue to PythCandlesToPriceObs
-func OhlcCandlesToPriceObs(candles [][]OhlcData) (PriceObservations, error) {
+func OhlcCandlesToPriceObs(candles [][]OhlcData, sym string) (PriceObservations, error) {
 	var px PriceObservations
 	var stopAtTs = uint32(0)
 	var nextLow = float64(0)
@@ -43,7 +44,7 @@ func OhlcCandlesToPriceObs(candles [][]OhlcData) (PriceObservations, error) {
 	for i := 0; i < len(candles); i++ {
 		err := ohlcToPriceObs(&px, candles[i], stopAtTs, nextLow, nextHigh)
 		if err != nil {
-			slog.Info("Some candle not available:" + err.Error())
+			slog.Info(fmt.Sprintf("Some candle not available for %s: %s", sym, err.Error()))
 			continue
 		}
 		if len(px.P) > 0 {
