@@ -262,7 +262,7 @@ func (p *PythClientApp) ConstructPriceObsForTriang(client *utils.RueidisClient, 
 	}
 	var candles = [][]OhlcData{oneDayResolutionMinute, twoDayResolution5Minute, oneMonthResolution1h, allTimeResolution1D}
 	var obs PriceObservations
-	obs, err = OhlcCandlesToPriceObs(candles)
+	obs, err = OhlcCandlesToPriceObs(candles, symT)
 	if err != nil {
 		return PriceObservations{}, err
 	}
