@@ -40,7 +40,6 @@ func RunCandleCharts() {
 }
 
 func StreamPyth() {
-	//wss://hermes-beta.pyth.network/ws
 	err := loadEnv()
 	if err != nil {
 		fmt.Println("Error:", err.Error())
