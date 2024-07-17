@@ -407,7 +407,7 @@ func (p *PythClientApp) OnPriceUpdate(pxData utils.PriceData, id string) {
 // check whether any of the symbols in the triangulation has a closed market
 func (p *PythClientApp) IsTriangulatedMarketClosed(tsym string, symbols []string) bool {
 	client := p.RedisClient
-	info, err := GetMarketInfo(context.Background(), client.Client, tsym)
+	info, err := utils.GetMarketInfo(context.Background(), client.Client, tsym)
 	if err != nil {
 		slog.Info("Market-closed info " + tsym + ":" + err.Error())
 		return true
@@ -416,7 +416,7 @@ func (p *PythClientApp) IsTriangulatedMarketClosed(tsym string, symbols []string
 		return true
 	}
 	for _, sym := range symbols {
-		info, err := GetMarketInfo(context.Background(), client.Client, tsym)
+		info, err := utils.GetMarketInfo(context.Background(), client.Client, tsym)
 		if err != nil {
 			slog.Error("Error market-closed info " + tsym + "(" + sym + "):" + err.Error())
 			return true
