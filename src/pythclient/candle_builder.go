@@ -165,7 +165,7 @@ func (p *PythClientApp) CandlesToTriangulatedCandles(client *utils.RueidisClient
 
 // sym of the form ETH-USD
 func (p *PythClientApp) PricesToRedis(sym string, obs PriceObservations) {
-	CreateRedisTimeSeries(p.RedisClient, sym)
+	utils.CreateRedisTimeSeries(p.RedisClient, sym)
 	var wg sync.WaitGroup
 	for k := 0; k < len(obs.P); k++ {
 		// store prices in ms

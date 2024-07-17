@@ -51,6 +51,15 @@ type PolyMidPrice struct {
 	Px CustomFloat64 `json:"mid"`
 }
 
+type PolyHistoryResponse struct {
+	History []PolyHistory `json:"history"`
+}
+
+type PolyHistory struct {
+	TimestampSec int64   `json:"t"`
+	Price        float64 `json:"p"`
+}
+
 // UnmarshalJSON implements the json.Unmarshaler interface for CustomInt64
 func (ci *CustomInt64) UnmarshalJSON(data []byte) error {
 	var timestampStr string

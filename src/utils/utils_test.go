@@ -13,4 +13,14 @@ func TestDec2Hex(t *testing.T) {
 		t.FailNow()
 	}
 	fmt.Println("hex id =", idHex)
+	idDec2, err := Hex2Dec(idHex)
+	if err != nil {
+		fmt.Println(err.Error())
+		t.FailNow()
+	}
+	if idDec2 != tokenId {
+		fmt.Println("no match")
+		t.FailNow()
+	}
+
 }
