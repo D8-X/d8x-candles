@@ -262,6 +262,7 @@ func (s *Server) updtMarketForSym(sym string, anchorTime24hMs int64) error {
 // Subscribe the client to a candle-topic (e.g. btc-usd:15m)
 func (s *Server) SubscribeCandles(conn *ClientConn, clientID string, topic string, config utils.SymbolManager) []byte {
 	if !isValidCandleTopic(topic) {
+		slog.Info("invalid candle topic requested:" + topic)
 		return errorResponse("subscribe", topic, "usage: symbol:period")
 	}
 	sym, period, isFound := strings.Cut(topic, ":")
@@ -307,19 +308,17 @@ func (s *Server) IsSymbolAvailable(sym string) bool {
 		slog.Error("IsSymbolAvailable " + sym + "error:" + err.Error())
 		return false
 	}
-	if isMember {
-		return true
-	}
-	// if the symbol can be triangulated, we're doing this now:
+	// we send the ticker request even if available (other process could have crashed)
+	// if the symbol can be triangulated, this will be done now
 	err = c.Do(context.Background(), c.B().Publish().Channel(utils.TICKER_REQUEST).Message(sym).Build()).Error()
 	if err != nil {
 		slog.Error("IsSymbolAvailable " + sym + "error:" + err.Error())
 	}
-	return false
+	return isMember
 }
 
 func isValidCandleTopic(topic string) bool {
-	pattern := "^[a-zA-Z]+-[a-zA-Z]+:[0-9]+[HMD]$" // Regular expression for candle topics
+	pattern := "^[a-zA-Z0-9]+-[a-zA-Z0-9]+:[0-9]+[HMD]$" // Regular expression for candle topics
 	regex, _ := regexp.Compile(pattern)
 	return regex.MatchString(topic)
 }
