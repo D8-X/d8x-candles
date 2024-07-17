@@ -87,7 +87,7 @@ func (p *PolyClient) enableTicker(sym string) {
 		slog.Error(fmt.Sprintf("could not convert hex-id to dec for %s: %v", sym, err))
 		return
 	}
-	h, err := RestQueryHistory(decId)
+	h, err := RestQueryHistory(p.api.apiBucket, decId)
 	if err != nil {
 		slog.Error(fmt.Sprintf("could not construct history for %s: %v", sym, err))
 		return

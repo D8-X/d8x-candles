@@ -88,3 +88,19 @@ func GetMarketInfo(ctx context.Context, client *rueidis.Client, ticker string) (
 	var m = MarketInfo{MarketHours: mh, AssetType: asset}
 	return m, nil
 }
+
+func SetMarketHours(rc *RueidisClient, sym string, mh MarketHours, assetType string) error {
+	assetType = strings.ToLower(assetType)
+	c := *rc.Client
+	var nxto, nxtc string
+
+	nxto = strconv.FormatInt(mh.NextOpen, 10)
+	nxtc = strconv.FormatInt(mh.NextClose, 10)
+
+	c.Do(rc.Ctx, c.B().Hset().Key(sym+":mkt_info").
+		FieldValue().FieldValue("is_open", strconv.FormatBool(mh.IsOpen)).
+		FieldValue("nxt_open", nxto).
+		FieldValue("nxt_close", nxtc).
+		FieldValue("asset_type", assetType).Build())
+	return nil
+}

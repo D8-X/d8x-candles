@@ -1,6 +1,7 @@
 package polyclient
 
 import (
+	"d8x-candles/src/utils"
 	"fmt"
 	"testing"
 	"time"
@@ -8,12 +9,22 @@ import (
 
 func TestGetMarketInfo(t *testing.T) {
 	id := "0xdd22472e552920b8438158ea7238bfadfa4f736aa4cee91a6b86c39ead110917"
-	m, err := GetMarketInfo(id)
+	bucket := utils.NewTokenBucket(4, 4.0)
+	m, err := GetMarketInfo(bucket, id)
 	if err != nil {
 		fmt.Println(err.Error())
 		t.FailNow()
 	}
 	fmt.Println(m)
+	// spam:
+	for k := 0; k < 40; k++ {
+		m, err = GetMarketInfo(bucket, id)
+		if err != nil {
+			fmt.Println(err.Error())
+			t.FailNow()
+		}
+		fmt.Printf("%d: %f\n", k, m.Tokens[0].Price)
+	}
 }
 
 func TestStreamWs(t *testing.T) {
@@ -44,7 +55,7 @@ func TestStreamWs(t *testing.T) {
 
 func TestRestQueryHistory(t *testing.T) {
 	id := "21742633143463906290569050155826241533067272736897614950488156847949938836455"
-	res, err := RestQueryHistory(id)
+	res, err := RestQueryHistory(utils.NewTokenBucket(4, 4.0), id)
 	if err != nil {
 		fmt.Println(err.Error())
 		t.FailNow()

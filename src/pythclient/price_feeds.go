@@ -8,7 +8,6 @@ import (
 	"math"
 	"math/rand"
 	"net/http"
-	"strconv"
 	"strings"
 	"time"
 )
@@ -159,19 +158,9 @@ func (p *PythClientApp) QueryPriceFeedInfo(sym string, id string) {
 
 func (p *PythClientApp) setMarketHours(ticker string, mh utils.MarketHours, assetType string) error {
 	assetType = strings.ToLower(assetType)
-	c := *p.RedisClient.Client
-	var nxto, nxtc string
-
-	nxto = strconv.FormatInt(mh.NextOpen, 10)
-	nxtc = strconv.FormatInt(mh.NextClose, 10)
-
-	c.Do(p.RedisClient.Ctx, c.B().Hset().Key(ticker+":mkt_info").
-		FieldValue().FieldValue("is_open", strconv.FormatBool(mh.IsOpen)).
-		FieldValue("nxt_open", nxto).
-		FieldValue("nxt_close", nxtc).
-		FieldValue("asset_type", assetType).Build())
-	return nil
+	return utils.SetMarketHours(p.RedisClient, ticker, mh, assetType)
 }
+
 func (p *PythClientApp) GetMarketInfo(ticker string) (utils.MarketInfo, error) {
 	return utils.GetMarketInfo(p.RedisClient.Ctx, p.RedisClient.Client, ticker)
 }

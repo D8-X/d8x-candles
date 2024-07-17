@@ -21,15 +21,18 @@ type PolyApi struct {
 	MuWs       sync.Mutex
 	Ws         *websocket.Conn
 	reconnChan chan struct{}
+	apiBucket  *utils.TokenBucket
 }
 
 func NewPolyApi() *PolyApi {
+
 	pa := PolyApi{
 		AssetIds:   make(map[string]string),
 		MuAssets:   sync.Mutex{},
 		MuWs:       sync.Mutex{},
 		Ws:         nil,
 		reconnChan: make(chan struct{}),
+		apiBucket:  utils.NewTokenBucket(4, 4.0),
 	}
 	return &pa
 }
@@ -81,8 +84,9 @@ func (pa *PolyApi) ReSubscribe() error {
 	return pa.sendSubscribe(assetIds)
 }
 
-func GetMarketInfo(conditionId string) (*utils.PolyMarketInfo, error) {
+func GetMarketInfo(bucket *utils.TokenBucket, conditionId string) (*utils.PolyMarketInfo, error) {
 	endpt := "https://clob.polymarket.com/markets/" + conditionId
+	bucket.WaitForToken(time.Millisecond*250, "get market info")
 	resp, err := http.Get(endpt)
 	if err != nil {
 		return nil, fmt.Errorf("failed to make GET request: %v", err)
@@ -230,7 +234,7 @@ func (pa *PolyApi) handleEvent(eventJson string, pc *PolyClient) error {
 		return fmt.Errorf("error unmarshalling price change JSON: %v", err)
 	}
 	fmt.Printf("asset=%s price = %s\n", pa.AssetIds[priceChange.AssetID], priceChange.Price)
-	px, err := RestQueryPrice(priceChange.AssetID)
+	px, err := RestQueryPrice(pa.apiBucket, priceChange.AssetID)
 	if err != nil {
 		return fmt.Errorf("error querying price: %v", err)
 	}
@@ -241,10 +245,38 @@ func (pa *PolyApi) handleEvent(eventJson string, pc *PolyClient) error {
 	return nil
 }
 
+func fetchMktHours(bucket *utils.TokenBucket, conditionIds []string) []utils.MarketHours {
+	mkts := make([]utils.MarketHours, 0, len(conditionIds))
+	for _, id := range conditionIds {
+		m, err := GetMarketInfo(bucket, id)
+		if err != nil {
+			slog.Info(fmt.Sprintf("FetchMktInfo: id %s: %v", id, err))
+			continue
+		}
+		var endDateTs int64
+		endDate, err := time.Parse(time.RFC3339, m.EndDateISO)
+		if err != nil {
+			slog.Error(fmt.Sprintf("parsing time for condition id %s: %v", id, err))
+		} else {
+			endDateTs = endDate.Unix()
+		}
+		nowTs := time.Now().Unix()
+		isOpen := m.Active && !m.Closed && m.AcceptingOrders && (endDateTs == 0 || endDateTs > nowTs)
+		hrs := utils.MarketHours{
+			IsOpen:    isOpen,
+			NextOpen:  0,
+			NextClose: endDateTs,
+		}
+		mkts = append(mkts, hrs)
+	}
+	return mkts
+}
+
 // restQueryPrice queries the mid-price for the given token id (decimal) from
 // polymarket rest API
-func RestQueryPrice(tokenId string) (float64, error) {
+func RestQueryPrice(bucket *utils.TokenBucket, tokenId string) (float64, error) {
 	url := "https://clob.polymarket.com/midpoint?token_id=" + tokenId
+	bucket.WaitForToken(time.Millisecond*250, "get market info")
 	resp, err := http.Get(url)
 	if err != nil {
 		return 0, fmt.Errorf("failed to make GET request: %v", err)
@@ -270,11 +302,13 @@ func RestQueryPrice(tokenId string) (float64, error) {
 }
 
 // RestQueryHistory queries historical prices on maximal time range plus 1 week for the minimal granularity of 1 minute
-func RestQueryHistory(tokenId string) ([]utils.PolyHistory, error) {
+func RestQueryHistory(bucket *utils.TokenBucket, tokenId string) ([]utils.PolyHistory, error) {
+	bucket.WaitForToken(time.Millisecond*250, "get market info")
 	hMax, err := rawQueryHistory("https://clob.polymarket.com/prices-history?market=" + tokenId + "&interval=max")
 	if err != nil {
 		return nil, err
 	}
+	bucket.WaitForToken(time.Millisecond*250, "get market info")
 	hWeek, err := rawQueryHistory("https://clob.polymarket.com/prices-history?market=" + tokenId + "&interval=1w&fidelity=1")
 	if err != nil {
 		return nil, err

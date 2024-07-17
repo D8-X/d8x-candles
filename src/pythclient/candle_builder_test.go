@@ -95,7 +95,7 @@ func createHistApi(t *testing.T) PythClientApp {
 	}
 	capacity := 30
 	refillRate := 3.0 // 3 tokens per second
-	tb := NewTokenBucket(capacity, refillRate)
+	tb := utils.NewTokenBucket(capacity, refillRate)
 	api := PythClientApp{
 		BaseUrl:     "https://benchmarks.pyth.network/",
 		RedisClient: &redisTSClient,
