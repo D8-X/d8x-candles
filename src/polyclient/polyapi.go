@@ -245,6 +245,10 @@ func (pa *PolyApi) handleEvent(eventJson string, pc *PolyClient) error {
 	return nil
 }
 
+func (pa *PolyApi) FetchMktHours(conditionIds []string) []utils.MarketHours {
+	return fetchMktHours(pa.apiBucket, conditionIds)
+}
+
 func fetchMktHours(bucket *utils.TokenBucket, conditionIds []string) []utils.MarketHours {
 	mkts := make([]utils.MarketHours, 0, len(conditionIds))
 	for _, id := range conditionIds {
@@ -256,7 +260,7 @@ func fetchMktHours(bucket *utils.TokenBucket, conditionIds []string) []utils.Mar
 		var endDateTs int64
 		endDate, err := time.Parse(time.RFC3339, m.EndDateISO)
 		if err != nil {
-			slog.Error(fmt.Sprintf("parsing time for condition id %s: %v", id, err))
+			slog.Error(fmt.Sprintf("FetchMktInfo: parsing time for condition id %s: %v", id, err))
 		} else {
 			endDateTs = endDate.Unix()
 		}

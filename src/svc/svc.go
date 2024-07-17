@@ -54,7 +54,7 @@ func StreamPolyMarkets() {
 	}
 	found := false
 	for _, el := range config.PriceFeedIds {
-		if el.Type == polyclient.POLYMARKET_TYPE {
+		if el.Type == utils.POLYMARKET_TYPE {
 			found = true
 			break
 		}

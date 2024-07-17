@@ -5,6 +5,10 @@ import (
 	"strconv"
 )
 
+const (
+	POLYMARKET_TYPE = "polymarket"
+)
+
 type SymbolPoly struct {
 	AssetType   string
 	Symbol      string

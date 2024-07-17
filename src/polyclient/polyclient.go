@@ -6,13 +6,10 @@ import (
 	"fmt"
 	"log/slog"
 	"sync"
+	"time"
 
 	d8xUtils "github.com/D8-X/d8x-futures-go-sdk/utils"
 	"github.com/redis/rueidis"
-)
-
-const (
-	POLYMARKET_TYPE = "polymarket"
 )
 
 type PolyClient struct {
@@ -20,7 +17,7 @@ type PolyClient struct {
 	api               *PolyApi
 	priceFeedUniverse map[string]d8xUtils.PriceFeedId
 	activeSyms        map[string]bool
-	mu                sync.Mutex
+	muSyms            *sync.RWMutex
 }
 
 func (pc *PolyClient) Run() error {
@@ -31,6 +28,9 @@ func (pc *PolyClient) Run() error {
 	// open websocket connection
 	stopCh := make(chan struct{})
 	go pc.api.RunWs(stopCh, pc)
+
+	// schedule market info updates
+	go pc.ScheduleMktInfoUpdate(15 * time.Minute)
 
 	errChan := make(chan error)
 	go pc.SubscribeTickerRequest(errChan)
@@ -54,14 +54,14 @@ func NewPolyClient(REDIS_ADDR, REDIS_PW string, config []d8xUtils.PriceFeedId) (
 	// available ticker universe
 	pc.priceFeedUniverse = make(map[string]d8xUtils.PriceFeedId, 0)
 	for _, el := range config {
-		if el.Type != POLYMARKET_TYPE {
+		if el.Type != utils.POLYMARKET_TYPE {
 			continue
 		}
 		fmt.Printf("adding ticker %s to universe", el.Symbol)
 		pc.priceFeedUniverse[el.Symbol] = el
 	}
 	pc.activeSyms = make(map[string]bool)
-	pc.mu = sync.Mutex{}
+	pc.muSyms = &sync.RWMutex{}
 	return &pc, nil
 }
 
@@ -74,12 +74,13 @@ func (p *PolyClient) enableTicker(sym string) {
 		slog.Info(fmt.Sprintf("ticker request for symbol %s -- not in polymarket universe", sym))
 		return
 	}
-	p.mu.Lock()
-	defer p.mu.Unlock()
+	p.muSyms.RLock()
 	if _, exists = p.activeSyms[sym]; exists {
+		p.muSyms.RUnlock()
 		slog.Info(fmt.Sprintf("ticker %s requested already exists", sym))
 		return
 	}
+	p.muSyms.RUnlock()
 
 	fmt.Printf("enable ticker request %s", sym)
 	decId, err := utils.Hex2Dec(el.Id)
@@ -95,4 +96,44 @@ func (p *PolyClient) enableTicker(sym string) {
 	utils.CreateRedisTimeSeries(p.RedisClient, sym)
 	p.HistoryToRedis(sym, h)
 	p.api.SubscribeAssetIds([]string{decId}, []string{sym})
+}
+
+// Runs FetchMktHours and schedules next runs
+func (p *PolyClient) ScheduleMktInfoUpdate(updtInterval time.Duration) {
+	tickerUpdate := time.NewTicker(updtInterval)
+	for {
+		<-tickerUpdate.C
+
+		slog.Info("Updating polymarket info...")
+		p.muSyms.RLock()
+		syms := make([]string, 0, len(p.activeSyms))
+		for s := range p.activeSyms {
+			syms = append(syms, s)
+		}
+		p.muSyms.RUnlock()
+		p.FetchMktInfo(syms)
+		fmt.Println("Polymarket info updated.")
+	}
+}
+
+// FetchMktInfo gets the market hours from the polymarket-api
+// and stores the data to Redis
+func (p *PolyClient) FetchMktInfo(syms []string) {
+	// gather market ids for given symbols
+	mktIds := make([]string, 0, len(syms))
+	usedSyms := make([]string, 0, len(syms))
+	for _, sym := range syms {
+		el, exists := p.priceFeedUniverse[sym]
+		if !exists {
+			slog.Error(fmt.Sprintf("FetchMktInfo: %s not in price feed universe", sym))
+			continue
+		}
+		// condition id is in 'origin'
+		mktIds = append(mktIds, el.Origin)
+		usedSyms = append(usedSyms, sym)
+	}
+	hours := p.api.FetchMktHours(mktIds)
+	for k, mh := range hours {
+		utils.SetMarketHours(p.RedisClient, usedSyms[k], mh, utils.POLYMARKET_TYPE)
+	}
 }
