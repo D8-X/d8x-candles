@@ -2,6 +2,7 @@ package svc
 
 import (
 	"d8x-candles/env"
+	"d8x-candles/src/polyclient"
 	"d8x-candles/src/pythclient"
 	"d8x-candles/src/utils"
 	"d8x-candles/src/wscandle"
@@ -10,6 +11,7 @@ import (
 	"log/slog"
 	"os"
 
+	d8xConf "github.com/D8-X/d8x-futures-go-sdk/config"
 	"github.com/spf13/viper"
 )
 
@@ -37,6 +39,44 @@ func RunCandleCharts() {
 		viper.GetString(env.REDIS_PW),
 		viper.GetInt(env.REDIS_DB_NUM),
 	)
+}
+
+func StreamPolyMarkets() {
+	err := loadEnv()
+	if err != nil {
+		fmt.Println("Error:", err.Error())
+		return
+	}
+	config, err := d8xConf.GetDefaultPriceConfig(42161) //chain-id irrellevant since same config
+	if err != nil {
+		fmt.Println("Error:", err.Error())
+		return
+	}
+	found := false
+	for _, el := range config.PriceFeedIds {
+		if el.Type == polyclient.POLYMARKET_TYPE {
+			found = true
+			break
+		}
+	}
+	if !found {
+		fmt.Println("no polymarket found in configuration, quitting")
+		return
+	}
+	app, err := polyclient.NewPolyClient(
+		viper.GetString(env.REDIS_ADDR),
+		viper.GetString(env.REDIS_PW),
+		config.PriceFeedIds)
+
+	if err != nil {
+		fmt.Println("Error:", err.Error())
+		panic(err)
+	}
+	err = app.Run()
+	if err != nil {
+		fmt.Println(err.Error())
+	}
+	panic(fmt.Errorf("terminated"))
 }
 
 func StreamPyth() {
