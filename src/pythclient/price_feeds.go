@@ -59,7 +59,7 @@ func (p *PythClientApp) FetchMktInfo(symbols []string) {
 		asset := strings.ToLower(strings.Split(origin, ".")[0])
 		if asset == "crypto" {
 			// crypto markets are always open, huray
-			p.setMarketHours(sym, utils.MarketHours{true, 0, 0}, "crypto")
+			p.setMarketHours(sym, utils.MarketHours{IsOpen: true, NextOpen: 0, NextClose: 0}, "crypto")
 			continue
 		}
 		slog.Info("Fetching market info for " + sym)
