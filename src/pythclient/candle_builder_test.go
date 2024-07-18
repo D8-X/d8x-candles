@@ -95,7 +95,7 @@ func createHistApi(t *testing.T) PythClientApp {
 	}
 	capacity := 30
 	refillRate := 3.0 // 3 tokens per second
-	tb := NewTokenBucket(capacity, refillRate)
+	tb := utils.NewTokenBucket(capacity, refillRate)
 	api := PythClientApp{
 		BaseUrl:     "https://benchmarks.pyth.network/",
 		RedisClient: &redisTSClient,
@@ -133,12 +133,12 @@ func TestFetchMktInfo(t *testing.T) {
 	}
 	api := createHistApi(t)
 	api.FetchMktInfo([]string{"chf-usdc"})
-	a, err := GetMarketInfo(api.RedisClient.Ctx, api.RedisClient.Client, "chf-usdc")
+	a, err := utils.GetMarketInfo(api.RedisClient.Ctx, api.RedisClient.Client, "chf-usdc")
 	if err != nil {
 		panic(err)
 	}
 	fmt.Print(a)
-	_, err = GetMarketInfo(api.RedisClient.Ctx, api.RedisClient.Client, "bs-ws")
+	_, err = utils.GetMarketInfo(api.RedisClient.Ctx, api.RedisClient.Client, "bs-ws")
 
 	if err != nil {
 		fmt.Print("intended error" + err.Error())

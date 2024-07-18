@@ -7,7 +7,7 @@ import (
 type PythClientApp struct {
 	BaseUrl     string
 	RedisClient *utils.RueidisClient
-	TokenBucket *TokenBucket
+	TokenBucket *utils.TokenBucket
 	SymbolMngr  *utils.SymbolManager
 	MsgCount    map[string]int
 	StreamMngr  StreamManager

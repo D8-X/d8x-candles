@@ -42,7 +42,7 @@ func Run(symMngr *utils.SymbolManager, REDIS_ADDR string, REDIS_PW string) error
 	//https://docs.pyth.network/benchmarks/rate-limits
 	capacity := 30
 	refillRate := 9.0
-	tb := NewTokenBucket(capacity, refillRate)
+	tb := utils.NewTokenBucket(capacity, refillRate)
 	ph := PythClientApp{
 		BaseUrl:     symMngr.ConfigFile.PythAPIEndpoint,
 		RedisClient: redisTSClient,
