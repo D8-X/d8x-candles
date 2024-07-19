@@ -60,5 +60,5 @@ func TestRestQueryHistory(t *testing.T) {
 		fmt.Println(err.Error())
 		t.FailNow()
 	}
-	fmt.Printf("num obs = %d", len(res))
+	fmt.Printf("num obs = %d\n", len(res))
 }

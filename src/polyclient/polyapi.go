@@ -156,7 +156,7 @@ func (pa *PolyApi) ConnectWs(stop chan struct{}, pc *PolyClient) error {
 			}
 			err = pa.handleEvent(string(message), pc)
 			if err != nil {
-				fmt.Printf("error handling event: %v", err)
+				fmt.Printf("error handling event: %v\n", err)
 			}
 		}
 	}()

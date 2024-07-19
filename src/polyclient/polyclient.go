@@ -57,7 +57,7 @@ func NewPolyClient(REDIS_ADDR, REDIS_PW string, config []d8xUtils.PriceFeedId) (
 		if el.Type != utils.POLYMARKET_TYPE {
 			continue
 		}
-		fmt.Printf("adding ticker %s to universe", el.Symbol)
+		fmt.Printf("adding ticker %s to universe\n", el.Symbol)
 		pc.priceFeedUniverse[el.Symbol] = el
 	}
 	pc.activeSyms = make(map[string]bool)
@@ -82,7 +82,7 @@ func (p *PolyClient) enableTicker(sym string) {
 	}
 	p.muSyms.RUnlock()
 
-	fmt.Printf("enable ticker request %s", sym)
+	fmt.Printf("enable ticker request %s\n", sym)
 	decId, err := utils.Hex2Dec(el.Id)
 	if err != nil {
 		slog.Error(fmt.Sprintf("could not convert hex-id to dec for %s: %v", sym, err))
