@@ -1,35 +1,20 @@
 package pythclient
 
 import (
-	"context"
+	"d8x-candles/src/utils"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"log/slog"
 	"math"
 	"math/rand"
 	"net/http"
-	"strconv"
 	"strings"
 	"time"
-
-	"github.com/redis/rueidis"
 )
-
-type MarketHours struct {
-	IsOpen    bool  `json:"is_open"`
-	NextOpen  int64 `json:"next_open"`
-	NextClose int64 `json:"next_close"`
-}
-
-type MarketInfo struct {
-	MarketHours MarketHours
-	AssetType   string `json:"assetType"`
-}
 
 type PriceFeedApiResponse struct {
 	ID          string            `json:"id"`
-	MarketHours MarketHours       `json:"market_hours"`
+	MarketHours utils.MarketHours `json:"market_hours"`
 	Attributes  map[string]string `json:"attributes"`
 }
 
@@ -73,7 +58,7 @@ func (p *PythClientApp) FetchMktInfo(symbols []string) {
 		asset := strings.ToLower(strings.Split(origin, ".")[0])
 		if asset == "crypto" {
 			// crypto markets are always open, huray
-			p.setMarketHours(sym, MarketHours{true, 0, 0}, "crypto")
+			p.setMarketHours(sym, utils.MarketHours{IsOpen: true, NextOpen: 0, NextClose: 0}, "crypto")
 			continue
 		}
 		slog.Info("Fetching market info for " + sym)
@@ -121,7 +106,7 @@ outerLoop:
 			nxtClose = 0
 		}
 
-		p.setMarketHours(symT, MarketHours{
+		p.setMarketHours(symT, utils.MarketHours{
 			IsOpen:    isOpen,
 			NextOpen:  nxtOpen,
 			NextClose: nxtClose},
@@ -171,50 +156,11 @@ func (p *PythClientApp) QueryPriceFeedInfo(sym string, id string) {
 	p.setMarketHours(sym, apiResponse.MarketHours, apiResponse.Attributes["asset_type"])
 }
 
-func (p *PythClientApp) setMarketHours(ticker string, mh MarketHours, assetType string) error {
+func (p *PythClientApp) setMarketHours(ticker string, mh utils.MarketHours, assetType string) error {
 	assetType = strings.ToLower(assetType)
-	c := *p.RedisClient.Client
-	var nxto, nxtc string
-
-	nxto = strconv.FormatInt(mh.NextOpen, 10)
-	nxtc = strconv.FormatInt(mh.NextClose, 10)
-
-	c.Do(p.RedisClient.Ctx, c.B().Hset().Key(ticker+":mkt_info").
-		FieldValue().FieldValue("is_open", strconv.FormatBool(mh.IsOpen)).
-		FieldValue("nxt_open", nxto).
-		FieldValue("nxt_close", nxtc).
-		FieldValue("asset_type", assetType).Build())
-	return nil
-}
-func (p *PythClientApp) GetMarketInfo(ticker string) (MarketInfo, error) {
-	return GetMarketInfo(p.RedisClient.Ctx, p.RedisClient.Client, ticker)
+	return utils.SetMarketHours(p.RedisClient, ticker, mh, assetType)
 }
 
-func GetMarketInfo(ctx context.Context, client *rueidis.Client, ticker string) (MarketInfo, error) {
-	c := *client
-	hm, err := c.Do(ctx, c.B().Hgetall().Key(ticker+":mkt_info").Build()).AsStrMap()
-	if err != nil {
-		return MarketInfo{}, err
-	}
-	if len(hm) == 0 {
-		return MarketInfo{}, errors.New("ticker not found")
-	}
-	isOpen, _ := strconv.ParseBool(hm["is_open"])
-	nxtOpen, _ := strconv.ParseInt(hm["nxt_open"], 10, 64)
-	nxtClose, _ := strconv.ParseInt(hm["nxt_close"], 10, 64)
-	asset := hm["asset_type"]
-	// determine market open/close based on current timestamp and
-	// next close ts (can be outdated as long as not outdated for more than
-	// closing period)
-	now := time.Now().UTC().Unix()
-	isClosed := nxtClose != 0 &&
-		((!isOpen && now < nxtOpen) ||
-			(isOpen && now > nxtClose))
-	var mh = MarketHours{
-		IsOpen:    !isClosed,
-		NextOpen:  nxtOpen,
-		NextClose: nxtClose,
-	}
-	var m = MarketInfo{MarketHours: mh, AssetType: asset}
-	return m, nil
+func (p *PythClientApp) GetMarketInfo(ticker string) (utils.MarketInfo, error) {
+	return utils.GetMarketInfo(p.RedisClient.Ctx, p.RedisClient.Client, ticker)
 }

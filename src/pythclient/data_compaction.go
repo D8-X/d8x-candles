@@ -81,7 +81,7 @@ func (p *PythClientApp) ExtractCompactedPriceObs(sym string, first int64, last i
 	ohlc1m, _ = Ohlc(client, sym, first1m, last, 60)
 	var candles = [][]OhlcData{ohlc1m, ohlc1h, ohlc1d}
 	var obs PriceObservations
-	obs, err := OhlcCandlesToPriceObs(candles)
+	obs, err := OhlcCandlesToPriceObs(candles, sym)
 	if err != nil {
 		return PriceObservations{}, err
 	}

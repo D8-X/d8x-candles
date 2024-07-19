@@ -72,18 +72,3 @@ func AddPriceObs(client *utils.RueidisClient, sym string, timestampMs int64, val
 	}
 	return nil
 }
-
-func CreateRedisTimeSeries(client *utils.RueidisClient, sym string) {
-	slog.Info("create " + sym)
-	_, err := (*client.Client).Do(client.Ctx, (*client.Client).B().
-		TsInfo().Key(sym).Build()).AsMap()
-	if err == nil {
-		// key exists, we purge the timeseries
-		if err = (*client.Client).Do(client.Ctx, (*client.Client).B().Del().
-			Key(sym).Build()).Error(); err != nil {
-			slog.Error("CreateRedisTimeSeries, failed deleting time series " + sym + ":" + err.Error())
-		}
-	}
-	// key does not exist, create series
-	(*client.Client).Do(client.Ctx, (*client.Client).B().TsCreate().Key(sym).DuplicatePolicyLast().Build())
-}

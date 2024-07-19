@@ -3,11 +3,11 @@ module d8x-candles
 go 1.21
 
 require (
-	github.com/D8-X/d8x-futures-go-sdk v0.9.7
+	github.com/D8-X/d8x-futures-go-sdk v1.0.0-alpha
 	github.com/google/uuid v1.4.0
-	github.com/gorilla/websocket v1.5.1
+	github.com/gorilla/websocket v1.5.3
 	github.com/redis/go-redis/v9 v9.1.0
-	github.com/redis/rueidis v1.0.27
+	github.com/redis/rueidis v1.0.41
 	github.com/spf13/viper v1.18.2
 )
 
@@ -51,9 +51,8 @@ require (
 	golang.org/x/crypto v0.23.0 // indirect
 	golang.org/x/exp v0.0.0-20231127185646-65229373498e // indirect
 	golang.org/x/mod v0.17.0 // indirect
-	golang.org/x/net v0.25.0 // indirect
 	golang.org/x/sync v0.7.0 // indirect
-	golang.org/x/sys v0.20.0 // indirect
+	golang.org/x/sys v0.22.0 // indirect
 	golang.org/x/text v0.15.0 // indirect
 	golang.org/x/tools v0.20.0 // indirect
 	gopkg.in/ini.v1 v1.67.0 // indirect
