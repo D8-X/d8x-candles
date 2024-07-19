@@ -4,7 +4,7 @@ services:
   poly-client:
     build:
       context: .
-      dockerfile: cmd/pyth-client/Dockerfile
+      dockerfile: cmd/poly-client/Dockerfile
     environment:
       - REDIS_PW=${REDIS_PW}
       - REDIS_ADDR=${REDIS_ADDR}
