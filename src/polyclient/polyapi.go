@@ -113,11 +113,14 @@ func GetMarketInfo(bucket *utils.TokenBucket, conditionId string) (*utils.PolyMa
 
 // RunWs keeps the websocket connection alive.
 func (pa *PolyApi) RunWs(stop chan struct{}, pc *PolyClient) {
+
 	for {
+		timeStart := time.Now()
 		err := pa.ConnectWs(stop, pc)
 		if err != nil {
-			fmt.Println("Reconnecting WS, reason:", err)
-			time.Sleep(1 * time.Second) // Reconnect after a delay
+			slog.Info(fmt.Sprintf("Reconnecting WS, after %s reason: %v\n", time.Since(timeStart), err))
+			sleep := 1 + max(0, 5-time.Since(timeStart))
+			time.Sleep(sleep * time.Second) // Reconnect after a delay
 		} else {
 			fmt.Println("Connection closed gracefully")
 			return
