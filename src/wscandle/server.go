@@ -241,9 +241,14 @@ func (s *Server) updtMarketForSym(sym string, anchorTime24hMs int64) error {
 	if err != nil || len(px24) == 0 || px24[0].Value == 0 {
 		px24 = nil
 	} else {
-		ret = px.Value/px24[0].Value - 1
-		scale := float64(px.Timestamp-px24[0].Timestamp) / float64(d)
-		ret = ret * scale
+		if m.AssetType == utils.POLYMARKET_TYPE {
+			// absolute change for betting markets
+			ret = px.Value - px24[0].Value
+		} else {
+			ret = px.Value/px24[0].Value - 1
+			scale := float64(px.Timestamp-px24[0].Timestamp) / float64(d)
+			ret = ret * scale
+		}
 	}
 
 	var mr = MarketResponse{
