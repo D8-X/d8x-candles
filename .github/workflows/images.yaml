@@ -20,6 +20,8 @@ jobs:
               image: ghcr.io/d8-x/d8x-candles-pyth-client
             - dockerfile: ./cmd/ws-server/Dockerfile
               image: ghcr.io/d8-x/d8x-candles-ws-server
+            - dockerfile: ./cmd/poly-client/Dockerfile
+              image: ghcr.io/d8-x/d8x-candles-poly-client
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v3
