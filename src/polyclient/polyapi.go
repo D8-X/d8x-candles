@@ -263,7 +263,7 @@ func (pa *PolyApi) handleEvent(eventJson string, pc *PolyClient) error {
 	if err != nil {
 		return fmt.Errorf("error querying price from oracle: %v", err)
 	}
-	dev := math.Abs(px1/(1+px0) - 1)
+	dev := math.Abs(px1/px0 - 1)
 	if dev > 0.01 {
 		return fmt.Errorf("price deviation between oracle and source too large: %.2f", dev)
 	}
@@ -305,6 +305,8 @@ func fetchMktHours(bucket *utils.TokenBucket, conditionIds []string) []utils.Mar
 	return mkts
 }
 
+// RestQueryOracle queries index price and EMA price (mark price=ema+spread) from
+// the oracle. Prices are transformed to 'probability'.
 func RestQueryOracle(endPtUrl, tokenId string) (float64, float64, int64, error) {
 	tokenIdHex, err := utils.Dec2Hex(tokenId)
 	if err != nil {
@@ -331,7 +333,7 @@ func RestQueryOracle(endPtUrl, tokenId string) (float64, float64, int64, error) 
 	}
 	ema := p.Parsed[0].EMAPrice.CalcPrice()
 	idx := p.Parsed[0].Price.CalcPrice()
-	return idx, ema, p.Parsed[0].Price.PublishTime, nil
+	return idx - 1, ema - 1, p.Parsed[0].Price.PublishTime, nil
 }
 
 // restQueryPrice queries the mid-price for the given token id (decimal) from
