@@ -30,7 +30,7 @@ func TestGetMarketInfo(t *testing.T) {
 func TestStreamWs(t *testing.T) {
 	ids := []string{"21742633143463906290569050155826241533067272736897614950488156847949938836455",
 		"48331043336612883890938759509493159234755048973500640148014422747788308965732"}
-	pa := NewPolyApi()
+	pa := NewPolyApi("https://odin-poly.d8x.xyz")
 	stopCh := make(chan struct{})
 	go pa.RunWs(stopCh, nil)
 	fmt.Println("adding asset 1")

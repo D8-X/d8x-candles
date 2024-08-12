@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"math"
 	"net/http"
 	"sync"
 	"time"
@@ -16,23 +17,29 @@ import (
 // PolyApi handles the connections to polymarket
 // websocket and REST API
 type PolyApi struct {
-	AssetIds   map[string]string //dec id -> symbol
-	MuAssets   sync.Mutex
-	MuWs       sync.Mutex
-	Ws         *websocket.Conn
-	reconnChan chan struct{}
-	apiBucket  *utils.TokenBucket
+	AssetIds     map[string]string //dec id -> symbol
+	LastUpdate   map[string]int64  //dec id -> timestamp
+	MuLastUpdate sync.Mutex
+	MuAssets     sync.Mutex
+	MuWs         sync.Mutex
+	Ws           *websocket.Conn
+	reconnChan   chan struct{}
+	apiBucket    *utils.TokenBucket
+	oracleEndpt  string
 }
 
-func NewPolyApi() *PolyApi {
+func NewPolyApi(oracleEndpt string) *PolyApi {
 
 	pa := PolyApi{
-		AssetIds:   make(map[string]string),
-		MuAssets:   sync.Mutex{},
-		MuWs:       sync.Mutex{},
-		Ws:         nil,
-		reconnChan: make(chan struct{}),
-		apiBucket:  utils.NewTokenBucket(4, 4.0),
+		AssetIds:     make(map[string]string),
+		LastUpdate:   make(map[string]int64),
+		MuLastUpdate: sync.Mutex{},
+		MuAssets:     sync.Mutex{},
+		MuWs:         sync.Mutex{},
+		Ws:           nil,
+		reconnChan:   make(chan struct{}),
+		apiBucket:    utils.NewTokenBucket(4, 4.0),
+		oracleEndpt:  oracleEndpt,
 	}
 	return &pa
 }
@@ -236,14 +243,33 @@ func (pa *PolyApi) handleEvent(eventJson string, pc *PolyClient) error {
 	if err != nil {
 		return fmt.Errorf("error unmarshalling price change JSON: %v", err)
 	}
+
+	pa.MuLastUpdate.Lock()
+	if int64(priceChange.TimestampMs) < pa.LastUpdate[id] {
+		pa.MuLastUpdate.Unlock()
+		slog.Info("skipping delayed message")
+		return nil
+	}
+	pa.LastUpdate[id] = int64(priceChange.TimestampMs)
+	pa.MuLastUpdate.Unlock()
+
 	fmt.Printf("asset=%s price = %s\n", pa.AssetIds[priceChange.AssetID], priceChange.Price)
-	px, err := RestQueryPrice(pa.apiBucket, priceChange.AssetID)
+	px0, err := RestQueryPrice(pa.apiBucket, priceChange.AssetID)
 	if err != nil {
-		return fmt.Errorf("error querying price: %v", err)
+		return fmt.Errorf("error querying price from polygon: %v", err)
+	}
+	// query price from oracle
+	px1, ema, ts, err := RestQueryOracle(pa.oracleEndpt, priceChange.AssetID)
+	if err != nil {
+		return fmt.Errorf("error querying price from oracle: %v", err)
+	}
+	dev := math.Abs(px1/(1+px0) - 1)
+	if dev > 0.01 {
+		return fmt.Errorf("price deviation between oracle and source too large: %.2f", dev)
 	}
 	if pc != nil {
 		// update redis
-		pc.OnNewPrice(pa.AssetIds[priceChange.AssetID], px, int64(priceChange.TimestampMs))
+		pc.OnNewPrice(pa.AssetIds[priceChange.AssetID], px1, ema, ts*1000)
 	}
 	return nil
 }
@@ -277,6 +303,35 @@ func fetchMktHours(bucket *utils.TokenBucket, conditionIds []string) []utils.Mar
 		mkts = append(mkts, hrs)
 	}
 	return mkts
+}
+
+func RestQueryOracle(endPtUrl, tokenId string) (float64, float64, int64, error) {
+	tokenIdHex, err := utils.Dec2Hex(tokenId)
+	if err != nil {
+		return 0, 0, 0, fmt.Errorf("invalid token id: %v", err)
+	}
+	url := fmt.Sprintf("%s/v2/updates/price/latest?ids[]=%s", endPtUrl, tokenIdHex)
+	resp, err := http.Get(url)
+	if err != nil {
+		return 0, 0, 0, fmt.Errorf("failed to make GET request: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return 0, 0, 0, fmt.Errorf("unexpected status code: %v", resp.StatusCode)
+	}
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return 0, 0, 0, fmt.Errorf("failed to read response body: %v", err)
+	}
+	var p utils.PythStreamData
+	err = json.Unmarshal(body, &p)
+	if err != nil {
+		return 0, 0, 0, fmt.Errorf("failed to read response body: %v", err)
+	}
+	ema := p.Parsed[0].EMAPrice.CalcPrice()
+	idx := p.Parsed[0].Price.CalcPrice()
+	return idx, ema, p.Parsed[0].Price.PublishTime, nil
 }
 
 // restQueryPrice queries the mid-price for the given token id (decimal) from
@@ -316,7 +371,7 @@ func RestQueryHistory(bucket *utils.TokenBucket, tokenId string) ([]utils.PolyHi
 		return nil, err
 	}
 	bucket.WaitForToken(time.Millisecond*250, "get market info")
-	hWeek, err := rawQueryHistory("https://clob.polymarket.com/prices-history?market=" + tokenId + "&interval=1w&fidelity=1")
+	hWeek, err := rawQueryHistory("https://clob.polymarket.com/prices-history?market=" + tokenId + "&interval=1w&fidelity=5")
 	if err != nil {
 		return nil, err
 	}

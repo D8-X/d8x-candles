@@ -105,15 +105,17 @@ func (s *Server) RemoveClient(clientID string) {
 // Process incoming websocket message
 // https://github.com/madeindra/golang-websocket/
 func (s *Server) HandleRequest(conn *ClientConn, config utils.SymbolManager, clientID string, message []byte) {
-	slog.Info("request received")
+
 	var data ClientMessage
 	err := json.Unmarshal(message, &data)
 	if err != nil {
+		slog.Info(fmt.Sprintf("invalid request received: %s", string(message)))
 		// JSON parsing not successful
 		return
 	}
 	reqTopic := strings.TrimSpace(strings.ToUpper(data.Topic))
 	reqType := strings.TrimSpace(strings.ToUpper(data.Type))
+	slog.Info(fmt.Sprintf("request received %s %s", reqTopic, reqType))
 	if reqType == "SUBSCRIBE" {
 		if reqTopic == MARKETS_TOPIC {
 			msg := s.SubscribeMarkets(conn, clientID)
