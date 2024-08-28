@@ -35,7 +35,7 @@ func (p *PolyClient) HistoryToRedis(sym string, obs []utils.PolyHistory) {
 		wg.Add(1)
 		go func(sym string, t int64, val float64) {
 			defer wg.Done()
-			AddPriceObs(p.RedisClient, sym, t, val)
+			AddPriceObs(p.RedisClient, sym, val, t)
 		}(sym, t, val)
 	}
 	// set the symbol as available
@@ -45,10 +45,16 @@ func (p *PolyClient) HistoryToRedis(sym string, obs []utils.PolyHistory) {
 }
 
 // OnNewPrice stores the new price in redis and informs subscribers
-func (p *PolyClient) OnNewPrice(sym string, px float64, tsMs int64) {
-	err := AddPriceObs(p.RedisClient, sym, tsMs, px)
+func (p *PolyClient) OnNewPrice(sym string, px, ema float64, tsMs int64) {
+	err := AddPriceObs(p.RedisClient, sym, px, tsMs)
 	if err != nil {
 		slog.Error(fmt.Sprintf("failed to update price for %s in redis: %v", sym, err))
+		return
+	}
+	err = AddEmaObs(p.RedisClient, sym, ema, tsMs)
+	if err != nil {
+		slog.Error(fmt.Sprintf("failed to update ema for %s in redis: %v", sym, err))
+		return
 	}
 	// publish updates to listeners
 	client := *p.RedisClient.Client
@@ -59,12 +65,23 @@ func (p *PolyClient) OnNewPrice(sym string, px float64, tsMs int64) {
 	}
 }
 
-func AddPriceObs(client *utils.RueidisClient, sym string, timestampMs int64, value float64) error {
+func AddPriceObs(client *utils.RueidisClient, sym string, price float64, timestampMs int64) error {
 	ts := strconv.FormatInt(timestampMs, 10)
 	resp := (*client.Client).Do(client.Ctx,
-		(*client.Client).B().TsAdd().Key(sym).Timestamp(ts).Value(value).Build())
+		(*client.Client).B().TsAdd().Key(sym).Timestamp(ts).Value(price).Build())
 	if resp.Error() != nil {
 		slog.Error("AddPriceObs " + sym + ": " + resp.Error().Error())
+		return resp.Error()
+	}
+	return nil
+}
+
+func AddEmaObs(client *utils.RueidisClient, sym string, ema float64, timestampMs int64) error {
+	// ema
+	emaStr := fmt.Sprintf("%.4f", ema)
+	resp := (*client.Client).Do(client.Ctx, (*client.Client).B().Set().Key(sym+":ema").Value(emaStr).Build())
+	if resp.Error() != nil {
+		slog.Error("AddEmaObs " + sym + ": " + resp.Error().Error())
 		return resp.Error()
 	}
 	return nil

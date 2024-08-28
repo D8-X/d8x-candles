@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"math"
 	"os"
 	"strconv"
 	"strings"
@@ -74,6 +75,17 @@ type PriceData struct {
 	Conf        string `json:"conf"`
 	Expo        int    `json:"expo"`
 	PublishTime int64  `json:"publish_time"`
+}
+
+// calculate floating point price from 'price' and 'expo'
+func (px *PriceData) CalcPrice() float64 {
+	x, err := strconv.Atoi(px.Price)
+	if err != nil {
+		slog.Error("onPriceUpdate error" + err.Error())
+		return 0
+	}
+	pw := px.Expo
+	return float64(x) * math.Pow10(pw)
 }
 
 type Metadata struct {
@@ -274,9 +286,10 @@ type SymbolManager struct {
 }
 
 type ConfigFile struct {
-	PythAPIEndpoint    string   `json:"pythAPIEndpoint"`
-	PythPriceEndpoints []string `json:"priceServiceHTTPSEndpoints"`
-	ObsoleteWS         []string `json:"priceServiceWSEndpoints"`
+	PythAPIEndpoint       string   `json:"pythAPIEndpoint"`
+	PythPriceEndpoints    []string `json:"priceServiceHTTPSEndpoints"`
+	PredMktPriceEndpoints []string `json:"predMktPriceEndpoints"`
+	ObsoleteWS            []string `json:"priceServiceWSEndpoints"`
 }
 
 // New initializes a new SymbolManager

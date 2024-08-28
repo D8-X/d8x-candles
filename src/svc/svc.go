@@ -63,7 +63,13 @@ func StreamPolyMarkets() {
 		fmt.Println("no polymarket found in configuration, quitting")
 		return
 	}
+	c, err := loadConfig()
+	if err != nil {
+		fmt.Println("Error:", err.Error())
+		return
+	}
 	app, err := polyclient.NewPolyClient(
+		c.ConfigFile.PredMktPriceEndpoints[0],
 		viper.GetString(env.REDIS_ADDR),
 		viper.GetString(env.REDIS_PW),
 		config.PriceFeedIds)

@@ -5,6 +5,7 @@ import (
 	"d8x-candles/src/utils"
 	"fmt"
 	"log/slog"
+	"strings"
 	"sync"
 	"time"
 
@@ -38,7 +39,7 @@ func (pc *PolyClient) Run() error {
 	return err
 }
 
-func NewPolyClient(REDIS_ADDR, REDIS_PW string, config []d8xUtils.PriceFeedId) (*PolyClient, error) {
+func NewPolyClient(oracleEndpt, REDIS_ADDR, REDIS_PW string, config []d8xUtils.PriceFeedId) (*PolyClient, error) {
 	client, err := rueidis.NewClient(
 		rueidis.ClientOption{InitAddress: []string{REDIS_ADDR}, Password: REDIS_PW})
 	if err != nil {
@@ -50,15 +51,17 @@ func NewPolyClient(REDIS_ADDR, REDIS_PW string, config []d8xUtils.PriceFeedId) (
 		Ctx:    context.Background(),
 	}
 	// data for polymarket api
-	pc.api = NewPolyApi()
+
+	pc.api = NewPolyApi(oracleEndpt)
 	// available ticker universe
 	pc.priceFeedUniverse = make(map[string]d8xUtils.PriceFeedId, 0)
 	for _, el := range config {
 		if el.Type != utils.POLYMARKET_TYPE {
 			continue
 		}
-		fmt.Printf("adding ticker %s to universe", el.Symbol)
-		pc.priceFeedUniverse[el.Symbol] = el
+		sym := strings.ToUpper(el.Symbol)
+		fmt.Printf("adding ticker %s to universe\n", sym)
+		pc.priceFeedUniverse[sym] = el
 	}
 	pc.activeSyms = make(map[string]bool)
 	pc.muSyms = &sync.RWMutex{}
@@ -82,7 +85,7 @@ func (p *PolyClient) enableTicker(sym string) {
 	}
 	p.muSyms.RUnlock()
 
-	fmt.Printf("enable ticker request %s", sym)
+	fmt.Printf("enable ticker request %s\n", sym)
 	decId, err := utils.Hex2Dec(el.Id)
 	if err != nil {
 		slog.Error(fmt.Sprintf("could not convert hex-id to dec for %s: %v", sym, err))
