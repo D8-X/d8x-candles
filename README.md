@@ -141,8 +141,10 @@ docker run -d --name redis-stack -p 6379:6379 -e REDIS_ARGS="--requirepass yourp
 - adjuste .env as indicated in .envExample comments
 - PythClient
   `go run cmd/pyth-client/main.go`
+- PolyClient
+  `go run cmd/poly-client/main.go`
 - WsCandle
- `go run cmd/pyth-client/main.go`
+ `go run cmd/ws-server/main.go`
 
 ### REDIS
 
