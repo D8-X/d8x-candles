@@ -229,7 +229,7 @@ func (pa *PolyApi) sendSubscribe(assetIds []string) error {
 		slog.Info("ws not ready yet")
 		return nil
 	}
-	fmt.Printf("Sending subscribe message: %s\n", message)
+	fmt.Printf("Polymarkets sending subscribe message: %s\n", message)
 	err = pa.Ws.WriteMessage(websocket.TextMessage, message)
 	if err != nil {
 		return fmt.Errorf("failed to write subscribe message: %w", err)
