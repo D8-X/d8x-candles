@@ -3,6 +3,7 @@ package polyclient
 import (
 	"d8x-candles/src/utils"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -91,8 +92,8 @@ func (pa *PolyApi) ReSubscribe() error {
 	return pa.sendSubscribe(assetIds)
 }
 
-func GetMarketInfo(bucket *utils.TokenBucket, conditionId string) (*utils.PolyMarketInfo, error) {
-	endpt := "https://clob.polymarket.com/markets/" + conditionId
+func GetMarketInfo(bucket *utils.TokenBucket, conditionIdHex string) (*utils.PolyMarketInfo, error) {
+	endpt := "https://clob.polymarket.com/markets/" + conditionIdHex
 	bucket.WaitForToken(time.Millisecond*250, "get market info")
 	resp, err := http.Get(endpt)
 	if err != nil {
@@ -109,13 +110,32 @@ func GetMarketInfo(bucket *utils.TokenBucket, conditionId string) (*utils.PolyMa
 		return nil, fmt.Errorf("failed to read response body: %v", err)
 	}
 
-	var marketInfo utils.PolyMarketInfo
+	type PolyMarketInfoJSON struct {
+		Active          bool              `json:"active"`
+		Closed          bool              `json:"closed"`
+		AcceptingOrders bool              `json:"accepting_orders"`
+		EndDateISO      string            `json:"end_date_iso"`
+		Tokens          []utils.PolyToken `json:"tokens"`
+	}
+	var marketInfo PolyMarketInfoJSON
 	err = json.Unmarshal(body, &marketInfo)
 	if err != nil {
 		return nil, fmt.Errorf("failed to unmarshal JSON: %v", err)
 	}
-
-	return &marketInfo, nil
+	var endDateTs int64
+	endDate, err := time.Parse(time.RFC3339, marketInfo.EndDateISO)
+	if err != nil {
+		slog.Error(fmt.Sprintf("GetMarketInfo: parsing time %s: %v", marketInfo.EndDateISO, err.Error()))
+	}
+	endDateTs = endDate.Unix()
+	marketInfoParsed := utils.PolyMarketInfo{
+		Active:          marketInfo.Active,
+		Closed:          marketInfo.Closed,
+		AcceptingOrders: marketInfo.AcceptingOrders,
+		EndDateISOTs:    endDateTs,
+		Tokens:          marketInfo.Tokens,
+	}
+	return &marketInfoParsed, nil
 }
 
 // RunWs keeps the websocket connection alive.
@@ -220,7 +240,7 @@ func (pa *PolyApi) sendSubscribe(assetIds []string) error {
 // handleEvent parses ws-subscriptions-clob.polymarket events
 func (pa *PolyApi) handleEvent(eventJson string, pc *PolyClient) error {
 	if eventJson == "Invalid command" {
-		return fmt.Errorf(eventJson)
+		return errors.New(eventJson)
 	}
 	// Process price change event
 	var eventMap map[string]interface{}
@@ -272,37 +292,6 @@ func (pa *PolyApi) handleEvent(eventJson string, pc *PolyClient) error {
 		pc.OnNewPrice(pa.AssetIds[priceChange.AssetID], px1, ema, ts*1000)
 	}
 	return nil
-}
-
-func (pa *PolyApi) FetchMktHours(conditionIds []string) []utils.MarketHours {
-	return fetchMktHours(pa.apiBucket, conditionIds)
-}
-
-func fetchMktHours(bucket *utils.TokenBucket, conditionIds []string) []utils.MarketHours {
-	mkts := make([]utils.MarketHours, 0, len(conditionIds))
-	for _, id := range conditionIds {
-		m, err := GetMarketInfo(bucket, id)
-		if err != nil {
-			slog.Info(fmt.Sprintf("FetchMktInfo: id %s: %v", id, err))
-			continue
-		}
-		var endDateTs int64
-		endDate, err := time.Parse(time.RFC3339, m.EndDateISO)
-		if err != nil {
-			slog.Error(fmt.Sprintf("FetchMktInfo: parsing time for condition id %s: %v", id, err))
-		} else {
-			endDateTs = endDate.Unix()
-		}
-		nowTs := time.Now().Unix()
-		isOpen := m.Active && !m.Closed && m.AcceptingOrders && (endDateTs == 0 || endDateTs > nowTs)
-		hrs := utils.MarketHours{
-			IsOpen:    isOpen,
-			NextOpen:  0,
-			NextClose: endDateTs,
-		}
-		mkts = append(mkts, hrs)
-	}
-	return mkts
 }
 
 // RestQueryOracle queries index price and EMA price (mark price=ema+spread) from

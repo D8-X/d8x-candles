@@ -25,7 +25,7 @@ func (p *PolyClient) SubscribeTickerRequest(errChan chan error) {
 }
 
 // HistoryToRedis adds the historical data in obs for the given
-// symmbol sym to redis and sets the ticker as available
+// symbol sym to redis and sets the ticker as available
 func (p *PolyClient) HistoryToRedis(sym string, obs []utils.PolyHistory) {
 	var wg sync.WaitGroup
 	for k := 0; k < len(obs); k++ {

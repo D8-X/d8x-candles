@@ -62,14 +62,24 @@ func TestPolyClient2(t *testing.T) {
 	//	"type": "subscribe",
 	//	"topic": "trump-usd:1M"
 	//}
+
 	config := []d8xUtils.PriceFeedId{
 		{
 			Symbol: "trump-usd",
 			Id:     "0x3011e4ede0f6befa0ad3f571001d3e1ffeef3d4af78c3112aaac90416e3a43e7",
 			Type:   utils.POLYMARKET_TYPE,
-			Origin: "2821742633143463906290569050155826241533067272736897614950488156847949938836455",
+			Origin: "0xdd22472e552920b8438158ea7238bfadfa4f736aa4cee91a6b86c39ead110917",
 		},
 	}
+	/*
+		config := []d8xUtils.PriceFeedId{
+			{
+				Symbol: "mark-usd",
+				Id:     "0x7F8D2BDA628CEE500C6CF3998542F0A80B9DC38090CE0CDD7742A26755819BE9",
+				Type:   utils.POLYMARKET_TYPE,
+				Origin: "0xd83c13f14529750b296d6d2b327cbcadd34c2c3e673f4242c1be94d462a36617",
+			}}
+	*/
 	r0, r1 := loadRedisCredentials()
 	if r0 == "" {
 		slog.Info("REDIS credentials needed in .env file")
