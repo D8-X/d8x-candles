@@ -108,6 +108,11 @@ func (p *PolyClient) enableTicker(sym string) {
 	p.activeSyms[sym] = MARKET_ACTIVE
 	p.muSyms.Unlock()
 	utils.CreateRedisTimeSeries(p.RedisClient, sym)
+
+	// set symbol available
+	c := *p.RedisClient.Client
+	c.Do(context.Background(), c.B().Sadd().Key(utils.AVAIL_TICKER_SET).Member(sym).Build())
+	p.FetchMktInfo([]string{sym})
 	if m.Closed {
 		// market is closed
 		p.setMarketClosed(sym, decId, m)
