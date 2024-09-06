@@ -287,7 +287,7 @@ func (pa *PolyApi) handleEvent(eventJson string, pc *PolyClient) error {
 func (pa *PolyApi) restQueryPrice(tokenIdDec string, pc *PolyClient) (float64, error) {
 	sym := pa.AssetIds[tokenIdDec]
 	id := pc.priceFeedUniverse[sym]
-	if id.StorkSym != "" {
+	if pc.stork != nil && id.StorkSym != "" {
 		// query price from stork API
 		slog.Info("query stork for " + sym + "/" + id.StorkSym)
 		return pc.stork.RestFetchStorkPrice(id.StorkSym)

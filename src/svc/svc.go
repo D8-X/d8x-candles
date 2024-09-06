@@ -46,8 +46,6 @@ func RunCandleCharts() {
 func StreamPolyMarkets() {
 	err := loadEnv([]string{
 		env.CONFIG_PATH,
-		env.STORK_CREDENTIALS,
-		env.STORK_ENDPOINT,
 	})
 	if err != nil {
 		fmt.Println("Error:", err.Error())

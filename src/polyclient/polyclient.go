@@ -59,7 +59,9 @@ func NewPolyClient(oracleEndpt, REDIS_ADDR, REDIS_PW, storkEndpoint, storkCreden
 		Client: &client,
 		Ctx:    context.Background(),
 	}
-	pc.stork = stork.NewStork(storkEndpoint, storkCredentials)
+	if storkEndpoint != "" && storkCredentials != "" {
+		pc.stork = stork.NewStork(storkEndpoint, storkCredentials)
+	}
 	// data for polymarket api
 	pc.api = NewPolyApi(oracleEndpt)
 	// available ticker universe
