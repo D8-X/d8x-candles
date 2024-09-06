@@ -22,7 +22,9 @@ func init() {
 }
 
 func RunCandleCharts() {
-	err := loadEnv()
+	err := loadEnv([]string{
+		env.CONFIG_PATH,
+	})
 	if err != nil {
 		fmt.Println("Error:", err.Error())
 		return
@@ -42,7 +44,11 @@ func RunCandleCharts() {
 }
 
 func StreamPolyMarkets() {
-	err := loadEnv()
+	err := loadEnv([]string{
+		env.CONFIG_PATH,
+		env.STORK_CREDENTIALS,
+		env.STORK_ENDPOINT,
+	})
 	if err != nil {
 		fmt.Println("Error:", err.Error())
 		return
@@ -72,6 +78,8 @@ func StreamPolyMarkets() {
 		c.ConfigFile.PredMktPriceEndpoints[0],
 		viper.GetString(env.REDIS_ADDR),
 		viper.GetString(env.REDIS_PW),
+		viper.GetString(env.STORK_ENDPOINT),
+		viper.GetString(env.STORK_CREDENTIALS),
 		config.PriceFeedIds)
 
 	if err != nil {
@@ -86,7 +94,9 @@ func StreamPolyMarkets() {
 }
 
 func StreamPyth() {
-	err := loadEnv()
+	err := loadEnv([]string{
+		env.CONFIG_PATH,
+	})
 	if err != nil {
 		fmt.Println("Error:", err.Error())
 		return
@@ -113,7 +123,7 @@ func loadConfig() (utils.SymbolManager, error) {
 	return c, nil
 }
 
-func loadEnv() error {
+func loadEnv(requiredEnvs []string) error {
 	viper.SetConfigFile(".env")
 	if err := viper.ReadInConfig(); err != nil {
 		slog.Error("could not load .env file" + err.Error())
@@ -125,10 +135,6 @@ func loadEnv() error {
 	viper.SetDefault(env.REDIS_ADDR, "localhost:6379")
 	viper.SetDefault(env.WS_ADDR, "localhost:8080")
 	viper.SetDefault(env.REDIS_DB_NUM, 0)
-	requiredEnvs := []string{
-		env.CONFIG_PATH,
-	}
-
 	for _, e := range requiredEnvs {
 		if !viper.IsSet(e) {
 			return errors.New("required environment variable not set" + e)

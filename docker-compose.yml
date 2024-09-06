@@ -8,6 +8,8 @@ services:
     environment:
       - REDIS_PW=${REDIS_PW}
       - REDIS_ADDR=${REDIS_ADDR}
+      - STORK_CREDENTIALS=${STORK_CREDENTIALS}
+      - STORK_ENDPOINT=${STORK_ENDPOINT}
     depends_on:
       - redis-timeseries
     networks:

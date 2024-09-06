@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
-	"math"
 	"net/http"
 	"sync"
 	"time"
@@ -274,24 +273,28 @@ func (pa *PolyApi) handleEvent(eventJson string, pc *PolyClient) error {
 	pa.MuLastUpdate.Unlock()
 
 	fmt.Printf("asset=%s price = %s\n", pa.AssetIds[priceChange.AssetID], priceChange.Price)
-	px0, err := RestQueryPrice(pa.apiBucket, priceChange.AssetID)
+	px0, err := pa.restQueryPrice(priceChange.AssetID, pc)
 	if err != nil {
-		return fmt.Errorf("error querying price from polygon: %v", err)
-	}
-	// query price from oracle
-	px1, ema, ts, err := RestQueryOracle(pa.oracleEndpt, priceChange.AssetID)
-	if err != nil {
-		return fmt.Errorf("error querying price from oracle: %v", err)
-	}
-	dev := math.Abs(px1/px0 - 1)
-	if dev > 0.01 {
-		return fmt.Errorf("price deviation between oracle and source too large: %.2f", dev)
+		return fmt.Errorf("error querying price: %v", err)
 	}
 	if pc != nil {
 		// update redis
-		pc.OnNewPrice(pa.AssetIds[priceChange.AssetID], px1, ema, ts*1000)
+		pc.OnNewPrice(pa.AssetIds[priceChange.AssetID], px0, int64(priceChange.TimestampMs))
 	}
 	return nil
+}
+
+func (pa *PolyApi) restQueryPrice(tokenIdDec string, pc *PolyClient) (float64, error) {
+	sym := pa.AssetIds[tokenIdDec]
+	id := pc.priceFeedUniverse[sym]
+	if id.StorkSym != "" {
+		// query price from stork API
+		slog.Info("query stork for " + sym + "/" + id.StorkSym)
+		return pc.stork.RestFetchStorkPrice(id.StorkSym)
+	}
+	slog.Info("query polymarket api for " + sym + "/" + tokenIdDec)
+	// query price from polymarket api
+	return RestQueryPrice(pa.apiBucket, tokenIdDec)
 }
 
 // RestQueryOracle queries index price and EMA price (mark price=ema+spread) from
@@ -325,7 +328,7 @@ func RestQueryOracle(endPtUrl, tokenId string) (float64, float64, int64, error) 
 	return idx - 1, ema - 1, p.Parsed[0].Price.PublishTime, nil
 }
 
-// restQueryPrice queries the mid-price for the given token id (decimal) from
+// RestQueryPrice queries the mid-price for the given token id (decimal) from
 // polymarket rest API
 func RestQueryPrice(bucket *utils.TokenBucket, tokenId string) (float64, error) {
 	url := "https://clob.polymarket.com/midpoint?token_id=" + tokenId

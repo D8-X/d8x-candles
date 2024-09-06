@@ -10,3 +10,6 @@ REDIS_DB_NUM=0
 #WS_ADDR="127.0.0.1:8080"
 
 CONFIG_PATH="./config/prices.config.json"
+
+STORK_CREDENTIALS="user:pw"
+STORK_ENDPOINT="https://url.stork-oracle.network/"

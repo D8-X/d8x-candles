@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	stork "github.com/D8-X/d8x-futures-go-sdk/pkg/stork"
 	d8xUtils "github.com/D8-X/d8x-futures-go-sdk/utils"
 	"github.com/redis/rueidis"
 )
@@ -19,6 +20,7 @@ type PolyClient struct {
 	priceFeedUniverse map[string]d8xUtils.PriceFeedId
 	activeSyms        map[string]ActiveState
 	muSyms            *sync.RWMutex
+	stork             *stork.Stork
 }
 
 type ActiveState uint8
@@ -46,7 +48,7 @@ func (pc *PolyClient) Run() error {
 	return err
 }
 
-func NewPolyClient(oracleEndpt, REDIS_ADDR, REDIS_PW string, config []d8xUtils.PriceFeedId) (*PolyClient, error) {
+func NewPolyClient(oracleEndpt, REDIS_ADDR, REDIS_PW, storkEndpoint, storkCredentials string, config []d8xUtils.PriceFeedId) (*PolyClient, error) {
 	client, err := rueidis.NewClient(
 		rueidis.ClientOption{InitAddress: []string{REDIS_ADDR}, Password: REDIS_PW})
 	if err != nil {
@@ -57,8 +59,8 @@ func NewPolyClient(oracleEndpt, REDIS_ADDR, REDIS_PW string, config []d8xUtils.P
 		Client: &client,
 		Ctx:    context.Background(),
 	}
+	pc.stork = stork.NewStork(storkEndpoint, storkCredentials)
 	// data for polymarket api
-
 	pc.api = NewPolyApi(oracleEndpt)
 	// available ticker universe
 	pc.priceFeedUniverse = make(map[string]d8xUtils.PriceFeedId, 0)
@@ -146,7 +148,7 @@ func (p *PolyClient) setMarketClosed(sym string, decId string, m *utils.PolyMark
 		slog.Error(fmt.Sprintf("price info not found in closed market info %s", sym))
 		return
 	}
-	p.OnNewPrice(sym, price, price, m.EndDateISOTs)
+	p.OnNewPrice(sym, price, m.EndDateISOTs)
 }
 
 // Runs FetchMktHours and schedules next runs

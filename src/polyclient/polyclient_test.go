@@ -18,6 +18,14 @@ func loadRedisCredentials() (string, string) {
 	return viper.GetString("REDIS_ADDR"), viper.GetString("REDIS_PW")
 }
 
+func loadStorkCredentials() (string, string) {
+	viper.SetConfigFile("../../.env")
+	if err := viper.ReadInConfig(); err != nil {
+		slog.Error("could not load .env file" + err.Error())
+	}
+	return viper.GetString("STORK_CREDENTIALS"), viper.GetString("STORK_ENDPOINT")
+}
+
 func TestPolyClient(t *testing.T) {
 	// run this test and as a separate instance
 	// go run cmd/ws-server/main.go
@@ -36,12 +44,13 @@ func TestPolyClient(t *testing.T) {
 			Origin: "0xdd22472e552920b8438158ea7238bfadfa4f736aa4cee91a6b86c39ead110917",
 		},
 	}
+	s0, s1 := loadStorkCredentials()
 	r0, r1 := loadRedisCredentials()
 	if r0 == "" {
 		slog.Info("REDIS credentials needed in .env file")
 		t.FailNow()
 	}
-	app, err := NewPolyClient("https://odin-poly.d8x.xyz", r0, r1, config)
+	app, err := NewPolyClient("https://odin-poly.d8x.xyz", r0, r1, s0, s1, config)
 	if err != nil {
 		fmt.Println("error:", err.Error())
 		t.FailNow()
@@ -85,7 +94,8 @@ func TestPolyClient2(t *testing.T) {
 		slog.Info("REDIS credentials needed in .env file")
 		t.FailNow()
 	}
-	app, err := NewPolyClient("https://odin-poly.d8x.xyz", r0, r1, config)
+	s0, s1 := loadStorkCredentials()
+	app, err := NewPolyClient("https://odin-poly.d8x.xyz", r0, r1, s0, s1, config)
 	if err != nil {
 		fmt.Println("error:", err.Error())
 		t.FailNow()
@@ -111,7 +121,8 @@ func TestMktInfoUpdate(t *testing.T) {
 		slog.Info("REDIS credentials needed in .env file")
 		t.FailNow()
 	}
-	app, err := NewPolyClient("https://odin-poly.d8x.xyz", r0, r1, config)
+	s0, s1 := loadStorkCredentials()
+	app, err := NewPolyClient("https://odin-poly.d8x.xyz", r0, r1, s0, s1, config)
 	if err != nil {
 		fmt.Println("error:", err.Error())
 		t.FailNow()

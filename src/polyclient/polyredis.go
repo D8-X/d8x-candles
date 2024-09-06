@@ -45,17 +45,13 @@ func (p *PolyClient) HistoryToRedis(sym string, obs []utils.PolyHistory) {
 }
 
 // OnNewPrice stores the new price in redis and informs subscribers
-func (p *PolyClient) OnNewPrice(sym string, px, ema float64, tsMs int64) {
+func (p *PolyClient) OnNewPrice(sym string, px float64, tsMs int64) {
 	err := AddPriceObs(p.RedisClient, sym, px, tsMs)
 	if err != nil {
 		slog.Error(fmt.Sprintf("failed to update price for %s in redis: %v", sym, err))
 		return
 	}
-	err = AddEmaObs(p.RedisClient, sym, ema, tsMs)
-	if err != nil {
-		slog.Error(fmt.Sprintf("failed to update ema for %s in redis: %v", sym, err))
-		return
-	}
+
 	// publish updates to listeners
 	client := *p.RedisClient.Client
 	err = client.Do(context.Background(),
@@ -71,17 +67,6 @@ func AddPriceObs(client *utils.RueidisClient, sym string, price float64, timesta
 		(*client.Client).B().TsAdd().Key(sym).Timestamp(ts).Value(price).Build())
 	if resp.Error() != nil {
 		slog.Error("AddPriceObs " + sym + ": " + resp.Error().Error())
-		return resp.Error()
-	}
-	return nil
-}
-
-func AddEmaObs(client *utils.RueidisClient, sym string, ema float64, timestampMs int64) error {
-	// ema
-	emaStr := fmt.Sprintf("%.4f", ema)
-	resp := (*client.Client).Do(client.Ctx, (*client.Client).B().Set().Key(sym+":ema").Value(emaStr).Build())
-	if resp.Error() != nil {
-		slog.Error("AddEmaObs " + sym + ": " + resp.Error().Error())
 		return resp.Error()
 	}
 	return nil
