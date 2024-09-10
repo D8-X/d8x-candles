@@ -35,6 +35,8 @@ func (pc *PolyClient) Run() error {
 		slog.Info("no polymarket tickers in universe")
 		return nil
 	}
+	// clean availability
+	pc.cleanPolyTickerAvailability()
 	// open websocket connection
 	stopCh := make(chan struct{})
 	go pc.api.RunWs(stopCh, pc)
@@ -46,6 +48,21 @@ func (pc *PolyClient) Run() error {
 	go pc.SubscribeTickerRequest(errChan)
 	err := <-errChan
 	return err
+}
+
+// cleanPythTickerAvailability removes all pyth tickers
+// from the set of available tickers
+func (p *PolyClient) cleanPolyTickerAvailability() {
+
+	// clean ticker availability
+	cl := *p.RedisClient.Client
+	for _, ids := range p.priceFeedUniverse {
+		if ids.Type != utils.POLYMARKET_TYPE {
+			continue
+		}
+		fmt.Printf("deleting availability for %s\n", ids.Symbol)
+		cl.Do(context.Background(), cl.B().Srem().Key(utils.AVAIL_TICKER_SET).Member(ids.Symbol).Build())
+	}
 }
 
 func NewPolyClient(oracleEndpt, REDIS_ADDR, REDIS_PW, storkEndpoint, storkCredentials string, config []d8xUtils.PriceFeedId) (*PolyClient, error) {
