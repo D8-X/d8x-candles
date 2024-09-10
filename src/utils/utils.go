@@ -77,9 +77,16 @@ func GetMarketInfo(ctx context.Context, client *rueidis.Client, ticker string) (
 	// next close ts (can be outdated as long as not outdated for more than
 	// closing period)
 	now := time.Now().UTC().Unix()
-	isClosed := nxtClose != 0 &&
-		((!isOpen && now < nxtOpen) ||
-			(isOpen && now > nxtClose))
+	var isClosed bool
+	if hm["asset_type"] == "polymarket" {
+		// we cannot rely on nxtOpen and nxtClose
+		isClosed = !isOpen
+	} else {
+		isClosed = nxtClose != 0 &&
+			((!isOpen && now < nxtOpen) ||
+				(isOpen && now > nxtClose))
+	}
+
 	var mh = MarketHours{
 		IsOpen:    !isClosed,
 		NextOpen:  nxtOpen,

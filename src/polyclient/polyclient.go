@@ -40,7 +40,7 @@ func (pc *PolyClient) Run() error {
 	go pc.api.RunWs(stopCh, pc)
 
 	// schedule market info updates
-	go pc.ScheduleMktInfoUpdate(15 * time.Minute)
+	go pc.ScheduleMktInfoUpdate(5 * time.Minute)
 
 	errChan := make(chan error)
 	go pc.SubscribeTickerRequest(errChan)
@@ -157,17 +157,16 @@ func (p *PolyClient) setMarketClosed(sym string, decId string, m *utils.PolyMark
 func (p *PolyClient) ScheduleMktInfoUpdate(updtInterval time.Duration) {
 	tickerUpdate := time.NewTicker(updtInterval)
 	for {
-		<-tickerUpdate.C
-
 		slog.Info("Updating polymarket info...")
-		p.muSyms.RLock()
-		syms := make([]string, 0, len(p.activeSyms))
-		for s := range p.activeSyms {
-			syms = append(syms, s)
+		// get entire universe
+		syms := make([]string, 0, len(p.priceFeedUniverse))
+		for _, p := range p.priceFeedUniverse {
+			syms = append(syms, p.Symbol)
 		}
-		p.muSyms.RUnlock()
 		p.FetchMktInfo(syms)
-		fmt.Println("Polymarket info updated.")
+		fmt.Printf("Polymarket info updated for %d symbols.\n", len(syms))
+		// wait for next time "tick"
+		<-tickerUpdate.C
 	}
 }
 
@@ -196,8 +195,7 @@ func (p *PolyClient) FetchMktInfo(syms []string) {
 			}
 			p.setMarketClosed(sym, decId, m)
 		}
-		nowTs := time.Now().Unix()
-		isOpen := m.Active && !m.Closed && m.AcceptingOrders && (m.EndDateISOTs == 0 || m.EndDateISOTs > nowTs)
+		isOpen := m.Active && !m.Closed && m.AcceptingOrders
 		hrs := utils.MarketHours{
 			IsOpen:    isOpen,
 			NextOpen:  0,
