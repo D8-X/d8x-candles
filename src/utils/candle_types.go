@@ -340,7 +340,7 @@ func (c *SymbolManager) extractPythIdToSymbolMap() error {
 	}
 	c.PriceFeedIds = make([]utils.PriceFeedId, 0, len(config.PriceFeedIds))
 	for k, el := range config.PriceFeedIds {
-		if el.Type != "pyth" {
+		if el.Type != PYTH_TYPE {
 			continue
 		}
 		s := strings.ToUpper(el.Symbol)

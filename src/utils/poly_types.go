@@ -7,6 +7,7 @@ import (
 
 const (
 	POLYMARKET_TYPE = "polymarket"
+	PYTH_TYPE       = "pyth"
 )
 
 type SymbolPoly struct {
