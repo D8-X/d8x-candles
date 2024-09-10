@@ -335,6 +335,10 @@ func (s *Server) candleResponse(sym string, p utils.CandlePeriod) []byte {
 	slog.Info("Subscription for symbol " + sym + " Period " + fmt.Sprint(p.TimeMs/60000) + "m")
 	data := GetInitialCandles(s.RedisTSClient, sym, p)
 	topic := sym + ":" + p.Name
+	if data == nil {
+		// return empty array [] instead of null
+		data = []pythclient.OhlcData{}
+	}
 	res := ServerResponse{Type: "subscribe", Topic: strings.ToLower(topic), Data: data}
 	jsonData, err := json.Marshal(res)
 	if err != nil {
