@@ -8,7 +8,8 @@ import (
 )
 
 func TestGetMarketInfo(t *testing.T) {
-	id := "0xdd22472e552920b8438158ea7238bfadfa4f736aa4cee91a6b86c39ead110917"
+	//id := "0xdd22472e552920b8438158ea7238bfadfa4f736aa4cee91a6b86c39ead110917"
+	id := "0x3157ea263270be44bd68a3d6bde1f6f639be2746974f65de24e00ea6378d7838" //btlj origin
 	bucket := utils.NewTokenBucket(4, 4.0)
 	m, err := GetMarketInfo(bucket, id)
 	if err != nil {
