@@ -95,7 +95,7 @@ func (p *PythClientApp) cleanPythTickerAvailability() {
 		if ids.Type != utils.PYTH_TYPE {
 			continue
 		}
-		fmt.Printf("deleting availability for %s", ids.Symbol)
+		fmt.Printf("deleting availability for %s\n", ids.Symbol)
 		cl.Do(context.Background(), cl.B().Srem().Key(utils.AVAIL_TICKER_SET).Member(ids.Symbol).Build())
 	}
 }
