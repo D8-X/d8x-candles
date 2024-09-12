@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"math"
 	"math/rand"
 	"net/http"
 	"strconv"
@@ -339,7 +338,7 @@ func (p *PythClientApp) OnPriceUpdate(pxData utils.PriceData, id string) {
 	if sym == "" {
 		return
 	}
-	px := CalcPrice(pxData)
+	px := pxData.CalcPrice()
 	// no check whether price is identical, because we want the candles to potentially match open/close
 	p.StreamMngr.lastPxRWMu.Lock()
 	p.StreamMngr.lastPx[sym] = px
@@ -426,16 +425,4 @@ func (p *PythClientApp) IsTriangulatedMarketClosed(tsym string, symbols []string
 		}
 	}
 	return false
-}
-
-// calculate floating point price from 'price' and 'expo'
-func CalcPrice(pxResp utils.PriceData) float64 {
-	x, err := strconv.Atoi(pxResp.Price)
-	if err != nil {
-		slog.Error("onPriceUpdate error" + err.Error())
-		return 0
-	}
-	pw := float64(pxResp.Expo)
-	px := float64(x) * math.Pow(10, pw)
-	return px
 }

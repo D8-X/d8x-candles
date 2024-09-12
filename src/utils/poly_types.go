@@ -7,6 +7,7 @@ import (
 
 const (
 	POLYMARKET_TYPE = "polymarket"
+	PYTH_TYPE       = "pyth"
 )
 
 type SymbolPoly struct {
@@ -20,7 +21,7 @@ type PolyMarketInfo struct {
 	Active          bool        `json:"active"`
 	Closed          bool        `json:"closed"`
 	AcceptingOrders bool        `json:"accepting_orders"`
-	EndDateISO      string      `json:"end_date_iso"`
+	EndDateISOTs    int64       `json:"end_date_iso_ts"`
 	Tokens          []PolyToken `json:"tokens"`
 }
 

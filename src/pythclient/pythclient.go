@@ -61,10 +61,7 @@ func Run(symMngr *utils.SymbolManager, REDIS_ADDR string, REDIS_PW string) error
 			SymToTriangPath:      make(map[string]d8x_futures.Triangulation),
 		},
 	}
-	// clean ticker availability
-	cl := *redisTSClient.Client
-	cl.Do(context.Background(), cl.B().Del().Key(utils.AVAIL_TICKER_SET).Build())
-
+	ph.cleanPythTickerAvailability()
 	go ph.ScheduleMktInfoUpdate(15 * time.Minute)
 	go ph.ScheduleCompaction(20 * time.Minute)
 
@@ -84,4 +81,21 @@ func Run(symMngr *utils.SymbolManager, REDIS_ADDR string, REDIS_PW string) error
 		}
 		return nil
 	*/
+}
+
+// cleanPythTickerAvailability removes all pyth tickers
+// from the set of available tickers
+func (p *PythClientApp) cleanPythTickerAvailability() {
+	p.SymbolMngr.SymConstructionMutx.Lock()
+	defer p.SymbolMngr.SymConstructionMutx.Unlock()
+	// clean ticker availability
+	cl := *p.RedisClient.Client
+	config := p.SymbolMngr.PriceFeedIds
+	for _, ids := range config {
+		if ids.Type != utils.PYTH_TYPE {
+			continue
+		}
+		fmt.Printf("deleting availability for %s\n", ids.Symbol)
+		cl.Do(context.Background(), cl.B().Srem().Key(utils.AVAIL_TICKER_SET).Member(ids.Symbol).Build())
+	}
 }

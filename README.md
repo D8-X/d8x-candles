@@ -1,11 +1,18 @@
 # d8x-candles
-Second Evolution of Candle Stick Charts and index price service
+Candle Stick Charts and index price service
 
+## Prediction Markets
+- Listens to polymarket websocket
+- On price change queries the mid-price from stork (if credentials defined in .env), or else from polymarket API
+
+## Regular Markets
+- Streams Pyth prices (http)
 
 ## Install
 - clone the repository
 - install docker, you can run `./host-setup.sh` to do so
 - copy .envExample to .env and change the value for REDIS_PW. Special characters in this password need to be escaped (e.g., $ needs to be written as \$)
+- specify stork credentials in .env, otherwise set to ""
 - setup nginx/certbot to point to this machine
 - run docker-compose `docker compose up --build -d`. Per default config, the websocket is available at port 8080/ws
 
@@ -141,8 +148,10 @@ docker run -d --name redis-stack -p 6379:6379 -e REDIS_ARGS="--requirepass yourp
 - adjuste .env as indicated in .envExample comments
 - PythClient
   `go run cmd/pyth-client/main.go`
+- PolyClient
+  `go run cmd/poly-client/main.go`
 - WsCandle
- `go run cmd/pyth-client/main.go`
+ `go run cmd/ws-server/main.go`
 
 ### REDIS
 

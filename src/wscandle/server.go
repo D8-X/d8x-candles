@@ -105,15 +105,17 @@ func (s *Server) RemoveClient(clientID string) {
 // Process incoming websocket message
 // https://github.com/madeindra/golang-websocket/
 func (s *Server) HandleRequest(conn *ClientConn, config utils.SymbolManager, clientID string, message []byte) {
-	slog.Info("request received")
+
 	var data ClientMessage
 	err := json.Unmarshal(message, &data)
 	if err != nil {
+		slog.Info(fmt.Sprintf("invalid request received: %s", string(message)))
 		// JSON parsing not successful
 		return
 	}
 	reqTopic := strings.TrimSpace(strings.ToUpper(data.Topic))
 	reqType := strings.TrimSpace(strings.ToUpper(data.Type))
+	slog.Info(fmt.Sprintf("request received %s %s", reqTopic, reqType))
 	if reqType == "SUBSCRIBE" {
 		if reqTopic == MARKETS_TOPIC {
 			msg := s.SubscribeMarkets(conn, clientID)
@@ -241,9 +243,14 @@ func (s *Server) updtMarketForSym(sym string, anchorTime24hMs int64) error {
 	if err != nil || len(px24) == 0 || px24[0].Value == 0 {
 		px24 = nil
 	} else {
-		ret = px.Value/px24[0].Value - 1
-		scale := float64(px.Timestamp-px24[0].Timestamp) / float64(d)
-		ret = ret * scale
+		if m.AssetType == utils.POLYMARKET_TYPE {
+			// absolute change for betting markets
+			ret = px.Value - px24[0].Value
+		} else {
+			ret = px.Value/px24[0].Value - 1
+			scale := float64(px.Timestamp-px24[0].Timestamp) / float64(d)
+			ret = ret * scale
+		}
 	}
 
 	var mr = MarketResponse{
@@ -328,6 +335,10 @@ func (s *Server) candleResponse(sym string, p utils.CandlePeriod) []byte {
 	slog.Info("Subscription for symbol " + sym + " Period " + fmt.Sprint(p.TimeMs/60000) + "m")
 	data := GetInitialCandles(s.RedisTSClient, sym, p)
 	topic := sym + ":" + p.Name
+	if data == nil {
+		// return empty array [] instead of null
+		data = []pythclient.OhlcData{}
+	}
 	res := ServerResponse{Type: "subscribe", Topic: strings.ToLower(topic), Data: data}
 	jsonData, err := json.Marshal(res)
 	if err != nil {
