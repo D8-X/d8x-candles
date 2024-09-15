@@ -35,8 +35,7 @@ func (pc *PolyClient) Run() error {
 		slog.Info("no polymarket tickers in universe")
 		return nil
 	}
-	// clean availability
-	pc.cleanPolyTickerAvailability()
+
 	// open websocket connection
 	stopCh := make(chan struct{})
 	go pc.api.RunWs(stopCh, pc)
@@ -60,7 +59,7 @@ func (p *PolyClient) cleanPolyTickerAvailability() {
 		if ids.Type != utils.POLYMARKET_TYPE {
 			continue
 		}
-		fmt.Printf("deleting availability for %s\n", ids.Symbol)
+		fmt.Printf("deleting availability in REDIS for %s\n", ids.Symbol)
 		cl.Do(context.Background(), cl.B().Srem().Key(utils.AVAIL_TICKER_SET).Member(ids.Symbol).Build())
 	}
 }
@@ -82,6 +81,8 @@ func NewPolyClient(oracleEndpt, REDIS_ADDR, REDIS_PW, storkEndpoint, storkCreden
 	// data for polymarket api
 	pc.api = NewPolyApi(oracleEndpt)
 	// available ticker universe
+
+	// now add
 	pc.priceFeedUniverse = make(map[string]d8xUtils.PriceFeedId, 0)
 	for _, el := range config {
 		if el.Type != utils.POLYMARKET_TYPE {
@@ -91,6 +92,9 @@ func NewPolyClient(oracleEndpt, REDIS_ADDR, REDIS_PW, storkEndpoint, storkCreden
 		fmt.Printf("adding ticker %s to universe\n", sym)
 		pc.priceFeedUniverse[sym] = el
 	}
+	// clean availability
+	pc.cleanPolyTickerAvailability()
+
 	pc.activeSyms = make(map[string]ActiveState)
 	pc.muSyms = &sync.RWMutex{}
 	return &pc, nil

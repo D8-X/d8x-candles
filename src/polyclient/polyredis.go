@@ -40,6 +40,7 @@ func (p *PolyClient) HistoryToRedis(sym string, obs []utils.PolyHistory) {
 	}
 	// set the symbol as available
 	c := *p.RedisClient.Client
+	fmt.Printf("make %s available in REDIS\n", sym)
 	c.Do(context.Background(), c.B().Sadd().Key(utils.AVAIL_TICKER_SET).Member(sym).Build())
 	wg.Wait()
 }

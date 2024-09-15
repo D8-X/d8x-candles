@@ -53,16 +53,16 @@ func (p *PythClientApp) SubscribeTickerRequest(errChan chan error) {
 }
 
 // enableTicker makes triangulation and/or base ticker available
-func (ph *PythClientApp) enableTicker(sym string) {
-	ph.StreamMngr.asymRWMu.RLock()
-	_, exists := ph.StreamMngr.activeSyms[sym]
-	ph.StreamMngr.asymRWMu.RUnlock()
+func (p *PythClientApp) enableTicker(sym string) {
+	p.StreamMngr.asymRWMu.RLock()
+	_, exists := p.StreamMngr.activeSyms[sym]
+	p.StreamMngr.asymRWMu.RUnlock()
 	if exists {
 		slog.Info(fmt.Sprintf("ticker %s requested already exists", sym))
 		return
 	}
-	slog.Info("Enabling ticker: " + sym)
-	ph.EnableTriangulation(sym)
+	slog.Info("Attempt to enable ticker: " + sym)
+	p.EnableTriangulation(sym)
 }
 
 // EnableTriangulation constructs candles from existing candles
