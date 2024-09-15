@@ -26,14 +26,27 @@ type SubscribeRequest struct {
 
 // symMap maps pyth ids to internal symbol (btc-usd)
 func Run(symMngr *utils.SymbolManager, REDIS_ADDR string, REDIS_PW string) error {
-
 	fmt.Print("REDIS ADDR = ", REDIS_ADDR)
 	fmt.Print("REDIS_PW=", REDIS_PW)
+	ph, err := NewPythClientApp(symMngr, REDIS_ADDR, REDIS_PW)
+	if err != nil {
+		return err
+	}
+	go ph.ScheduleMktInfoUpdate(15 * time.Minute)
+	go ph.ScheduleCompaction(20 * time.Minute)
+
+	errChan := make(chan error)
+	go ph.SubscribeTickerRequest(errChan)
+	err = <-errChan
+	return err
+}
+
+func NewPythClientApp(symMngr *utils.SymbolManager, REDIS_ADDR string, REDIS_PW string) (*PythClientApp, error) {
 
 	client, err := rueidis.NewClient(
 		rueidis.ClientOption{InitAddress: []string{REDIS_ADDR}, Password: REDIS_PW})
 	if err != nil {
-		return fmt.Errorf("redis connection %s", err.Error())
+		return nil, fmt.Errorf("redis connection %s", err.Error())
 	}
 	redisTSClient := &utils.RueidisClient{
 		Client: &client,
@@ -43,7 +56,7 @@ func Run(symMngr *utils.SymbolManager, REDIS_ADDR string, REDIS_PW string) error
 	capacity := 30
 	refillRate := 9.0
 	tb := utils.NewTokenBucket(capacity, refillRate)
-	ph := PythClientApp{
+	pca := PythClientApp{
 		BaseUrl:     symMngr.ConfigFile.PythAPIEndpoint,
 		RedisClient: redisTSClient,
 		TokenBucket: tb,
@@ -61,31 +74,13 @@ func Run(symMngr *utils.SymbolManager, REDIS_ADDR string, REDIS_PW string) error
 			SymToTriangPath:      make(map[string]d8x_futures.Triangulation),
 		},
 	}
-	ph.cleanPythTickerAvailability()
-	go ph.ScheduleMktInfoUpdate(15 * time.Minute)
-	go ph.ScheduleCompaction(20 * time.Minute)
-
-	errChan := make(chan error)
-	go ph.SubscribeTickerRequest(errChan)
-	err = <-errChan
-	return err
-	/*
-		slog.Info("Building price history...")
-		ph.BuildHistory()
-		go ph.ScheduleMktInfoUpdate(15 * time.Minute)
-		go ph.ScheduleCompaction(15 * time.Minute)
-
-		err = ph.streamHttp(symMngr.ConfigFile.PythPriceEndpoints, symMap)
-		if err != nil {
-			return err
-		}
-		return nil
-	*/
+	pca.clearPythTickerAvailability()
+	return &pca, nil
 }
 
-// cleanPythTickerAvailability removes all pyth tickers
-// from the set of available tickers
-func (p *PythClientApp) cleanPythTickerAvailability() {
+// clearPythTickerAvailability removes all pyth tickers
+// from available tickers in REDIS
+func (p *PythClientApp) clearPythTickerAvailability() {
 	p.SymbolMngr.SymConstructionMutx.Lock()
 	defer p.SymbolMngr.SymConstructionMutx.Unlock()
 	// clean ticker availability
