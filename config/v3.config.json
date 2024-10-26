@@ -1,0 +1,20 @@
+{
+    "indices" : [
+        {"symbol":"DIRAC-HONEY", "triang": ["/", "HONEY-DIRAC"]},
+        {"symbol":"BUDS-HONEY", "triang": ["/", "WBERA-BUDS", "/", "HONEY-WBERA"]}
+    ],
+    "pools" : [
+        {
+            "symbol": "HONEY-WBERA",
+            "addr": "0x8a960a6e5f224d0a88bad10463bdad161b68c144"
+        },
+        {
+            "symbol": "WBERA-BUDS",
+            "addr": "0x7912705080a8aa819e97eda946d5cdf2702faa47"
+        },
+        {
+            "symbol": "HONEY-DIRAC",
+            "addr": "0xea2e981f185e6a4b53eb1b72792cf02e2ebcbdcb"
+        }
+    ]
+}
