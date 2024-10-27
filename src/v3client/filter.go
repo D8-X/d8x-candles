@@ -18,7 +18,7 @@ import (
 	"golang.org/x/exp/slog"
 )
 
-const LOOKBACK_SEC = 86400 // now-LOOKBACK_SEC is when we start gathering history
+const LOOKBACK_SEC = 86400 * 5 // now-LOOKBACK_SEC is when we start gathering history
 
 func (v3 *V3Client) Filter() error {
 
