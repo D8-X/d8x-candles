@@ -227,6 +227,6 @@ func (p *PolyClient) FetchMktInfo(syms []string) {
 			NextOpen:  0,
 			NextClose: m.EndDateISOTs,
 		}
-		utils.SetMarketHours(p.RedisClient, sym, hrs, utils.POLYMARKET_TYPE)
+		utils.SetMarketHours(p.RedisClient.Client, sym, hrs, utils.POLYMARKET_TYPE)
 	}
 }

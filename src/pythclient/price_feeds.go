@@ -158,7 +158,7 @@ func (p *PythClientApp) QueryPriceFeedInfo(sym string, id string) {
 
 func (p *PythClientApp) setMarketHours(ticker string, mh utils.MarketHours, assetType string) error {
 	assetType = strings.ToLower(assetType)
-	return utils.SetMarketHours(p.RedisClient, ticker, mh, assetType)
+	return utils.SetMarketHours(p.RedisClient.Client, ticker, mh, assetType)
 }
 
 func (p *PythClientApp) GetMarketInfo(ticker string) (utils.MarketInfo, error) {

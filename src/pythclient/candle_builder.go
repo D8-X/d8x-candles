@@ -122,7 +122,7 @@ func (p *PythClientApp) PythDataToRedisPriceObs(symbols []utils.SymbolPyth) {
 				trial++
 			}
 			err = p.PricesToRedis(sym.Symbol, o)
-			if err == nil {
+			if err != nil {
 				slog.Error("pyth PricesToRedis failed for " + sym.ToString() + ":" + err.Error())
 				return
 			}
@@ -406,9 +406,7 @@ func (p *PythClientApp) OnPriceUpdate(pxData utils.PriceData, id string) {
 	}
 
 	// publish updates to listeners
-	client := *p.RedisClient.Client
-	err := client.Do(context.Background(),
-		client.B().Publish().Channel(utils.PRICE_UPDATE_MSG).Message(pubMsg).Build()).Error()
+	err := utils.RedisPublishPriceChange(p.RedisClient.Client, pubMsg)
 	if err != nil {
 		slog.Error("Redis Pub" + err.Error())
 	}

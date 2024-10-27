@@ -53,9 +53,7 @@ func (p *PolyClient) OnNewPrice(sym string, px float64, tsMs int64) {
 	}
 
 	// publish updates to listeners
-	client := *p.RedisClient.Client
-	err = client.Do(context.Background(),
-		client.B().Publish().Channel(utils.PRICE_UPDATE_MSG).Message(sym).Build()).Error()
+	err = utils.RedisPublishPriceChange(p.RedisClient.Client, sym)
 	if err != nil {
 		slog.Error("Redis Pub" + err.Error())
 	}
