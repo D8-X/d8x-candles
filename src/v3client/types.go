@@ -7,6 +7,7 @@ import (
 	"log"
 	"math/big"
 	"os"
+	"strings"
 
 	"github.com/ethereum/go-ethereum/common"
 )
@@ -73,13 +74,22 @@ func loadConfig(filename string) (*Config, error) {
 	if err := json.Unmarshal(data, &response); err != nil {
 		return nil, fmt.Errorf("error unmarshaling JSON: %w", err)
 	}
+	// uppercase/lowercase
 	for j, pool := range response.Pools {
 		// pool address -> pool data
 		// avoid uppercase/lowercase issues by converting to
 		// address and let the library choose uppercase/lowercase
 		response.Pools[j].Addr = common.HexToAddress(pool.Addr).Hex()
+		// uppercase symbols
+		response.Pools[j].Symbol = strings.ToUpper(response.Pools[j].Symbol)
 	}
-
+	// uppercase symbols
+	for j := range response.Indices {
+		response.Indices[j].Symbol = strings.ToUpper(response.Indices[j].Symbol)
+		for k := 1; k < len(response.Indices[j].Triang); k += 2 {
+			response.Indices[j].Triang[k] = strings.ToUpper(response.Indices[j].Triang[k])
+		}
+	}
 	return &response, nil
 }
 

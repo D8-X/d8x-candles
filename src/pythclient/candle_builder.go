@@ -121,8 +121,11 @@ func (p *PythClientApp) PythDataToRedisPriceObs(symbols []utils.SymbolPyth) {
 				}
 				trial++
 			}
-			p.PricesToRedis(sym.Symbol, o)
-
+			err = p.PricesToRedis(sym.Symbol, o)
+			if err == nil {
+				slog.Error("pyth PricesToRedis failed for " + sym.ToString() + ":" + err.Error())
+				return
+			}
 			slog.Info("Processed history for " + sym.ToString())
 		}(sym)
 	}
@@ -150,10 +153,14 @@ func (p *PythClientApp) CandlesToTriangulatedCandles(client *utils.RueidisClient
 			defer wg.Done()
 			o, err := p.ConstructPriceObsForTriang(client, sym, path)
 			if err != nil {
-				slog.Error("error for triangulation " + sym + ":" + err.Error())
+				slog.Error("triangulation " + sym + ":" + err.Error())
 				return
 			}
-			p.PricesToRedis(sym, o)
+			err = p.PricesToRedis(sym, o)
+			if err != nil {
+				slog.Error("triangulation " + sym + ":" + err.Error())
+				return
+			}
 			slog.Info("Processed history for " + sym)
 		}(sym, pathCp)
 	}
@@ -163,8 +170,11 @@ func (p *PythClientApp) CandlesToTriangulatedCandles(client *utils.RueidisClient
 }
 
 // sym of the form ETH-USD
-func (p *PythClientApp) PricesToRedis(sym string, obs PriceObservations) {
-	utils.CreateRedisTimeSeries(p.RedisClient, sym)
+func (p *PythClientApp) PricesToRedis(sym string, obs PriceObservations) error {
+	err := utils.RedisReCreateTimeSeries(p.RedisClient.Client, sym)
+	if err != nil {
+		return err
+	}
 	var wg sync.WaitGroup
 	for k := 0; k < len(obs.P); k++ {
 		// store prices in ms
@@ -173,13 +183,14 @@ func (p *PythClientApp) PricesToRedis(sym string, obs PriceObservations) {
 		wg.Add(1)
 		go func(sym string, t int64, val float64) {
 			defer wg.Done()
-			AddPriceObs(p.RedisClient, sym, t, val)
+			utils.RedisAddPriceObs(p.RedisClient.Client, sym, val, t)
 		}(sym, t, val)
 	}
+	wg.Wait()
 	// set the symbol as available
 	c := *p.RedisClient.Client
 	c.Do(context.Background(), c.B().Sadd().Key(utils.AVAIL_TICKER_SET).Member(sym).Build())
-	wg.Wait()
+	return nil
 }
 
 // Query specific candle resolutions and time ranges from the Pyth-API
@@ -344,7 +355,7 @@ func (p *PythClientApp) OnPriceUpdate(pxData utils.PriceData, id string) {
 	p.StreamMngr.lastPx[sym] = px
 	p.StreamMngr.lastPxRWMu.Unlock()
 
-	AddPriceObs(p.RedisClient, sym, pxData.PublishTime*1000, px)
+	utils.RedisAddPriceObs(p.RedisClient.Client, sym, px, pxData.PublishTime*1000)
 
 	p.MsgCount["px"] = (p.MsgCount["px"] + 1) % 500
 	if p.MsgCount["px"] == 0 {
@@ -387,7 +398,7 @@ func (p *PythClientApp) OnPriceUpdate(pxData utils.PriceData, id string) {
 		p.StreamMngr.lastPxRWMu.Unlock()
 
 		pubMsg += ";" + tsym
-		AddPriceObs(p.RedisClient, tsym, pxData.PublishTime*1000, pxTriang)
+		utils.RedisAddPriceObs(p.RedisClient.Client, tsym, pxTriang, pxData.PublishTime*1000)
 		p.MsgCount["t"] = (p.MsgCount["t"] + 1) % 500
 		if p.MsgCount["t"] == 0 {
 			slog.Info("-- 500 triangulation price updates, now: " + tsym + " price=" + fmt.Sprint(pxTriang))

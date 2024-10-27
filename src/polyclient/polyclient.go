@@ -137,7 +137,7 @@ func (p *PolyClient) enableTicker(sym string) {
 	}
 	p.muSyms.Unlock()
 
-	utils.CreateRedisTimeSeries(p.RedisClient, sym)
+	utils.RedisReCreateTimeSeries(p.RedisClient.Client, sym)
 
 	// set symbol available
 	c := *p.RedisClient.Client

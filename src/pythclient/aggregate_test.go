@@ -95,7 +95,7 @@ func TestRedisAggr(t *testing.T) {
 	sym := "rds-tst"
 	for k := 0; k < 50; k++ {
 		var timestampMs int64 = 1 + int64(k)*1000
-		AddPriceObs(&rc, sym, timestampMs, float64(k))
+		utils.RedisAddPriceObs(rc.Client, sym, float64(k), timestampMs)
 	}
 	obs, err := rc.RangeAggr(sym, 0, 50000, 0, "")
 	if err != nil {

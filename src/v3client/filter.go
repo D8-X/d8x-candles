@@ -2,6 +2,7 @@ package v3client
 
 import (
 	"context"
+	"d8x-candles/src/utils"
 	"fmt"
 	"log"
 	"math/big"
@@ -17,9 +18,17 @@ import (
 	"golang.org/x/exp/slog"
 )
 
+const LOOKBACK_SEC = 86400 // now-LOOKBACK_SEC is when we start gathering history
+
 func (v3 *V3Client) Filter() error {
+
+	symToAdd := v3.missingSymsInHist()
+	if len(symToAdd) == 0 {
+		slog.Info("no missing symbols in v3 history")
+		return nil
+	}
 	nowTs := time.Now().Unix()
-	start := nowTs - 86400*1
+	start := nowTs - LOOKBACK_SEC
 	blk, blkNow, err := v3.findStartingBlock(uint64(start))
 	if err != nil {
 		return err
@@ -30,10 +39,97 @@ func (v3 *V3Client) Filter() error {
 	}
 	v3.findBlockTs(prices)
 	// now triangulate available prices
-	//...
+	v3.fillTriangulatedHistory(prices)
 	// finally insert to redis
-	//...
+	v3.histPricesToRedis(prices, symToAdd)
+
 	return nil
+}
+
+// histPricesToRedis adds prices (symbol, price per timestamp) available in `prices`
+// if the symbol is to be addded
+func (v3 *V3Client) histPricesToRedis(prices []BlockObs, symToAdd map[string]bool) error {
+	for t := range prices {
+		for sym, val := range prices[t].symToPx {
+			if _, exists := symToAdd[sym]; !exists {
+				continue
+			}
+			err := utils.RedisAddPriceObs(v3.Ruedi, sym, val, int64(prices[t].ts))
+			if err != nil {
+				return fmt.Errorf("insert triangulations to redis %s t=%d ts=%d: %v",
+					sym, t, prices[t].ts, err)
+			}
+		}
+	}
+	return nil
+}
+
+// missingSymsInHist determines symbols for which historical data
+// should be added to redis
+func (v3 *V3Client) missingSymsInHist() map[string]bool {
+	// identify all symbols
+	symRequired := make(map[string]bool)
+	for j := range v3.Config.Indices {
+		symRequired[v3.Config.Indices[j].Symbol] = true
+		for k := 1; k < len(v3.Config.Indices[j].Triang); k += 2 {
+			symRequired[v3.Config.Indices[j].Triang[k]] = true
+		}
+	}
+	// find which symbols are missing in history
+	maxAgeTs := time.Now().UnixMilli() - LOOKBACK_SEC
+	symToAdd := make(map[string]bool)
+	for sym := range symRequired {
+		ts := utils.RedisGetFirstTimestamp(v3.Ruedi, sym)
+		if ts == 0 || ts > maxAgeTs {
+			symToAdd[sym] = true
+		}
+	}
+	return symToAdd
+}
+
+// fillTriangulatedHistory amends the prices array by adding symbols
+// and prices of triangulated symbols
+func (v3 *V3Client) fillTriangulatedHistory(prices []BlockObs) {
+	for j := range v3.Config.Indices {
+		triang := v3.Config.Indices[j].Triang
+		sym2Triang := v3.Config.Indices[j].Symbol
+		// store last price of underlying in map
+		lastPx := make(map[string]float64)
+		for k := 1; k < len(triang); k += 2 {
+			lastPx[triang[k]] = float64(0)
+		}
+		for t := range prices {
+			hasObs := false
+			// see whether any of the underlying prices have
+			// a change at this timestamp
+			for sym := range lastPx {
+				if v, exists := prices[t].symToPx[sym]; exists {
+					lastPx[sym] = v
+					hasObs = true
+				}
+			}
+			if hasObs {
+				//triangulate
+				px := float64(1)
+				for k := 1; k < len(triang); k += 2 {
+					p := lastPx[triang[k]]
+					if p == 0 {
+						// no price of underlying yet
+						px = -1
+						break
+					}
+					if triang[k-1] == "/" {
+						px = px / p
+					} else {
+						px = px * p
+					}
+				}
+				if px != -1 {
+					prices[t].symToPx[sym2Triang] = px
+				}
+			}
+		}
+	}
 }
 
 // findBlockTs collects blocks where we have data and for
@@ -52,6 +148,7 @@ func (v3 *V3Client) findBlockTs(prices []BlockObs) {
 			}
 			lastBlock = p.blockNum
 			prices[j].ts = ts
+			fmt.Printf("\rblock ts progress %.2f", float64(j)/float64(len(prices)))
 		}
 	}
 	// interpolate the rest
@@ -134,6 +231,7 @@ func (v3 *V3Client) blockTs(blockNum int64) (uint64, error) {
 	ctx := context.Background()
 	for trial := 0; trial < 3; trial++ {
 		rec, err = v3.RpcHndl.WaitForRpc(TYPE_HTTPS, 15)
+		defer v3.RpcHndl.ReturnLock(rec)
 		if err != nil {
 			continue
 		}
@@ -184,7 +282,7 @@ func (v3 *V3Client) runFilterer(startBlk, blockNow int64) ([]BlockObs, error) {
 		for trial := 0; trial < 3; trial++ {
 			logs, err = v3.getLogs(query)
 			if err != nil {
-				fmt.Printf("error %s, retry...\n", err.Error())
+				fmt.Printf("\nerror %s, retry...\n", err.Error())
 				time.Sleep(500 * time.Millisecond)
 				continue
 			}
@@ -195,13 +293,13 @@ func (v3 *V3Client) runFilterer(startBlk, blockNow int64) ([]BlockObs, error) {
 		}
 		// Process logs
 		progress := 1 - float64(blockNow-fromBlock.Int64())/float64(blockNow-startBlk)
-		fmt.Printf("processing %d swap events: %.2f\n", len(logs), progress)
+		fmt.Printf("\rprocessing %d swap events: %.2f", len(logs), progress)
 		for _, vLog := range logs {
 			var event SwapEvent
 
 			err := swapABI.UnpackIntoInterface(&event, "Swap", vLog.Data)
 			if err != nil {
-				log.Printf("Failed to unpack log data: %v", err)
+				log.Printf("\nfailed to unpack log data: %v\n", err)
 				continue
 			}
 			sym := v3.PoolAddrToSymbol[vLog.Address.Hex()]
@@ -212,7 +310,7 @@ func (v3 *V3Client) runFilterer(startBlk, blockNow int64) ([]BlockObs, error) {
 
 		fromBlock = big.NewInt(toBlock.Int64() + 1)
 	}
-
+	log.Printf("\nfilterer processed.\n")
 	return prices, nil
 }
 
@@ -256,18 +354,22 @@ func (v3 *V3Client) findStartingBlock(startTs uint64) (uint64, uint64, error) {
 		var rec Receipt
 		rec, err = v3.RpcHndl.WaitForRpc(TYPE_HTTPS, 15)
 		if err != nil {
+			v3.RpcHndl.ReturnLock(rec)
 			continue
 		}
 		client, err := ethclient.Dial(rec.Url)
 		if err != nil {
+			v3.RpcHndl.ReturnLock(rec)
 			slog.Info("error ethclient dial", "error", err, "url", rec.Url)
 			continue
 		}
 		blk, ts, blkNow, err = FindBlockWithTs(client, uint64(startTs))
 		if err != nil {
+			v3.RpcHndl.ReturnLock(rec)
 			slog.Info("error finding block, retry", "error", err)
 			continue
 		}
+		v3.RpcHndl.ReturnLock(rec)
 		break
 	}
 	if err != nil {

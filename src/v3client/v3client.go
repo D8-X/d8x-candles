@@ -1,6 +1,8 @@
 package v3client
 
 import (
+	"d8x-candles/src/utils"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/redis/rueidis"
 )
@@ -48,6 +50,20 @@ func NewV3Client(configV3, configRpc, redisAddr, redisPw string) (*V3Client, err
 	v3.RelevantPoolAddrs = make([]common.Address, 0, len(v3.PoolAddrToIndices))
 	for addr, _ := range v3.PoolAddrToIndices {
 		v3.RelevantPoolAddrs = append(v3.RelevantPoolAddrs, common.HexToAddress(addr))
+	}
+	// create relevant timeseries in Redis
+	for j := range v3.Config.Indices {
+		err := utils.RedisCreateIfNotExistsTs(&client, v3.Config.Indices[j].Symbol)
+		if err != nil {
+			return nil, err
+		}
+		for k := 1; k < len(v3.Config.Indices[j].Triang); k += 2 {
+			err := utils.RedisCreateIfNotExistsTs(&client, v3.Config.Indices[j].Triang[k])
+			if err != nil {
+				return nil, err
+			}
+		}
+
 	}
 	return &v3, nil
 }
