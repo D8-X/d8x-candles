@@ -5,6 +5,8 @@ const (
 	// base url for pyth historical data API
 	PYTH_API_BASE_URL = "PYTH_API_BASE_URL"
 	CONFIG_PATH       = "CONFIG_PATH"
+	CONFIG_V3_RPC     = "CONFIG_V3_RPC"
+	CONFIG_V3_IDX     = "CONFIG_V3_IDX"
 	REDIS_ADDR        = "REDIS_ADDR"
 	REDIS_DB_NUM      = "REDIS_DB_NUM"
 	REDIS_PW          = "REDIS_PW"

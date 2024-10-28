@@ -4,11 +4,14 @@ go 1.21
 
 require (
 	github.com/D8-X/d8x-futures-go-sdk v1.0.5-alpha
+	github.com/ethereum/go-ethereum v1.14.3
 	github.com/google/uuid v1.4.0
 	github.com/gorilla/websocket v1.5.3
 	github.com/redis/go-redis/v9 v9.1.0
 	github.com/redis/rueidis v1.0.41
 	github.com/spf13/viper v1.18.2
+	golang.org/x/crypto v0.23.0
+	golang.org/x/exp v0.0.0-20231127185646-65229373498e
 )
 
 require (
@@ -23,7 +26,6 @@ require (
 	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.3.0 // indirect
 	github.com/dgryski/go-rendezvous v0.0.0-20200823014737-9f7001d12a5f // indirect
 	github.com/ethereum/c-kzg-4844 v1.0.2 // indirect
-	github.com/ethereum/go-ethereum v1.14.3 // indirect
 	github.com/forta-network/go-multicall v0.0.0-20230701154355-9467c4ddaa83 // indirect
 	github.com/fsnotify/fsnotify v1.7.0 // indirect
 	github.com/go-ole/go-ole v1.3.0 // indirect
@@ -48,8 +50,6 @@ require (
 	github.com/yusufpapurcu/wmi v1.2.3 // indirect
 	go.uber.org/atomic v1.9.0 // indirect
 	go.uber.org/multierr v1.9.0 // indirect
-	golang.org/x/crypto v0.23.0 // indirect
-	golang.org/x/exp v0.0.0-20231127185646-65229373498e // indirect
 	golang.org/x/mod v0.17.0 // indirect
 	golang.org/x/sync v0.7.0 // indirect
 	golang.org/x/sys v0.22.0 // indirect

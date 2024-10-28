@@ -5,6 +5,7 @@ import (
 	"d8x-candles/src/polyclient"
 	"d8x-candles/src/pythclient"
 	"d8x-candles/src/utils"
+	"d8x-candles/src/v3client"
 	"d8x-candles/src/wscandle"
 	"errors"
 	"fmt"
@@ -41,6 +42,33 @@ func RunCandleCharts() {
 		viper.GetString(env.REDIS_PW),
 		viper.GetInt(env.REDIS_DB_NUM),
 	)
+}
+
+func RunV3Client() {
+	err := loadEnv([]string{
+		env.CONFIG_V3_IDX,
+		env.CONFIG_V3_RPC,
+		env.REDIS_ADDR,
+		env.REDIS_PW,
+	})
+	if err != nil {
+		fmt.Println("Error:", err.Error())
+		panic(err)
+	}
+	v3, err := v3client.NewV3Client(
+		viper.GetString(env.CONFIG_V3_IDX),
+		viper.GetString(env.CONFIG_V3_RPC),
+		viper.GetString(env.REDIS_ADDR),
+		viper.GetString(env.REDIS_PW))
+	if err != nil {
+		fmt.Println("error:", err.Error())
+		panic(err)
+	}
+	err = v3.Run()
+	if err != nil {
+		fmt.Println("error:", err.Error())
+		panic(err)
+	}
 }
 
 func StreamPolyMarkets() {

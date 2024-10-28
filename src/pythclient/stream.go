@@ -112,10 +112,14 @@ func (p *PythClientApp) EnableTriangulation(symT string) bool {
 	p.fetchTriangulatedMktInfo()
 	o, err := p.ConstructPriceObsForTriang(p.RedisClient, symT, path)
 	if err != nil {
-		slog.Error("error for triangulation " + symT + ":" + err.Error())
+		slog.Error("triangulation " + symT + ":" + err.Error())
 		return false
 	}
-	p.PricesToRedis(symT, o)
+	err = p.PricesToRedis(symT, o)
+	if err != nil {
+		slog.Error("triangulation " + symT + ":" + err.Error())
+		return false
+	}
 	return true
 }
 

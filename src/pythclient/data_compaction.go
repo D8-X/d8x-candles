@@ -59,8 +59,7 @@ func (p *PythClientApp) CompactPriceObs(sym string) error {
 	// clear data
 	client.Do(p.RedisClient.Ctx, client.B().TsDel().Key(sym).FromTimestamp(first).ToTimestamp(last).Build())
 	// add compacted data
-	p.PricesToRedis(sym, priceObs)
-	return nil
+	return p.PricesToRedis(sym, priceObs)
 }
 
 // Construct price observations from OHLC data sourced from REDIS,
