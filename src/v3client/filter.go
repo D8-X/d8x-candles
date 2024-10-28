@@ -54,7 +54,7 @@ func (v3 *V3Client) histPricesToRedis(prices []BlockObs, symToAdd map[string]boo
 			if _, exists := symToAdd[sym]; !exists {
 				continue
 			}
-			err := utils.RedisAddPriceObs(v3.Ruedi, sym, val, int64(prices[t].ts))
+			err := utils.RedisAddPriceObs(v3.Ruedi, sym, val, int64(prices[t].ts*1000))
 			if err != nil {
 				return fmt.Errorf("insert triangulations to redis %s t=%d ts=%d: %v",
 					sym, t, prices[t].ts, err)

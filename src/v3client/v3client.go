@@ -146,7 +146,7 @@ func (v3 *V3Client) runWebsocket(client *ethclient.Client) error {
 			return fmt.Errorf("subscription: %v", err)
 		case vLog := <-logs:
 			// Check which event the log corresponds to
-			addr := strings.ToLower(vLog.Address.String())
+			addr := vLog.Address.Hex()
 			switch vLog.Topics[0] {
 			case swapSig:
 				// Handle Swap event
@@ -158,11 +158,13 @@ func (v3 *V3Client) runWebsocket(client *ethclient.Client) error {
 
 func (v3 *V3Client) onSwap(poolAddr string, log types.Log) {
 	var event SwapEvent
+	poolAddr = common.HexToAddress(poolAddr).Hex()
 	sym, exists := v3.PoolAddrToSymbol[poolAddr]
 	if !exists {
 		slog.Error("pool addr not in universe", "addr", poolAddr)
 		return
 	}
+	slog.Info("onSwap", "symbol", sym)
 	err := v3.SwapEventAbi.UnpackIntoInterface(&event, "Swap", log.Data)
 	if err != nil {
 		slog.Error("failed to unpack Swap event", "error", err)
@@ -181,6 +183,7 @@ func (v3 *V3Client) onSwap(poolAddr string, log types.Log) {
 		fmt.Printf("pool %s no indices\n", poolAddr)
 		return
 	}
+	symUpdated := sym
 	for _, j := range idx {
 		pxIdx := v3.Config.Indices[j]
 		var px float64 = 1
@@ -190,10 +193,12 @@ func (v3 *V3Client) onSwap(poolAddr string, log types.Log) {
 			return
 		}
 		// write the updated price
-		err = utils.RedisAddPriceObs(v3.Ruedi, sym, px, nowTs)
+		err = utils.RedisAddPriceObs(v3.Ruedi, pxIdx.Symbol, px, nowTs)
 		if err != nil {
 			slog.Error("onSwap: failed to RedisAddPriceObs", "error", err)
 			return
 		}
+		symUpdated += ";" + pxIdx.Symbol
 	}
+	utils.RedisPublishPriceChange(v3.Ruedi, symUpdated)
 }
