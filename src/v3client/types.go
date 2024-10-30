@@ -48,18 +48,8 @@ type RpcConfig struct {
 }
 
 type BlockObs struct {
-	blockNum int64
-	ts       uint64 //timestamp
-	symToPx  map[string]float64
-}
-
-func NewBlockObsArray(startBlock, endBlock int64) []BlockObs {
-	obs := make([]BlockObs, endBlock-startBlock)
-	for i := range obs {
-		obs[i].blockNum = startBlock + int64(i)
-		obs[i].symToPx = make(map[string]float64)
-	}
-	return obs
+	ts      uint64 //timestamp
+	symToPx map[string]float64
 }
 
 func loadConfig(filename string) (*Config, error) {

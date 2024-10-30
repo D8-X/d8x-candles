@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"math/big"
+	"slices"
 	"strings"
 	"time"
 
@@ -48,16 +49,16 @@ func (v3 *V3Client) Filter() error {
 
 // histPricesToRedis adds prices (symbol, price per timestamp) available in `prices`
 // if the symbol is to be addded
-func (v3 *V3Client) histPricesToRedis(prices []BlockObs, symToAdd map[string]bool) error {
-	for t := range prices {
-		for sym, val := range prices[t].symToPx {
+func (v3 *V3Client) histPricesToRedis(prices map[uint64]*BlockObs, symToAdd map[string]bool) error {
+	for block, obs := range prices {
+		for sym, val := range obs.symToPx {
 			if _, exists := symToAdd[sym]; !exists {
 				continue
 			}
-			err := utils.RedisAddPriceObs(v3.Ruedi, sym, val, int64(prices[t].ts*1000))
+			err := utils.RedisAddPriceObs(v3.Ruedi, sym, val, int64(obs.ts*1000))
 			if err != nil {
-				return fmt.Errorf("insert triangulations to redis %s t=%d ts=%d: %v",
-					sym, t, prices[t].ts, err)
+				return fmt.Errorf("insert triangulations to redis %s block=%d ts=%d: %v",
+					sym, block, obs.ts, err)
 			}
 		}
 	}
@@ -89,7 +90,7 @@ func (v3 *V3Client) missingSymsInHist() map[string]bool {
 
 // fillTriangulatedHistory amends the prices array by adding symbols
 // and prices of triangulated symbols
-func (v3 *V3Client) fillTriangulatedHistory(prices []BlockObs) {
+func (v3 *V3Client) fillTriangulatedHistory(prices map[uint64]*BlockObs) {
 	for j := range v3.Config.Indices {
 		triang := v3.Config.Indices[j].Triang
 		sym2Triang := v3.Config.Indices[j].Symbol
@@ -98,35 +99,31 @@ func (v3 *V3Client) fillTriangulatedHistory(prices []BlockObs) {
 		for k := 1; k < len(triang); k += 2 {
 			lastPx[triang[k]] = float64(0)
 		}
-		for t := range prices {
-			hasObs := false
+		for _, obs := range prices {
 			// see whether any of the underlying prices have
 			// a change at this timestamp
 			for sym := range lastPx {
-				if v, exists := prices[t].symToPx[sym]; exists {
+				if v, exists := obs.symToPx[sym]; exists {
 					lastPx[sym] = v
-					hasObs = true
 				}
 			}
-			if hasObs {
-				//triangulate
-				px := float64(1)
-				for k := 1; k < len(triang); k += 2 {
-					p := lastPx[triang[k]]
-					if p == 0 {
-						// no price of underlying yet
-						px = -1
-						break
-					}
-					if triang[k-1] == "/" {
-						px = px / p
-					} else {
-						px = px * p
-					}
+			//triangulate
+			px := float64(1)
+			for k := 1; k < len(triang); k += 2 {
+				p := lastPx[triang[k]]
+				if p == 0 {
+					// no price of underlying yet
+					px = -1
+					break
 				}
-				if px != -1 {
-					prices[t].symToPx[sym2Triang] = px
+				if triang[k-1] == "/" {
+					px = px / p
+				} else {
+					px = px * p
 				}
+			}
+			if px != -1 {
+				obs.symToPx[sym2Triang] = px
 			}
 		}
 	}
@@ -134,22 +131,33 @@ func (v3 *V3Client) fillTriangulatedHistory(prices []BlockObs) {
 
 // findBlockTs collects blocks where we have data and for
 // which we need to figure out the timestamp
-func (v3 *V3Client) findBlockTs(prices []BlockObs) {
-	lastBlock := int64(0)
+func (v3 *V3Client) findBlockTs(prices map[uint64]*BlockObs) {
+	lastBlock := uint64(0)
+	// we first loop through the map and get all blocks
+	// into array blocks
+	blocks := make([]uint64, len(prices))
+	j := 0
+	for block := range prices {
+		blocks[j] = block
+		j++
+	}
+	slices.Sort(blocks)
 	// we fill some of the blocks with actual numbers
-	for j, p := range prices {
-		if len(p.symToPx) > 0 && p.blockNum-lastBlock > 1800 {
-			ts, err := v3.blockTs(p.blockNum)
+
+	for j, blockNum := range blocks {
+		if blockNum-lastBlock > 1800 {
+			ts, err := v3.blockTs(int64(blockNum))
 			if err != nil {
 				//skip
 				fmt.Println("error getting block timestamp, skipping")
 				time.Sleep(500 * time.Millisecond)
 				continue
 			}
-			lastBlock = p.blockNum
-			prices[j].ts = ts
-			fmt.Printf("\rblock ts progress %.2f", float64(j)/float64(len(prices)))
+			lastBlock = blockNum
+			prices[blockNum].ts = ts
+			fmt.Printf("\rblock ts progress %.2f", float64(j)/float64(len(blocks)))
 		}
+		j++
 	}
 	// interpolate the rest
 	interpolateTs(prices)
@@ -157,27 +165,36 @@ func (v3 *V3Client) findBlockTs(prices []BlockObs) {
 
 // interpolateTs interpolates and extrapolates the timestamps
 // given the filled data in BlockObs linearly
-func interpolateTs(prices []BlockObs) {
+func interpolateTs(prices map[uint64]*BlockObs) {
+	// we first loop through the map and get all blocks
+	// into array blocks
+	blocks := make([]uint64, len(prices))
+	j := 0
+	for block := range prices {
+		blocks[j] = block
+		j++
+	}
+	slices.Sort(blocks)
 	var left int
-	for j := 0; j < len(prices); j++ {
-		if prices[j].ts != 0 {
+	for j, currBlock := range blocks {
+		if prices[currBlock].ts != 0 {
 			left = j
 			break
 		}
 	}
-	for j := left + 1; j < len(prices); j++ {
-		if prices[j].ts != 0 {
+	for j := left + 1; j < len(blocks); j++ {
+		if prices[blocks[j]].ts != 0 {
 			if j-left == 1 {
 				left = j
 				continue
 			}
-			x1 := prices[j].blockNum
-			x0 := prices[left].blockNum
-			y1 := prices[j].ts
-			y0 := prices[left].ts
+			x1 := blocks[j]
+			x0 := blocks[left]
+			y1 := prices[x1].ts
+			y0 := prices[x0].ts
 			m := float64(y1-y0) / float64(x1-x0)
 			for k := left; k < j; k++ {
-				prices[k].ts = y0 + uint64(m*float64(prices[k].blockNum-x0))
+				prices[blocks[k]].ts = uint64(float64(y0) + m*(float64(blocks[k])-float64(x0)))
 			}
 			left = j
 		}
@@ -185,39 +202,39 @@ func interpolateTs(prices []BlockObs) {
 	// extrapolation
 	// left end
 	var pivot int
-	for j := 0; j < len(prices); j++ {
-		if prices[j].ts != 0 {
+	for j := 0; j < len(blocks); j++ {
+		if prices[blocks[j]].ts != 0 {
 			pivot = j
 			break
 		}
 	}
 	if pivot > 0 {
 		// extrapolate left end
-		x1 := prices[pivot+1].blockNum
-		x0 := prices[pivot].blockNum
-		y1 := prices[pivot+1].ts
-		y0 := prices[pivot].ts
+		x1 := blocks[pivot+1]
+		x0 := blocks[pivot]
+		y1 := float64(prices[x1].ts)
+		y0 := float64(prices[x0].ts)
 		m := float64(y1-y0) / float64(x1-x0)
 		for k := 0; k < pivot; k++ {
-			prices[k].ts = y0 + uint64(m*float64(prices[k].blockNum-x0))
+			prices[blocks[k]].ts = uint64(y0 + m*(float64(blocks[k])-float64(x0)))
 		}
 	}
 	// right end
-	for j := len(prices) - 1; j > 0; j-- {
-		if prices[j].ts != 0 {
+	for j := len(blocks) - 1; j > 0; j-- {
+		if prices[blocks[j]].ts != 0 {
 			pivot = j
 			break
 		}
 	}
-	if pivot < len(prices)-1 {
+	if pivot < len(blocks)-1 {
 		// extrapolate right end
-		x1 := prices[pivot].blockNum
-		x0 := prices[pivot-1].blockNum
-		y1 := prices[pivot].ts
-		y0 := prices[pivot-1].ts
+		x1 := float64(blocks[pivot])
+		x0 := float64(blocks[pivot-1])
+		y1 := float64(prices[blocks[pivot]].ts)
+		y0 := float64(prices[blocks[pivot-1]].ts)
 		m := float64(y1-y0) / float64(x1-x0)
 		for k := pivot + 1; k < len(prices); k++ {
-			prices[k].ts = y0 + uint64(m*float64(prices[k].blockNum-x0))
+			prices[blocks[k]].ts = uint64(y0 + m*(float64(blocks[k])-x0))
 		}
 	}
 }
@@ -253,7 +270,7 @@ func (v3 *V3Client) blockTs(blockNum int64) (uint64, error) {
 
 // runFilterer collects swap events from startBlk to blockNow
 // in BlockObs, without filling the block timestamp (requires separate rpc query)
-func (v3 *V3Client) runFilterer(startBlk, blockNow int64) ([]BlockObs, error) {
+func (v3 *V3Client) runFilterer(startBlk, blockNow int64) (map[uint64]*BlockObs, error) {
 
 	swapSig := getEventSignatureHash(SWAP_EVENT_SIGNATURE)
 
@@ -261,7 +278,7 @@ func (v3 *V3Client) runFilterer(startBlk, blockNow int64) ([]BlockObs, error) {
 	swapABI, _ := abi.JSON(strings.NewReader(SWAP_EVENT_ABI))
 	fromBlock := big.NewInt(startBlk)
 
-	prices := NewBlockObsArray(startBlk, blockNow)
+	prices := make(map[uint64]*BlockObs, (blockNow-startBlk)/4)
 	//toBlock := nil
 	// Create filter query
 	INC_BLOCK := int64(1000)
@@ -304,8 +321,13 @@ func (v3 *V3Client) runFilterer(startBlk, blockNow int64) ([]BlockObs, error) {
 			}
 			sym := v3.PoolAddrToSymbol[vLog.Address.Hex()]
 			px := SqrtPriceX96ToPrice(event.SqrtPriceX96)
-
-			prices[vLog.BlockNumber-uint64(startBlk)].symToPx[sym] = px
+			if _, exists := prices[vLog.BlockNumber]; !exists {
+				prices[vLog.BlockNumber] = &BlockObs{
+					ts:      0, // unknown at this point
+					symToPx: make(map[string]float64),
+				}
+			}
+			prices[vLog.BlockNumber].symToPx[sym] = px
 		}
 
 		fromBlock = big.NewInt(toBlock.Int64() + 1)
