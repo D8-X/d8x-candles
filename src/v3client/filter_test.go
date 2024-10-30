@@ -2,7 +2,6 @@ package v3client
 
 import (
 	"fmt"
-	"math/rand"
 	"testing"
 )
 
@@ -12,17 +11,21 @@ func TestInterpolateTs(t *testing.T) {
 	// 	ts       uint64 //timestamp
 	// 	symToPx  map[string]float64
 	// }
-	r := rand.New(rand.NewSource(42))
-	obs := make([]BlockObs, 100)
-	for k := range obs {
-		obs[k].blockNum = int64(k)
+	obs := make(map[uint64]*BlockObs)
+
+	blocks := []uint64{100, 110, 120, 130, 140, 150}
+	timest := []uint64{0, 0, 110, 0, 120, 0}
+	for j := 0; j < len(blocks); j++ {
+		obs[blocks[j]] = &BlockObs{
+			ts:      timest[j],
+			symToPx: make(map[string]float64),
+		}
 	}
-	for k := 0; k < len(obs); {
-		obs[k].ts = uint64(k * 2)
-		k = k + r.Intn(10)
-	}
+
 	interpolateTs(obs)
-	for k := range obs {
-		fmt.Printf("%d; %d\n", obs[k].blockNum, obs[k].ts)
+	fmt.Println("block; ts")
+	for j := 0; j < len(blocks); j++ {
+		currobs := obs[blocks[j]]
+		fmt.Printf("%d; %d\n", blocks[j], currobs.ts)
 	}
 }
