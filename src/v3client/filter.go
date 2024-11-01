@@ -2,6 +2,7 @@ package v3client
 
 import (
 	"context"
+	"d8x-candles/src/globalrpc"
 	"d8x-candles/src/utils"
 	"fmt"
 	"log"
@@ -250,12 +251,12 @@ func interpolateTs(prices map[uint64]*BlockObs) {
 // blockTs gets the block timestamp of the given block number using
 // several trials
 func (v3 *V3Client) blockTs(blockNum int64) (uint64, error) {
-	var rec Receipt
+	var rec globalrpc.Receipt
 	var err error
 	var client *ethclient.Client
 	ctx := context.Background()
 	for trial := 0; trial < 3; trial++ {
-		rec, err = v3.RpcHndl.WaitForRpc(TYPE_HTTPS, 15)
+		rec, err = v3.RpcHndl.GetAndLockRpc(globalrpc.TypeHTTPS, 15)
 		defer v3.RpcHndl.ReturnLock(rec)
 		if err != nil {
 			continue
@@ -345,7 +346,7 @@ func (v3 *V3Client) runFilterer(startBlk, blockNow int64) (map[uint64]*BlockObs,
 }
 
 func (v3 *V3Client) getLogs(query ethereum.FilterQuery) ([]types.Log, error) {
-	rec, err := v3.RpcHndl.WaitForRpc(TYPE_HTTPS, 15)
+	rec, err := v3.RpcHndl.GetAndLockRpc(globalrpc.TypeHTTPS, 15)
 	defer v3.RpcHndl.ReturnLock(rec)
 	if err != nil {
 		return nil, err
@@ -381,8 +382,8 @@ func (v3 *V3Client) findStartingBlock(startTs uint64) (uint64, uint64, error) {
 	var blk, blkNow, ts uint64
 	var err error
 	for trial := 0; trial < 3; trial++ {
-		var rec Receipt
-		rec, err = v3.RpcHndl.WaitForRpc(TYPE_HTTPS, 15)
+		var rec globalrpc.Receipt
+		rec, err = v3.RpcHndl.GetAndLockRpc(globalrpc.TypeHTTPS, 15)
 		if err != nil {
 			v3.RpcHndl.ReturnLock(rec)
 			continue
