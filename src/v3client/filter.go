@@ -91,6 +91,14 @@ func (v3 *V3Client) missingSymsInHist() map[string]bool {
 // fillTriangulatedHistory amends the prices array by adding symbols
 // and prices of triangulated symbols
 func (v3 *V3Client) fillTriangulatedHistory(prices map[uint64]*BlockObs) {
+	blocks := make([]uint64, len(prices))
+	j := 0
+	for block := range prices {
+		blocks[j] = block
+		j++
+	}
+	slices.Sort(blocks)
+
 	for j := range v3.Config.Indices {
 		triang := v3.Config.Indices[j].Triang
 		sym2Triang := v3.Config.Indices[j].Symbol
@@ -99,7 +107,8 @@ func (v3 *V3Client) fillTriangulatedHistory(prices map[uint64]*BlockObs) {
 		for k := 1; k < len(triang); k += 2 {
 			lastPx[triang[k]] = float64(0)
 		}
-		for _, obs := range prices {
+		for _, blockNum := range blocks {
+			obs := prices[blockNum]
 			// see whether any of the underlying prices have
 			// a change at this timestamp
 			for sym := range lastPx {
@@ -123,7 +132,7 @@ func (v3 *V3Client) fillTriangulatedHistory(prices map[uint64]*BlockObs) {
 				}
 			}
 			if px != -1 {
-				obs.symToPx[sym2Triang] = px
+				prices[blockNum].symToPx[sym2Triang] = px
 			}
 		}
 	}
