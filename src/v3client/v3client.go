@@ -2,6 +2,7 @@ package v3client
 
 import (
 	"context"
+	"d8x-candles/src/globalrpc"
 	"d8x-candles/src/utils"
 	"fmt"
 	"log/slog"
@@ -20,7 +21,7 @@ import (
 type V3Client struct {
 	Config            *Config
 	Ruedi             *rueidis.Client
-	RpcHndl           *RpcHandler
+	RpcHndl           *globalrpc.GlobalRpc
 	RelevantPoolAddrs []common.Address                     // contains all pool addresses that are used for indices
 	Triangulations    map[string]d8x_futures.Triangulation //map index symbol to its triangulation
 	PoolAddrToIndices map[string][]int                     // map pool address to price index location in Config.indices
@@ -42,7 +43,7 @@ func NewV3Client(configV3, configRpc, redisAddr, redisPw string) (*V3Client, err
 		return nil, err
 	}
 	v3.Ruedi = &client
-	v3.RpcHndl, err = NewRpcHandler(configRpc)
+	v3.RpcHndl, err = globalrpc.NewGlobalRpc(configRpc, redisAddr, redisPw)
 	if err != nil {
 		return nil, err
 	}
@@ -110,7 +111,7 @@ func (v3 *V3Client) Run() error {
 
 	for {
 
-		rec, err := v3.RpcHndl.WaitForRpc(TYPE_WSS, 10)
+		rec, err := v3.RpcHndl.GetAndLockRpc(globalrpc.TypeWSS, 10)
 		if err != nil {
 			return err
 		}
