@@ -49,13 +49,13 @@ func FindBlockWithTs(client *ethclient.Client, ts uint64) (uint64, uint64, uint6
 		tsB = tsA
 		numB = numA
 	}
-	blockNo, tsFound, numCalls2, err := binSearch(client, numA, tsA, numB, tsB, ts)
+	blockNo, tsFound, numCalls2, err := binSearch(client, numA, numB, ts)
 	numCalls = numCalls + numCalls2
 	slog.Info("Num rpc calls FindBlockWithTs=" + strconv.Itoa(int(numCalls)))
 	return blockNo, tsFound, blockNow, err
 }
 
-func binSearch(client *ethclient.Client, numA uint64, tsA uint64, numB uint64, tsB uint64, ts uint64) (uint64, uint64, uint64, error) {
+func binSearch(client *ethclient.Client, numA uint64, numB uint64, ts uint64) (uint64, uint64, uint64, error) {
 
 	var tsP, numP, numCalls uint64
 	numCalls = 0
@@ -69,10 +69,8 @@ func binSearch(client *ethclient.Client, numA uint64, tsA uint64, numB uint64, t
 		}
 		tsP = blockP.Time()
 		if tsP < ts {
-			tsA = tsP
 			numA = numP
 		} else {
-			tsB = tsP
 			numB = numP
 		}
 		if numB <= numA+2 {
@@ -81,12 +79,4 @@ func binSearch(client *ethclient.Client, numA uint64, tsA uint64, numB uint64, t
 
 	}
 	return numP, tsP, numCalls, nil
-}
-
-func getCurrentBlockTs(rpcClient *ethclient.Client) (int64, error) {
-	header, err := rpcClient.HeaderByNumber(context.Background(), nil)
-	if err != nil {
-		return 0, errors.New("Failed to retrieve the latest block header: " + err.Error())
-	}
-	return int64(header.Time), nil
 }
