@@ -157,7 +157,6 @@ func (v3 *V3Client) findBlockTs(prices map[uint64]*BlockObs) {
 			prices[blockNum].ts = ts
 			fmt.Printf("\rblock ts progress %.2f", float64(j)/float64(len(blocks)))
 		}
-		j++
 	}
 	// interpolate the rest
 	interpolateTs(prices)
