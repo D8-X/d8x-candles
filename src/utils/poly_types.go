@@ -95,12 +95,16 @@ func (ci *CustomFloat64) UnmarshalJSON(data []byte) error {
 
 // PolyPriceChange represents the JSON response structure for price change events.
 type PolyPriceChange struct {
-	AssetID     string      `json:"asset_id"`
-	EventType   string      `json:"event_type"`
-	Hash        string      `json:"hash"`
-	Market      string      `json:"market"`
-	Price       string      `json:"price"`
-	Side        string      `json:"side"`
-	Size        string      `json:"size"`
-	TimestampMs CustomInt64 `json:"timestamp"`
+	AssetID     string       `json:"asset_id"`
+	Changes     []PolyChange `json:"changes"`
+	EventType   string       `json:"event_type"`
+	Hash        string       `json:"hash"`
+	Market      string       `json:"market"`
+	TimestampMs CustomInt64  `json:"timestamp"`
+}
+
+type PolyChange struct {
+	Price string `json:"price"`
+	Side  string `json:"side"`
+	Size  string `json:"size"`
 }

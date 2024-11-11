@@ -242,12 +242,16 @@ func (pa *PolyApi) handleEvent(eventJson string, pc *PolyClient) error {
 		return errors.New(eventJson)
 	}
 	// Process price change event
-	var eventMap map[string]interface{}
-	err := json.Unmarshal([]byte(eventJson), &eventMap)
+	var eventData []interface{}
+	json.Unmarshal([]byte(eventJson), &eventData)
+
+	var eventMap0 []map[string]interface{}
+	err := json.Unmarshal([]byte(eventJson), &eventMap0)
 	if err != nil {
+		fmt.Println(eventJson)
 		return fmt.Errorf("error unmarshalling JSON: %v, message=%s", err, eventJson)
 	}
-
+	eventMap := eventMap0[0]
 	eventType, ok := eventMap["event_type"].(string)
 	if !ok {
 		return fmt.Errorf("event_type not found or not a string: %s", eventJson)
@@ -257,12 +261,12 @@ func (pa *PolyApi) handleEvent(eventJson string, pc *PolyClient) error {
 	if eventType == "book" {
 		return nil
 	}
-	var priceChange utils.PolyPriceChange
-	err = json.Unmarshal([]byte(eventJson), &priceChange)
+	var priceChange0 []utils.PolyPriceChange
+	err = json.Unmarshal([]byte(eventJson), &priceChange0)
 	if err != nil {
 		return fmt.Errorf("error unmarshalling price change JSON: %v", err)
 	}
-
+	priceChange := priceChange0[0]
 	pa.MuLastUpdate.Lock()
 	if int64(priceChange.TimestampMs) < pa.LastUpdate[id] {
 		pa.MuLastUpdate.Unlock()
@@ -272,7 +276,7 @@ func (pa *PolyApi) handleEvent(eventJson string, pc *PolyClient) error {
 	pa.LastUpdate[id] = int64(priceChange.TimestampMs)
 	pa.MuLastUpdate.Unlock()
 
-	fmt.Printf("asset=%s price = %s\n", pa.AssetIds[priceChange.AssetID], priceChange.Price)
+	fmt.Printf("asset=%s price changes = %d\n", pa.AssetIds[priceChange.AssetID], len(priceChange.Changes))
 	px0, err := pa.restQueryPrice(priceChange.AssetID, pc)
 	if err != nil {
 		return fmt.Errorf("error querying price: %v", err)

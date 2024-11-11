@@ -2,8 +2,6 @@ package pythclient
 
 import (
 	"d8x-candles/src/utils"
-	"log/slog"
-	"strconv"
 	"time"
 )
 
@@ -60,15 +58,4 @@ func ConvertTimestampToISO8601(timestampMs int64) string {
 	timestamp := time.Unix(0, timestampMs*int64(time.Millisecond))
 	iso8601 := timestamp.UTC().Format("2006-01-02T15:04:05.000Z")
 	return iso8601
-}
-
-func AddPriceObs(client *utils.RueidisClient, sym string, timestampMs int64, value float64) error {
-	ts := strconv.FormatInt(timestampMs, 10)
-	resp := (*client.Client).Do(client.Ctx,
-		(*client.Client).B().TsAdd().Key(sym).Timestamp(ts).Value(value).Build())
-	if resp.Error() != nil {
-		slog.Error("AddPriceObs " + sym + ": " + resp.Error().Error())
-		return resp.Error()
-	}
-	return nil
 }

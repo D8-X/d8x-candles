@@ -5,7 +5,6 @@ import (
 	"d8x-candles/src/utils"
 	"fmt"
 	"log/slog"
-	"strconv"
 	"sync"
 
 	"github.com/redis/rueidis"
@@ -35,7 +34,7 @@ func (p *PolyClient) HistoryToRedis(sym string, obs []utils.PolyHistory) {
 		wg.Add(1)
 		go func(sym string, t int64, val float64) {
 			defer wg.Done()
-			AddPriceObs(p.RedisClient, sym, val, t)
+			utils.RedisAddPriceObs(p.RedisClient.Client, sym, val, t)
 		}(sym, t, val)
 	}
 	// set the symbol as available
@@ -47,28 +46,15 @@ func (p *PolyClient) HistoryToRedis(sym string, obs []utils.PolyHistory) {
 
 // OnNewPrice stores the new price in redis and informs subscribers
 func (p *PolyClient) OnNewPrice(sym string, px float64, tsMs int64) {
-	err := AddPriceObs(p.RedisClient, sym, px, tsMs)
+	err := utils.RedisAddPriceObs(p.RedisClient.Client, sym, px, tsMs)
 	if err != nil {
 		slog.Error(fmt.Sprintf("failed to update price for %s in redis: %v", sym, err))
 		return
 	}
 
 	// publish updates to listeners
-	client := *p.RedisClient.Client
-	err = client.Do(context.Background(),
-		client.B().Publish().Channel(utils.PRICE_UPDATE_MSG).Message(sym).Build()).Error()
+	err = utils.RedisPublishPriceChange(p.RedisClient.Client, sym)
 	if err != nil {
 		slog.Error("Redis Pub" + err.Error())
 	}
-}
-
-func AddPriceObs(client *utils.RueidisClient, sym string, price float64, timestampMs int64) error {
-	ts := strconv.FormatInt(timestampMs, 10)
-	resp := (*client.Client).Do(client.Ctx,
-		(*client.Client).B().TsAdd().Key(sym).Timestamp(ts).Value(price).Build())
-	if resp.Error() != nil {
-		slog.Error("AddPriceObs " + sym + ": " + resp.Error().Error())
-		return resp.Error()
-	}
-	return nil
 }

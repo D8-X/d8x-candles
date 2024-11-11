@@ -40,6 +40,28 @@ services:
     configs:
       - prices_conf
       
+  v3-client:
+    build:
+      context: .
+      dockerfile: cmd/v3-client/Dockerfile
+    environment:
+      - REDIS_PW=${REDIS_PW}
+      - REDIS_ADDR=${REDIS_ADDR}
+      - CONFIG_V3_RPC=/v3_rpc_conf
+      - CONFIG_V3_IDX=/v3_idx_conf
+    depends_on:
+      - redis-timeseries
+    networks:
+      - app-net
+    restart: on-failure
+    logging:
+      options:
+        max-size: "10m"
+        max-file: "10"
+    configs:
+      - v3_rpc_conf
+      - v3_idx_conf
+
   ws-server:
     build:
       context: .
@@ -79,5 +101,9 @@ services:
 configs:
   prices_conf:
     file: ./config/prices.config.json
+  v3_idx_conf:
+    file: ./config/v3_idx_conf.json
+  v3_rpc_conf:
+    file: ./config/v3_rpc_conf.json
 networks:
   app-net:
