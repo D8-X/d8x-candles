@@ -37,7 +37,15 @@ type Filter struct {
 	handleFunc func(*Filter, types.Log)
 }
 
-func NewFilter(unitype utils.PriceType, indices []ConfigIndex, rpcHndl *globalrpc.GlobalRpc, eventAbi string, eventSigHash common.Hash, handleFunc func(*Filter, types.Log)) (*Filter, error) {
+func NewFilter(
+	unitype utils.PriceType,
+	indices []ConfigIndex,
+	rpcHndl *globalrpc.GlobalRpc,
+	eventAbi string,
+	eventSigHash common.Hash,
+	handleFunc func(*Filter, types.Log),
+) (*Filter, error) {
+
 	var f = Filter{
 		Indices:    indices,
 		UniType:    unitype,
@@ -67,7 +75,7 @@ func (fltr *Filter) Run(client *rueidis.Client, relPoolAddr []common.Address) er
 	if err != nil {
 		return err
 	}
-	prices, err := fltr.runFilterer(
+	err = fltr.runFilterer(
 		int64(blk),
 		int64(blkNow),
 		relPoolAddr,
@@ -75,10 +83,10 @@ func (fltr *Filter) Run(client *rueidis.Client, relPoolAddr []common.Address) er
 	if err != nil {
 		return err
 	}
-	fltr.findBlockTs(prices)
+	fltr.findBlockTs()
 	// now triangulate available prices
-	fltr.fillTriangulatedHistory(prices)
-	fltr.histPricesToRedis(prices, symToAdd, client)
+	fltr.fillTriangulatedHistory()
+	fltr.histPricesToRedis(symToAdd, client)
 
 	return nil
 }
@@ -123,11 +131,10 @@ func (fltr *Filter) runFilterer(
 	startBlk int64,
 	blockNow int64,
 	poolAddr []common.Address,
-) (map[uint64]*BlockObs, error) {
+) error {
 
 	fromBlock := big.NewInt(startBlk)
 
-	prices := make(map[uint64]*BlockObs, (blockNow-startBlk)/4)
 	//toBlock := nil
 	// Create filter query
 	INC_BLOCK := int64(1000)
@@ -155,7 +162,7 @@ func (fltr *Filter) runFilterer(
 			break
 		}
 		if err != nil {
-			return nil, err
+			return err
 		}
 		// Process logs
 		progress := 1 - float64(blockNow-fromBlock.Int64())/float64(blockNow-startBlk)
@@ -167,18 +174,18 @@ func (fltr *Filter) runFilterer(
 		fromBlock = big.NewInt(toBlock.Int64() + 1)
 	}
 	log.Printf("\nfilterer processed.\n")
-	return prices, nil
+	return nil
 }
 
 // findBlockTs collects blocks where we have data and for
 // which we need to figure out the timestamp
-func (fltr *Filter) findBlockTs(prices map[uint64]*BlockObs) {
+func (fltr *Filter) findBlockTs() {
 	lastBlock := uint64(0)
 	// we first loop through the map and get all blocks
 	// into array blocks
-	blocks := make([]uint64, len(prices))
+	blocks := make([]uint64, len(fltr.Prices))
 	j := 0
-	for block := range prices {
+	for block := range fltr.Prices {
 		blocks[j] = block
 		j++
 	}
@@ -195,20 +202,20 @@ func (fltr *Filter) findBlockTs(prices map[uint64]*BlockObs) {
 				continue
 			}
 			lastBlock = blockNum
-			prices[blockNum].Ts = ts
+			fltr.Prices[blockNum].Ts = ts
 			fmt.Printf("\rblock ts progress %.2f", float64(j)/float64(len(blocks)))
 		}
 	}
 	// interpolate the rest
-	interpolateTs(prices)
+	interpolateTs(fltr.Prices)
 }
 
 // fillTriangulatedHistory amends the prices array by adding symbols
 // and prices of triangulated symbols
-func (fltr *Filter) fillTriangulatedHistory(prices map[uint64]*BlockObs) {
-	blocks := make([]uint64, len(prices))
+func (fltr *Filter) fillTriangulatedHistory() {
+	blocks := make([]uint64, len(fltr.Prices))
 	j := 0
-	for block := range prices {
+	for block := range fltr.Prices {
 		blocks[j] = block
 		j++
 	}
@@ -223,7 +230,7 @@ func (fltr *Filter) fillTriangulatedHistory(prices map[uint64]*BlockObs) {
 			lastPx[triang[k]] = float64(0)
 		}
 		for _, blockNum := range blocks {
-			obs := prices[blockNum]
+			obs := fltr.Prices[blockNum]
 			// see whether any of the underlying prices have
 			// a change at this timestamp
 			for sym := range lastPx {
@@ -247,7 +254,7 @@ func (fltr *Filter) fillTriangulatedHistory(prices map[uint64]*BlockObs) {
 				}
 			}
 			if px != -1 {
-				prices[blockNum].SymToPx[sym2Triang] = px
+				fltr.Prices[blockNum].SymToPx[sym2Triang] = px
 			}
 		}
 	}
@@ -331,8 +338,8 @@ func interpolateTs(prices map[uint64]*BlockObs) {
 
 // histPricesToRedis adds prices (symbol, price per timestamp) available in `prices`
 // if the symbol is to be addded
-func (fltr *Filter) histPricesToRedis(prices map[uint64]*BlockObs, symToAdd map[string]bool, client *rueidis.Client) error {
-	for block, obs := range prices {
+func (fltr *Filter) histPricesToRedis(symToAdd map[string]bool, client *rueidis.Client) error {
+	for block, obs := range fltr.Prices {
 		for sym, val := range obs.SymToPx {
 			if _, exists := symToAdd[sym]; !exists {
 				continue

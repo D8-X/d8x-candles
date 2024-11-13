@@ -41,7 +41,7 @@ func (p PriceType) ToString() string {
 // RedisCreateIfNotExistsTs creates a time-series for the given symbol
 func RedisCreateIfNotExistsTs(rClient *rueidis.Client, pxtype PriceType, symbol string) error {
 	ctx := context.Background()
-	key := pxtype.ToString() + symbol
+	key := pxtype.ToString() + ":" + symbol
 	client := *rClient
 	exists, err := client.Do(ctx, client.B().Exists().Key(key).Build()).AsBool()
 	if err != nil {
@@ -67,7 +67,7 @@ func RedisAddPriceObs(client *rueidis.Client, pxtype PriceType, sym string, pric
 	ctx := context.Background()
 	c := *client
 	ts := strconv.FormatInt(timestampMs, 10)
-	key := pxtype.ToString() + sym
+	key := pxtype.ToString() + ":" + sym
 	resp := c.Do(ctx,
 		c.B().TsAdd().Key(key).Timestamp(ts).Value(price).Build())
 	if resp.Error() != nil {
@@ -79,7 +79,7 @@ func RedisAddPriceObs(client *rueidis.Client, pxtype PriceType, sym string, pric
 func RedisGetFirstTimestamp(client *rueidis.Client, pxtype PriceType, sym string) int64 {
 	ctx := context.Background()
 	c := *client
-	key := pxtype.ToString() + sym
+	key := pxtype.ToString() + ":" + sym
 	cmd := c.B().TsRange().Key(key).Fromtimestamp("0").Totimestamp("+").Count(1).Build()
 	result, err := c.Do(ctx, cmd).ToArray()
 	if err != nil || len(result) == 0 {
@@ -105,11 +105,14 @@ func RedisCalcTriangPrice(redisClient *rueidis.Client, pxtype PriceType, triang 
 	var px float64 = 1
 	tsOldest := time.Now().UnixMilli()
 	for j, sym := range triang.Symbol {
-		key := pxtype.ToString() + sym
+		key := pxtype.ToString() + ":" + sym
 		cmd := client.B().TsGet().Key(key).Build()
 		res, err := client.Do(ctx, cmd).ToArray()
 		if err != nil {
 			return 0, 0, fmt.Errorf("price update failed %v", err)
+		}
+		if len(res) == 0 {
+			return 0, 0, fmt.Errorf("price update failed: no obs for %s", sym)
 		}
 		price, err := res[1].ToFloat64()
 		if err != nil {
