@@ -3,6 +3,7 @@ package v3client
 import (
 	"context"
 	"d8x-candles/src/globalrpc"
+	"d8x-candles/src/uniutils"
 	"d8x-candles/src/utils"
 	"fmt"
 	"log/slog"
@@ -32,7 +33,7 @@ type V3Client struct {
 func NewV3Client(configV3, configRpc, redisAddr, redisPw string) (*V3Client, error) {
 	var v3 V3Client
 	var err error
-	v3.Config, err = loadConfig(configV3)
+	v3.Config, err = loadV2PoolConfig(configV3)
 	if err != nil {
 		return nil, err
 	}
@@ -65,19 +66,11 @@ func NewV3Client(configV3, configRpc, redisAddr, redisPw string) (*V3Client, err
 		v3.RelevantPoolAddrs = append(v3.RelevantPoolAddrs, common.HexToAddress(addr))
 	}
 	// create relevant timeseries in Redis
-	for j := range v3.Config.Indices {
-		err := utils.RedisCreateIfNotExistsTs(&client, v3.Config.Indices[j].Symbol)
-		if err != nil {
-			return nil, err
-		}
-		for k := 1; k < len(v3.Config.Indices[j].Triang); k += 2 {
-			err := utils.RedisCreateIfNotExistsTs(&client, v3.Config.Indices[j].Triang[k])
-			if err != nil {
-				return nil, err
-			}
-		}
-
+	err = uniutils.InitRedisIndices(v3.Config.Indices, utils.TYPE_V3, &client)
+	if err != nil {
+		return nil, err
 	}
+	// abi
 	v3.SwapEventAbi, err = abi.JSON(strings.NewReader(SWAP_EVENT_ABI))
 	if err != nil {
 		return nil, err
@@ -85,14 +78,8 @@ func NewV3Client(configV3, configRpc, redisAddr, redisPw string) (*V3Client, err
 	// triangulations
 	v3.Triangulations = make(map[string]d8x_futures.Triangulation)
 	for j := range v3.Config.Indices {
-		var triang d8x_futures.Triangulation
-		triang.IsInverse = make([]bool, len(v3.Config.Indices[j].Triang)/2)
-		triang.Symbol = make([]string, len(v3.Config.Indices[j].Triang)/2)
-		for k := 1; k < len(v3.Config.Indices[j].Triang); k += 2 {
-			triang.IsInverse[k/2] = v3.Config.Indices[j].Triang[k-1] == "/"
-			triang.Symbol[k/2] = v3.Config.Indices[j].Triang[k]
-		}
-		v3.Triangulations[v3.Config.Indices[j].Symbol] = triang
+		v3.Triangulations[v3.Config.Indices[j].Symbol] =
+			uniutils.TriangFromStringSlice(v3.Config.Indices[j].Triang)
 	}
 	return &v3, nil
 }
@@ -103,7 +90,7 @@ func (v3 *V3Client) Run() error {
 	for j := range v3.Config.Indices {
 		// set market hours for index symbol
 		sym := v3.Config.Indices[j].Symbol
-		utils.SetMarketHours(v3.Ruedi, sym, utils.MarketHours{IsOpen: true, NextOpen: 0, NextClose: 0}, "crypto")
+		utils.RedisSetMarketHours(v3.Ruedi, sym, utils.MarketHours{IsOpen: true, NextOpen: 0, NextClose: 0}, "crypto")
 		// set index symbol as available in redis
 		c := *v3.Ruedi
 		c.Do(context.Background(), c.B().Sadd().Key(utils.AVAIL_TICKER_SET).Member(sym).Build())
@@ -130,7 +117,7 @@ func (v3 *V3Client) Run() error {
 }
 
 func (v3 *V3Client) runWebsocket(client *ethclient.Client) error {
-	swapSig := getEventSignatureHash(SWAP_EVENT_SIGNATURE)
+	swapSig := uniutils.GetEventSignatureHash(SWAP_EVENT_SIGNATURE)
 	query := ethereum.FilterQuery{
 		Addresses: v3.RelevantPoolAddrs,
 		Topics:    [][]common.Hash{{swapSig}},
@@ -173,7 +160,7 @@ func (v3 *V3Client) onSwap(poolAddr string, log types.Log) {
 	}
 	price := SqrtPriceX96ToPrice(event.SqrtPriceX96)
 	nowTs := time.Now().UnixMilli()
-	err = utils.RedisAddPriceObs(v3.Ruedi, sym, price, nowTs)
+	err = utils.RedisAddPriceObs(v3.Ruedi, utils.TYPE_V3, sym, price, nowTs)
 	if err != nil {
 		slog.Error("onSwap: failed to insert new obs", "error", err)
 		return
@@ -184,22 +171,23 @@ func (v3 *V3Client) onSwap(poolAddr string, log types.Log) {
 		fmt.Printf("pool %s no indices\n", poolAddr)
 		return
 	}
-	symUpdated := sym
+	symUpdated := ""
 	for _, j := range idx {
 		pxIdx := v3.Config.Indices[j]
 		var px float64 = 1
-		px, _, err := utils.RedisCalcTriangPrice(v3.Ruedi, v3.Triangulations[pxIdx.Symbol])
+		px, _, err := utils.RedisCalcTriangPrice(v3.Ruedi, utils.TYPE_V3, v3.Triangulations[pxIdx.Symbol])
 		if err != nil {
 			fmt.Printf("onSwap: RedisCalcTriangPrice failed %v\n", err)
 			return
 		}
 		// write the updated price
-		err = utils.RedisAddPriceObs(v3.Ruedi, pxIdx.Symbol, px, nowTs)
+		err = utils.RedisAddPriceObs(v3.Ruedi, utils.TYPE_V3, pxIdx.Symbol, px, nowTs)
 		if err != nil {
 			slog.Error("onSwap: failed to RedisAddPriceObs", "error", err)
 			return
 		}
-		symUpdated += ";" + pxIdx.Symbol
+		symUpdated += utils.TYPE_V3.ToString() + ":" + pxIdx.Symbol + ";"
 	}
-	utils.RedisPublishPriceChange(v3.Ruedi, symUpdated)
+	symUpdated = strings.TrimSuffix(symUpdated, ";")
+	utils.RedisPublishIdxPriceChange(v3.Ruedi, symUpdated)
 }

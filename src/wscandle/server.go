@@ -229,7 +229,7 @@ func (s *Server) UpdateMarketResponses() {
 }
 
 func (s *Server) updtMarketForSym(sym string, anchorTime24hMs int64) error {
-	m, err := utils.GetMarketInfo(s.RedisTSClient.Ctx, s.RedisTSClient.Client, sym)
+	m, err := utils.RedisGetMarketInfo(s.RedisTSClient.Ctx, s.RedisTSClient.Client, sym)
 	if err != nil {
 		return err
 	}

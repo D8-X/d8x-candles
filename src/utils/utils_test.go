@@ -48,7 +48,7 @@ func TestRedisGetFirstTimestamp(t *testing.T) {
 		fmt.Printf("error %v", err)
 		t.FailNow()
 	}
-	ts := RedisGetFirstTimestamp(&client, "BTC-USD")
+	ts := RedisGetFirstTimestamp(&client, TYPE_PYTH, "BTC-USD")
 	fmt.Println(ts)
 	tsNow := time.Now().UnixMilli()
 	diff := (tsNow - ts) / 1000

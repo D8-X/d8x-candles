@@ -5,6 +5,7 @@ import (
 	"d8x-candles/src/polyclient"
 	"d8x-candles/src/pythclient"
 	"d8x-candles/src/utils"
+	"d8x-candles/src/v2client"
 	"d8x-candles/src/v3client"
 	"d8x-candles/src/wscandle"
 	"errors"
@@ -65,6 +66,33 @@ func RunV3Client() {
 		panic(err)
 	}
 	err = v3.Run()
+	if err != nil {
+		fmt.Println("error:", err.Error())
+		panic(err)
+	}
+}
+
+func RunV2Client() {
+	err := loadEnv([]string{
+		env.CONFIG_V2_IDX,
+		env.CONFIG_V2_RPC,
+		env.REDIS_ADDR,
+		env.REDIS_PW,
+	})
+	if err != nil {
+		fmt.Println("Error:", err.Error())
+		panic(err)
+	}
+	v2, err := v2client.NewV2Client(
+		viper.GetString(env.CONFIG_V2_IDX),
+		viper.GetString(env.CONFIG_V2_RPC),
+		viper.GetString(env.REDIS_ADDR),
+		viper.GetString(env.REDIS_PW))
+	if err != nil {
+		fmt.Println("error:", err.Error())
+		panic(err)
+	}
+	err = v2.Run()
 	if err != nil {
 		fmt.Println("error:", err.Error())
 		panic(err)

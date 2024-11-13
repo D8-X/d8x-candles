@@ -137,7 +137,7 @@ func (p *PolyClient) enableTicker(sym string) {
 	}
 	p.muSyms.Unlock()
 
-	utils.RedisReCreateTimeSeries(p.RedisClient.Client, sym)
+	utils.RedisReCreateTimeSeries(p.RedisClient.Client, utils.TYPE_POLY, sym)
 
 	// set symbol available
 	c := *p.RedisClient.Client
@@ -227,6 +227,6 @@ func (p *PolyClient) FetchMktInfo(syms []string) {
 			NextOpen:  0,
 			NextClose: m.EndDateISOTs,
 		}
-		utils.SetMarketHours(p.RedisClient.Client, sym, hrs, utils.POLYMARKET_TYPE)
+		utils.RedisSetMarketHours(p.RedisClient.Client, sym, hrs, utils.POLYMARKET_TYPE)
 	}
 }

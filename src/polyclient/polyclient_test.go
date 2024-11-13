@@ -129,7 +129,7 @@ func TestMktInfoUpdate(t *testing.T) {
 	}
 	app.FetchMktInfo([]string{"EL24-USD"})
 	// check REDIS
-	m, err := utils.GetMarketInfo(app.RedisClient.Ctx, app.RedisClient.Client, "EL24-USD")
+	m, err := utils.RedisGetMarketInfo(app.RedisClient.Ctx, app.RedisClient.Client, "EL24-USD")
 	if err != nil {
 		fmt.Println("error:", err.Error())
 		t.FailNow()

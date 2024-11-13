@@ -34,7 +34,7 @@ func (p *PolyClient) HistoryToRedis(sym string, obs []utils.PolyHistory) {
 		wg.Add(1)
 		go func(sym string, t int64, val float64) {
 			defer wg.Done()
-			utils.RedisAddPriceObs(p.RedisClient.Client, sym, val, t)
+			utils.RedisAddPriceObs(p.RedisClient.Client, utils.TYPE_POLY, sym, val, t)
 		}(sym, t, val)
 	}
 	// set the symbol as available
@@ -46,14 +46,15 @@ func (p *PolyClient) HistoryToRedis(sym string, obs []utils.PolyHistory) {
 
 // OnNewPrice stores the new price in redis and informs subscribers
 func (p *PolyClient) OnNewPrice(sym string, px float64, tsMs int64) {
-	err := utils.RedisAddPriceObs(p.RedisClient.Client, sym, px, tsMs)
+	err := utils.RedisAddPriceObs(p.RedisClient.Client, utils.TYPE_POLY, sym, px, tsMs)
 	if err != nil {
 		slog.Error(fmt.Sprintf("failed to update price for %s in redis: %v", sym, err))
 		return
 	}
 
 	// publish updates to listeners
-	err = utils.RedisPublishPriceChange(p.RedisClient.Client, sym)
+	key := utils.TYPE_POLY.ToString() + ":" + sym
+	err = utils.RedisPublishIdxPriceChange(p.RedisClient.Client, key)
 	if err != nil {
 		slog.Error("Redis Pub" + err.Error())
 	}

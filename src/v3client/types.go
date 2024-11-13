@@ -1,6 +1,7 @@
 package v3client
 
 import (
+	"d8x-candles/src/uniutils"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -26,14 +27,8 @@ type SwapEvent struct {
 }
 
 type Config struct {
-	Indices []ConfigIndex `json:"indices"`
-	Pools   []ConfigPool  `json:"pools"`
-}
-
-// Index represents each index in the "indices" array
-type ConfigIndex struct {
-	Symbol string   `json:"symbol"`
-	Triang []string `json:"triang"`
+	Indices []uniutils.ConfigIndex `json:"indices"`
+	Pools   []ConfigPool           `json:"pools"`
 }
 
 // Pool represents each pool in the "pools" array
@@ -52,7 +47,7 @@ type BlockObs struct {
 	symToPx map[string]float64
 }
 
-func loadConfig(filename string) (*Config, error) {
+func loadV2PoolConfig(filename string) (*Config, error) {
 	// Read the file contents
 	data, err := os.ReadFile(filename) // Use os.ReadFile in Go 1.16+
 	if err != nil {
