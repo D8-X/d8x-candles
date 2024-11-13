@@ -42,11 +42,6 @@ type RpcConfig struct {
 	Https []string `json:"https"`
 }
 
-type BlockObs struct {
-	ts      uint64 //timestamp
-	symToPx map[string]float64
-}
-
 func loadV2PoolConfig(filename string) (*Config, error) {
 	// Read the file contents
 	data, err := os.ReadFile(filename) // Use os.ReadFile in Go 1.16+
