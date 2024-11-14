@@ -99,7 +99,12 @@ func RedisGetFirstTimestamp(client *rueidis.Client, pxtype PriceType, sym string
 
 // RedisCalcTriangPrice calculates the triangulated price and returns it, plus the timestamp
 // of the oldest price involved
-func RedisCalcTriangPrice(redisClient *rueidis.Client, pxtype PriceType, triang d8x_futures.Triangulation) (float64, int64, error) {
+func RedisCalcTriangPrice(
+	redisClient *rueidis.Client,
+	pxtype PriceType,
+	triang d8x_futures.Triangulation,
+) (float64, int64, error) {
+
 	client := *redisClient
 	ctx := context.Background()
 	var px float64 = 1

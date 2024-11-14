@@ -86,7 +86,7 @@ func NewV3Client(configV3, configRpc, redisAddr, redisPw string) (*V3Client, err
 
 func (v3 *V3Client) Run() error {
 	v3.Filter()
-	slog.Info("filtering historical data complete")
+	slog.Info("filtering historical v3 data complete")
 	for j := range v3.Config.Indices {
 		// set market hours for index symbol
 		sym := v3.Config.Indices[j].Symbol
@@ -105,7 +105,7 @@ func (v3 *V3Client) Run() error {
 		client, err := ethclient.Dial(rec.Url)
 		if err != nil {
 			v3.RpcHndl.ReturnLock(rec)
-			slog.Error("Failed to connect to the Ethereum client: " + err.Error())
+			slog.Error("v3 failed to connect to the Ethereum client: " + err.Error())
 			continue
 		}
 		err = v3.runWebsocket(client)
@@ -144,6 +144,8 @@ func (v3 *V3Client) runWebsocket(client *ethclient.Client) error {
 	}
 }
 
+// onSwap handles a swap event in v3 client which leads
+// to a price change
 func (v3 *V3Client) onSwap(poolAddr string, log types.Log) {
 	var event SwapEvent
 	poolAddr = common.HexToAddress(poolAddr).Hex()
@@ -175,7 +177,11 @@ func (v3 *V3Client) onSwap(poolAddr string, log types.Log) {
 	for _, j := range idx {
 		pxIdx := v3.Config.Indices[j]
 		var px float64 = 1
-		px, _, err := utils.RedisCalcTriangPrice(v3.Ruedi, utils.TYPE_V3, v3.Triangulations[pxIdx.Symbol])
+		px, _, err := utils.RedisCalcTriangPrice(
+			v3.Ruedi,
+			utils.TYPE_V3,
+			v3.Triangulations[pxIdx.Symbol],
+		)
 		if err != nil {
 			fmt.Printf("onSwap: RedisCalcTriangPrice failed %v\n", err)
 			return

@@ -64,7 +64,7 @@ func NewFilter(
 }
 
 func (fltr *Filter) Run(client *rueidis.Client, relPoolAddr []common.Address) error {
-	symToAdd := missingSymsInHist(fltr.Indices, client)
+	symToAdd := missingSymsInHist(fltr.Indices, fltr.UniType, client)
 	if len(symToAdd) == 0 {
 		slog.Info("no missing symbols in v3 history")
 		return nil

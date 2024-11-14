@@ -49,7 +49,7 @@ func TriangFromStringSlice(tr []string) d8x_futures.Triangulation {
 
 // missingSymsInHist determines symbols for which historical data
 // should be added to redis
-func missingSymsInHist(indices []ConfigIndex, client *rueidis.Client) map[string]bool {
+func missingSymsInHist(indices []ConfigIndex, unitype utils.PriceType, client *rueidis.Client) map[string]bool {
 	// identify all symbols
 	symRequired := make(map[string]bool)
 	for j := range indices {
@@ -62,7 +62,7 @@ func missingSymsInHist(indices []ConfigIndex, client *rueidis.Client) map[string
 	maxAgeTs := time.Now().UnixMilli() - LOOKBACK_SEC
 	symToAdd := make(map[string]bool)
 	for sym := range symRequired {
-		ts := utils.RedisGetFirstTimestamp(client, utils.TYPE_V3, sym)
+		ts := utils.RedisGetFirstTimestamp(client, unitype, sym)
 		if ts == 0 || ts > maxAgeTs {
 			symToAdd[sym] = true
 		}
