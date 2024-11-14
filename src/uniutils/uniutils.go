@@ -2,6 +2,7 @@ package uniutils
 
 import (
 	"d8x-candles/src/utils"
+	"math/big"
 	"time"
 
 	"github.com/D8-X/d8x-futures-go-sdk/pkg/d8x_futures"
@@ -74,4 +75,16 @@ func GetEventSignatureHash(eventSig string) common.Hash {
 	hash := sha3.NewLegacyKeccak256()
 	hash.Write([]byte(eventSig))
 	return common.BytesToHash(hash.Sum(nil))
+}
+
+// DecNToFloat converts a decimal N number to
+// the corresponding float number
+func DecNToFloat(decN *big.Int, n uint8) float64 {
+	y := new(big.Float).SetInt(decN)
+	N := new(big.Int).SetUint64(uint64(n))
+	pow := new(big.Int).Exp(big.NewInt(10), N, nil)
+	q := new(big.Float).SetInt(pow)
+	z := new(big.Float).Quo(y, q)
+	f, _ := z.Float64()
+	return f
 }

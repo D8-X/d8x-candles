@@ -25,6 +25,7 @@ func (v3 *V3Client) Filter() error {
 	return fltr.Run(v3.Ruedi, v3.RelevantPoolAddrs)
 }
 
+// handleSwapEvent is the handler function passed to the uniutils.Filter
 func (v3 *V3Client) handleSwapEvent(fltr *uniutils.Filter, vLog types.Log) {
 	var event SwapEvent
 	err := fltr.Abi.UnpackIntoInterface(&event, "Swap", vLog.Data)

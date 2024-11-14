@@ -12,6 +12,8 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 )
 
+const SYNC_EVENT_SIGNATURE = "Sync(uint112,uint112)"
+
 type V2PoolConfig struct {
 	ChainID    int                    `json:"chainId"`
 	Factory    string                 `json:"factory"`
