@@ -115,7 +115,7 @@ func (p *PythClientApp) EnableTriangulation(symT string) bool {
 		slog.Error("triangulation " + symT + ":" + err.Error())
 		return false
 	}
-	err = p.PricesToRedis(symT, o)
+	err = utils.PricesToRedis(p.RedisClient.Client, symT, utils.TYPE_PYTH, o)
 	if err != nil {
 		slog.Error("triangulation " + symT + ":" + err.Error())
 		return false

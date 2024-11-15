@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/D8-X/d8x-futures-go-sdk/pkg/d8x_futures"
@@ -13,30 +14,11 @@ import (
 	"golang.org/x/exp/slog"
 )
 
-type PriceType int
-
-const (
-	TYPE_V2 PriceType = iota
-	TYPE_V3
-	TYPE_PYTH
-	TYPE_POLY
-)
-
-func (p PriceType) ToString() string {
-	if p == TYPE_V2 {
-		return "v2"
-	}
-	if p == TYPE_V3 {
-		return "v3"
-	}
-	if p == TYPE_PYTH {
-		return "pyth"
-	}
-	if p == TYPE_POLY {
-		return "poly"
-	}
-	return "unknown"
-}
+// REDIS set name
+const AVAIL_TICKER_SET string = "avail" // :pricetype
+const AVAIL_CCY_SET string = "avail_ccy"
+const TICKER_REQUEST = "request"
+const PRICE_UPDATE_MSG = "px_update"
 
 // RedisCreateIfNotExistsTs creates a time-series for the given symbol
 func RedisCreateIfNotExistsTs(rClient *rueidis.Client, pxtype PriceType, symbol string) error {
@@ -73,6 +55,31 @@ func RedisAddPriceObs(client *rueidis.Client, pxtype PriceType, sym string, pric
 	if resp.Error() != nil {
 		return fmt.Errorf("RedisAddPriceObs " + sym + ": " + resp.Error().Error())
 	}
+	return nil
+}
+
+// sym of the form ETH-USD
+func PricesToRedis(client *rueidis.Client, sym string, pxtype PriceType, obs PriceObservations) error {
+	err := RedisReCreateTimeSeries(client, pxtype, sym)
+	if err != nil {
+		return err
+	}
+	var wg sync.WaitGroup
+	for k := 0; k < len(obs.P); k++ {
+		// store prices in ms
+		val := obs.P[k]
+		t := int64(obs.T[k]) * 1000
+		wg.Add(1)
+		go func(sym string, t int64, val float64) {
+			defer wg.Done()
+			RedisAddPriceObs(client, pxtype, sym, val, t)
+		}(sym, t, val)
+	}
+	wg.Wait()
+	// set the symbol as available
+	c := *client
+	key := AVAIL_TICKER_SET + ":" + pxtype.ToString()
+	c.Do(context.Background(), c.B().Sadd().Key(key).Member(sym).Build())
 	return nil
 }
 
@@ -177,6 +184,58 @@ func RedisReCreateTimeSeries(client *rueidis.Client, pxtype PriceType, sym strin
 	return nil
 }
 
+// RedisSetCcyAvailable sets currencies available, e.g., ccys=[]string{"USDC", "BTC", ...}
+func RedisSetCcyAvailable(client *rueidis.Client, pxtype PriceType, ccys []string) error {
+	ctx := context.Background()
+	c := *client
+	setKey := AVAIL_CCY_SET + ":" + pxtype.ToString()
+	// Delete the entire set
+	cmds := c.B().Del().Key(setKey).Build()
+	if res := c.Do(ctx, cmds); res.Error() == nil {
+		slog.Info("redis: deleted existing " + setKey)
+	}
+	slog.Info("create " + setKey)
+	cmd := c.B().Sadd().Key(setKey).Member(ccys...).Build()
+	res := c.Do(ctx, cmd)
+	return res.Error()
+}
+
+// RedisAreCcyAvailable checks which of the provided currencies are available in the AVAIL_CCY_SET
+// and returns a boolean array corresponding to ccys
+func RedisAreCcyAvailable(client *rueidis.Client, pxtype PriceType, ccys []string) ([]bool, error) {
+	ctx := context.Background()
+	c := *client
+	setKey := AVAIL_CCY_SET + ":" + pxtype.ToString()
+	cmd := c.B().Smembers().Key(setKey).Build()
+	availCcys, err := c.Do(ctx, cmd).AsStrSlice()
+	if err != nil {
+		return nil, err
+	}
+	avail := make([]bool, len(ccys))
+	for k, c0 := range ccys {
+		for _, c1 := range availCcys {
+			if c0 == c1 {
+				avail[k] = true
+				break
+			}
+		}
+	}
+	return avail, nil
+}
+
+func RedisIsSymbolAvailable(client *rueidis.Client, pxtype PriceType, sym string) bool {
+	ctx := context.Background()
+	key := AVAIL_TICKER_SET + ":" + pxtype.ToString()
+	c := *client
+	cmd := c.B().Sismember().Key(key).Member(sym).Build()
+	isMember, err := c.Do(ctx, cmd).AsBool()
+	if err != nil {
+		slog.Error("IsSymbolAvailable " + sym + "error:" + err.Error())
+		return false
+	}
+	return isMember
+}
+
 func RedisSetMarketHours(rc *rueidis.Client, sym string, mh MarketHours, assetType string) error {
 	ctx := context.Background()
 
@@ -213,7 +272,7 @@ func RedisGetMarketInfo(ctx context.Context, client *rueidis.Client, ticker stri
 	// closing period)
 	now := time.Now().UTC().Unix()
 	var isClosed bool
-	if hm["asset_type"] == POLYMARKET_TYPE {
+	if hm["asset_type"] == TYPE_POLYMARKET.ToString() {
 		// we cannot rely on nxtOpen and nxtClose
 		isClosed = !isOpen
 	} else {

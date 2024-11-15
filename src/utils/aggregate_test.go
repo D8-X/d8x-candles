@@ -1,8 +1,8 @@
-package pythclient
+package utils
 
 import (
 	"context"
-	"d8x-candles/src/utils"
+	"d8x-candles/env"
 	"fmt"
 	"testing"
 
@@ -45,8 +45,9 @@ import (
 	}
 */
 func TestRueidis(t *testing.T) {
+	v := loadEnv()
 	client, err := rueidis.NewClient(
-		rueidis.ClientOption{InitAddress: []string{"127.0.0.1:6379"}, Password: "23_*PAejOanJma"})
+		rueidis.ClientOption{InitAddress: []string{v.GetString(env.REDIS_ADDR)}, Password: v.GetString(env.REDIS_PW)})
 	if err != nil {
 		panic(err)
 	}
@@ -71,10 +72,9 @@ func TestRueidis(t *testing.T) {
 		panic(err)
 	}
 	fmt.Print(r)
-	dp := utils.ParseTsRange(r)
+	dp := ParseTsRange(r)
 	fmt.Print(dp)
-	rc := utils.RueidisClient{Client: &client, Ctx: ctx}
-	dp2, err := rc.RangeAggr("btc-usd", 1693809900000, 1693896300000, 300000, "max")
+	dp2, err := RangeAggr(&client, "btc-usd", TYPE_PYTH, 1693809900000, 1693896300000, 300000, "max")
 	if err != nil {
 		panic(err)
 	}
@@ -90,25 +90,23 @@ func TestRedisAggr(t *testing.T) {
 		t.Error(err)
 		return
 	}
-	ctx := context.Background()
-	rc := utils.RueidisClient{Client: &client, Ctx: ctx}
 	sym := "rds-tst"
 	for k := 0; k < 50; k++ {
 		var timestampMs int64 = 1 + int64(k)*1000
-		utils.RedisAddPriceObs(rc.Client, utils.TYPE_PYTH, sym, float64(k), timestampMs)
+		RedisAddPriceObs(&client, TYPE_PYTH, sym, float64(k), timestampMs)
 	}
-	obs, err := rc.RangeAggr(sym, 0, 50000, 0, "")
+	obs, err := RangeAggr(&client, sym, TYPE_PYTH, 0, 50000, 0, "")
 	if err != nil {
 		t.Error(err)
 		return
 	}
 	fmt.Println(obs)
 	var bucket int64 = 10000
-	aF, err := rc.RangeAggr(sym, 0, 50000, bucket, "first")
+	aF, err := RangeAggr(&client, sym, TYPE_PYTH, 0, 50000, bucket, "first")
 	if err != nil {
 		panic(err)
 	}
-	aL, err := rc.RangeAggr(sym, 0, 50000, bucket, "last")
+	aL, err := RangeAggr(&client, sym, TYPE_PYTH, 0, 50000, bucket, "last")
 	if err != nil {
 		panic(err)
 	}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"d8x-candles/src/utils"
 	"fmt"
+	"log/slog"
 	"sync"
 	"time"
 
@@ -24,21 +25,13 @@ type SubscribeRequest struct {
 	IDs  []string `json:"ids"`
 }
 
-// symMap maps pyth ids to internal symbol (btc-usd)
-func Run(symMngr *utils.SymbolManager, REDIS_ADDR string, REDIS_PW string) error {
-	fmt.Print("REDIS ADDR = ", REDIS_ADDR)
-	fmt.Print("REDIS_PW=", REDIS_PW)
-	ph, err := NewPythClientApp(symMngr, REDIS_ADDR, REDIS_PW)
-	if err != nil {
-		return err
-	}
-	go ph.ScheduleMktInfoUpdate(15 * time.Minute)
-	go ph.ScheduleCompaction(20 * time.Minute)
-
-	errChan := make(chan error)
-	go ph.SubscribeTickerRequest(errChan)
-	err = <-errChan
-	return err
+type PythClientApp struct {
+	BaseUrl     string
+	RedisClient *utils.RueidisClient
+	TokenBucket *utils.TokenBucket
+	SymbolMngr  *utils.SymbolManager
+	MsgCount    map[string]int
+	StreamMngr  StreamManager
 }
 
 func NewPythClientApp(symMngr *utils.SymbolManager, REDIS_ADDR string, REDIS_PW string) (*PythClientApp, error) {
@@ -74,8 +67,47 @@ func NewPythClientApp(symMngr *utils.SymbolManager, REDIS_ADDR string, REDIS_PW 
 			SymToTriangPath:      make(map[string]d8x_futures.Triangulation),
 		},
 	}
+	err = setCCYAvailable(symMngr, &client)
+	if err != nil {
+		return nil, err
+	}
 	pca.clearPythTickerAvailability()
 	return &pca, nil
+}
+
+func setCCYAvailable(symMngr *utils.SymbolManager, ruedi *rueidis.Client) error {
+	syms, err := symMngr.ExtractCCY(utils.TYPE_PYTH)
+	if err != nil {
+		return err
+	}
+	return utils.RedisSetCcyAvailable(ruedi, utils.TYPE_PYTH, syms)
+}
+
+// symMap maps pyth ids to internal symbol (btc-usd)
+func Run(symMngr *utils.SymbolManager, REDIS_ADDR string, REDIS_PW string) error {
+	fmt.Print("REDIS ADDR = ", REDIS_ADDR)
+	fmt.Print("REDIS_PW=", REDIS_PW)
+	ph, err := NewPythClientApp(symMngr, REDIS_ADDR, REDIS_PW)
+	if err != nil {
+		return err
+	}
+	go ph.ScheduleMktInfoUpdate(15 * time.Minute)
+	go ph.ScheduleCompaction(20 * time.Minute)
+
+	errChan := make(chan error)
+	go ph.SubscribeTickerRequest(errChan)
+	err = <-errChan
+	return err
+}
+
+// Schedule regular calls of compaction (e.g. every hour)
+func (p *PythClientApp) ScheduleCompaction(waitTime time.Duration) {
+	tickerUpdate := time.NewTicker(waitTime)
+	for {
+		<-tickerUpdate.C
+		utils.CompactAllPriceObs(p.RedisClient.Client, utils.TYPE_PYTH)
+		slog.Info("Compaction completed.")
+	}
 }
 
 // clearPythTickerAvailability removes all pyth tickers
@@ -86,11 +118,12 @@ func (p *PythClientApp) clearPythTickerAvailability() {
 	// clean ticker availability
 	cl := *p.RedisClient.Client
 	config := p.SymbolMngr.PriceFeedIds
+	key := utils.AVAIL_TICKER_SET + ":" + utils.TYPE_PYTH.ToString()
 	for _, ids := range config {
-		if ids.Type != utils.PYTH_TYPE {
+		if ids.Type != utils.TYPE_PYTH.ToString() {
 			continue
 		}
 		fmt.Printf("deleting availability for %s\n", ids.Symbol)
-		cl.Do(context.Background(), cl.B().Srem().Key(utils.AVAIL_TICKER_SET).Member(ids.Symbol).Build())
+		cl.Do(context.Background(), cl.B().Srem().Key(key).Member(ids.Symbol).Build())
 	}
 }

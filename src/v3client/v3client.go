@@ -87,13 +87,19 @@ func NewV3Client(configV3, configRpc, redisAddr, redisPw string) (*V3Client, err
 func (v3 *V3Client) Run() error {
 	v3.Filter()
 	slog.Info("filtering historical v3 data complete")
+	key := utils.AVAIL_TICKER_SET + ":" + utils.TYPE_V3.ToString()
 	for j := range v3.Config.Indices {
 		// set market hours for index symbol
 		sym := v3.Config.Indices[j].Symbol
-		utils.RedisSetMarketHours(v3.Ruedi, sym, utils.MarketHours{IsOpen: true, NextOpen: 0, NextClose: 0}, "crypto")
+		utils.RedisSetMarketHours(
+			v3.Ruedi,
+			sym,
+			utils.MarketHours{IsOpen: true, NextOpen: 0, NextClose: 0},
+			"crypto",
+		)
 		// set index symbol as available in redis
 		c := *v3.Ruedi
-		c.Do(context.Background(), c.B().Sadd().Key(utils.AVAIL_TICKER_SET).Member(sym).Build())
+		c.Do(context.Background(), c.B().Sadd().Key(key).Member(sym).Build())
 	}
 
 	for {

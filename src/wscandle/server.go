@@ -2,7 +2,6 @@ package wscandle
 
 import (
 	"context"
-	"d8x-candles/src/pythclient"
 	"d8x-candles/src/utils"
 	"encoding/json"
 	"fmt"
@@ -31,11 +30,12 @@ type ClientConn struct {
 
 // Server is the struct to handle the Server functions & manage the Subscriptions
 type Server struct {
-	Subscriptions   Subscriptions
-	LastCandles     map[string]*pythclient.OhlcData //symbol:period->OHLC
-	MarketResponses map[string]MarketResponse       //symbol->market response
-	RedisTSClient   *utils.RueidisClient
-	MsgCount        int
+	Subscriptions     Subscriptions
+	LastCandles       map[string]*utils.OhlcData //symbol:period->OHLC
+	MarketResponses   map[string]MarketResponse  //symbol->market response
+	TickerToPriceType map[string]utils.PriceType //symbol->corresponding price type
+	RedisTSClient     *utils.RueidisClient
+	MsgCount          int
 }
 
 type ClientMessage struct {
@@ -66,11 +66,13 @@ type MarketResponse struct {
 const MARKETS_TOPIC = "MARKETS"
 
 func NewServer() *Server {
-	var s Server
-	s.Subscriptions = make(Subscriptions)
+	var s = Server{
+		Subscriptions:     make(Subscriptions),
+		LastCandles:       make(map[string]*utils.OhlcData),
+		MarketResponses:   make(map[string]MarketResponse),
+		TickerToPriceType: make(map[string]utils.PriceType),
+	}
 	s.Subscriptions[MARKETS_TOPIC] = make(Clients)
-	s.LastCandles = make(map[string]*pythclient.OhlcData)
-	s.MarketResponses = make(map[string]MarketResponse)
 	return &s
 }
 
@@ -161,17 +163,14 @@ func (s *Server) ScheduleUpdateMarketAndBroadcast(waitTime time.Duration, config
 	tickerUpdate := time.NewTicker(waitTime)
 	s.UpdateMarketAndBroadcast()
 	for {
-		select {
-		case <-tickerUpdate.C:
-			// if no subscribers we update infrequently
-			if len(server.Subscriptions[MARKETS_TOPIC]) == 0 &&
-				rand.Float64() < 0.95 {
-				slog.Info("UpdateMarketAndBroadcast: no subscribers")
-				break
-			}
-			s.UpdateMarketAndBroadcast()
-			fmt.Println("Market info data updated.")
+		<-tickerUpdate.C // if no subscribers we update infrequently
+		if len(server.Subscriptions[MARKETS_TOPIC]) == 0 &&
+			rand.Float64() < 0.95 {
+			slog.Info("UpdateMarketAndBroadcast: no subscribers")
+			break
 		}
+		s.UpdateMarketAndBroadcast()
+		fmt.Println("Market info data updated.")
 	}
 
 }
@@ -218,13 +217,16 @@ func (s *Server) UpdateMarketResponses() {
 	var anchorTime24hMs int64 = nowUTCms - 86400000
 	// symbols
 	c := *s.RedisTSClient.Client
-	members, err := c.Do(context.Background(), c.B().Smembers().Key(utils.AVAIL_TICKER_SET).Build()).AsStrSlice()
-	if err != nil {
-		slog.Error("UpdateMarketResponses:" + err.Error())
-		return
-	}
-	for _, sym := range members {
-		s.updtMarketForSym(sym, anchorTime24hMs)
+	for _, priceType := range utils.PriceTypes {
+		key := utils.AVAIL_TICKER_SET + priceType.ToString()
+		members, err := c.Do(context.Background(), c.B().Smembers().Key(key).Build()).AsStrSlice()
+		if err != nil {
+			slog.Error("UpdateMarketResponses:", "key", key, "error", err)
+			continue
+		}
+		for _, sym := range members {
+			s.updtMarketForSym(sym, anchorTime24hMs)
+		}
 	}
 }
 
@@ -238,12 +240,12 @@ func (s *Server) updtMarketForSym(sym string, anchorTime24hMs int64) error {
 		return err
 	}
 	const d = 86400000
-	px24, err := s.RedisTSClient.RangeAggr(sym, anchorTime24hMs, anchorTime24hMs+d, 60000, "first")
+	px24, err := utils.RangeAggr(s.RedisTSClient.Client, sym, s.TickerToPriceType[sym], anchorTime24hMs, anchorTime24hMs+d, 60000, "first")
 	var ret float64
 	if err != nil || len(px24) == 0 || px24[0].Value == 0 {
 		px24 = nil
 	} else {
-		if m.AssetType == utils.POLYMARKET_TYPE {
+		if m.AssetType == utils.TYPE_POLYMARKET.ToString() {
 			// absolute change for betting markets
 			ret = px.Value - px24[0].Value
 		} else {
@@ -277,14 +279,24 @@ func (s *Server) SubscribeCandles(conn *ClientConn, clientID string, topic strin
 		// usage: symbol:period
 		return errorResponse("subscribe", topic, "usage: symbol:period")
 	}
-	if !s.IsSymbolAvailable(sym) {
-		// symbol not supported
-		return errorResponse("subscribe", topic, "symbol not supported")
-	}
 	p := config.CandlePeriodsMs[period]
 	if p.TimeMs == 0 {
 		// period not supported
 		return errorResponse("subscribe", topic, "period not supported")
+	}
+
+	if _, exists := s.TickerToPriceType[sym]; !exists {
+		pxtype, avail, ready := s.IsSymbolAvailable(sym)
+		if pxtype == utils.TYPE_UNKNOWN {
+			// symbol not supported
+			return errorResponse("subscribe", topic, "symbol not supported")
+		}
+		if avail && !ready {
+			// symbol not available
+			return errorResponse("subscribe", topic, "symbol not available yet")
+		}
+		// store the "source" of the symbol
+		s.TickerToPriceType[sym] = pxtype
 	}
 
 	if _, exist := s.Subscriptions[topic]; exist {
@@ -307,21 +319,36 @@ func (s *Server) SubscribeCandles(conn *ClientConn, clientID string, topic strin
 	return s.candleResponse(sym, p)
 }
 
-func (s *Server) IsSymbolAvailable(sym string) bool {
-	// check redis
-	c := *s.RedisTSClient.Client
-	isMember, err := c.Do(context.Background(), c.B().Sismember().Key(utils.AVAIL_TICKER_SET).Member(sym).Build()).AsBool()
-	if err != nil {
-		slog.Error("IsSymbolAvailable " + sym + "error:" + err.Error())
-		return false
+// IsSymbolAvailable returns the price source, whether the symbol can be
+// triangulated and whether it is readily available
+func (s *Server) IsSymbolAvailable(sym string) (utils.PriceType, bool, bool) {
+	// first priority: Pyth-type
+	if utils.RedisIsSymbolAvailable(s.RedisTSClient.Client, utils.TYPE_PYTH, sym) {
+		return utils.TYPE_PYTH, true, true
 	}
-	// we send the ticker request even if available (other process could have crashed)
-	// if the symbol can be triangulated, this will be done now
-	err = c.Do(context.Background(), c.B().Publish().Channel(utils.TICKER_REQUEST).Message(sym).Build()).Error()
-	if err != nil {
-		slog.Error("IsSymbolAvailable " + sym + "error:" + err.Error())
+	ccys := strings.Split(sym, "-")
+	avail, err := utils.RedisAreCcyAvailable(s.RedisTSClient.Client, utils.TYPE_PYTH, ccys)
+	if err == nil && avail[0] && avail[1] {
+		// we send the ticker request even if available (other process could have crashed)
+		// if the symbol can be triangulated, this will be done now
+		c := *s.RedisTSClient.Client
+		err = c.Do(
+			context.Background(),
+			c.B().Publish().Channel(utils.TICKER_REQUEST).Message(sym).Build(),
+		).Error()
+		if err != nil {
+			slog.Error("IsSymbolAvailable " + sym + "error:" + err.Error())
+		}
+		return utils.TYPE_PYTH, false, true
 	}
-	return isMember
+	// V2 and V3 are not triangulated on demand, hence we directly query the symbol
+	if utils.RedisIsSymbolAvailable(s.RedisTSClient.Client, utils.TYPE_V2, sym) {
+		return utils.TYPE_V2, true, true
+	}
+	if utils.RedisIsSymbolAvailable(s.RedisTSClient.Client, utils.TYPE_V3, sym) {
+		return utils.TYPE_V3, true, true
+	}
+	return utils.TYPE_UNKNOWN, false, false
 }
 
 func isValidCandleTopic(topic string) bool {
@@ -332,12 +359,15 @@ func isValidCandleTopic(topic string) bool {
 
 // form initial response for candle subscription (e.g., eth-usd:5m)
 func (s *Server) candleResponse(sym string, p utils.CandlePeriod) []byte {
-	slog.Info("Subscription for symbol " + sym + " Period " + fmt.Sprint(p.TimeMs/60000) + "m")
-	data := GetInitialCandles(s.RedisTSClient, sym, p)
+	pxtype := s.TickerToPriceType[sym]
+	slog.Info("Subscription for symbol " +
+		pxtype.ToString() + ":" + sym +
+		" Period " + fmt.Sprint(p.TimeMs/60000) + "m")
+	data := GetInitialCandles(s.RedisTSClient, sym, pxtype, p)
 	topic := sym + ":" + p.Name
 	if data == nil {
 		// return empty array [] instead of null
-		data = []pythclient.OhlcData{}
+		data = []utils.OhlcData{}
 	}
 	res := ServerResponse{Type: "subscribe", Topic: strings.ToLower(topic), Data: data}
 	jsonData, err := json.Marshal(res)
@@ -393,7 +423,7 @@ func (s *Server) candleUpdates(symbols []string) {
 			key := sym + ":" + prd.Name
 			lastCandle := s.LastCandles[key]
 			if lastCandle == nil {
-				s.LastCandles[key] = &pythclient.OhlcData{}
+				s.LastCandles[key] = &utils.OhlcData{}
 				lastCandle = s.LastCandles[key]
 			}
 			if pxLast.Timestamp > lastCandle.TsMs+int64(prd.TimeMs) {
@@ -404,7 +434,7 @@ func (s *Server) candleUpdates(symbols []string) {
 				lastCandle.C = pxLast.Value
 				nextTs := (pxLast.Timestamp / int64(prd.TimeMs)) * int64(prd.TimeMs)
 				lastCandle.TsMs = nextTs
-				lastCandle.Time = pythclient.ConvertTimestampToISO8601(nextTs)
+				lastCandle.Time = utils.ConvertTimestampToISO8601(nextTs)
 			} else {
 				// update existing candle
 				lastCandle.C = pxLast.Value

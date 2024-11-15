@@ -4,10 +4,12 @@ import (
 	"context"
 	"d8x-candles/src/utils"
 	"fmt"
+	"log/slog"
 	"testing"
 	"time"
 
 	"github.com/redis/rueidis"
+	"github.com/spf13/viper"
 )
 
 func TestRetrieveCandle(t *testing.T) {
@@ -79,9 +81,18 @@ func TestPythDataToRedisPriceObs(t *testing.T) {
 	fmt.Print(vlast)
 }
 
+func loadEnv() *viper.Viper {
+	viper.SetConfigFile("../../.env")
+	if err := viper.ReadInConfig(); err != nil {
+		slog.Error("could not load .env file" + err.Error())
+	}
+	return viper.GetViper()
+}
+
 func createHistApi(t *testing.T) PythClientApp {
-	REDIS_ADDR := "localhost:6379"
-	REDIS_PW := "23_*PAejOanJma"
+	v := loadEnv()
+	REDIS_ADDR := v.GetString("REDIS_ADDR")
+	REDIS_PW := v.GetString("REDIS_PW")
 	ctx := context.Background()
 	client, err := rueidis.NewClient(
 		rueidis.ClientOption{InitAddress: []string{REDIS_ADDR}, Password: REDIS_PW})

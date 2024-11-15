@@ -105,7 +105,7 @@ func (p *PythClientApp) PythDataToRedisPriceObs(symbols []utils.SymbolPyth) {
 
 			trial := 0
 			var err error
-			var o PriceObservations
+			var o utils.PriceObservations
 			for {
 				o, err = p.ConstructPriceObsFromPythCandles(sym)
 				if err == nil {
@@ -121,7 +121,7 @@ func (p *PythClientApp) PythDataToRedisPriceObs(symbols []utils.SymbolPyth) {
 				}
 				trial++
 			}
-			err = p.PricesToRedis(sym.Symbol, o)
+			err = utils.PricesToRedis(p.RedisClient.Client, sym.Symbol, utils.TYPE_PYTH, o)
 			if err != nil {
 				slog.Error("pyth PricesToRedis failed for " + sym.ToString() + ":" + err.Error())
 				return
@@ -156,7 +156,7 @@ func (p *PythClientApp) CandlesToTriangulatedCandles(client *utils.RueidisClient
 				slog.Error("triangulation " + sym + ":" + err.Error())
 				return
 			}
-			err = p.PricesToRedis(sym, o)
+			err = utils.PricesToRedis(client.Client, sym, utils.TYPE_PYTH, o)
 			if err != nil {
 				slog.Error("triangulation " + sym + ":" + err.Error())
 				return
@@ -169,77 +169,53 @@ func (p *PythClientApp) CandlesToTriangulatedCandles(client *utils.RueidisClient
 	slog.Info("History of Pyth sources complete")
 }
 
-// sym of the form ETH-USD
-func (p *PythClientApp) PricesToRedis(sym string, obs PriceObservations) error {
-	err := utils.RedisReCreateTimeSeries(p.RedisClient.Client, utils.TYPE_PYTH, sym)
-	if err != nil {
-		return err
-	}
-	var wg sync.WaitGroup
-	for k := 0; k < len(obs.P); k++ {
-		// store prices in ms
-		val := obs.P[k]
-		t := int64(obs.T[k]) * 1000
-		wg.Add(1)
-		go func(sym string, t int64, val float64) {
-			defer wg.Done()
-			utils.RedisAddPriceObs(p.RedisClient.Client, utils.TYPE_PYTH, sym, val, t)
-		}(sym, t, val)
-	}
-	wg.Wait()
-	// set the symbol as available
-	c := *p.RedisClient.Client
-	c.Do(context.Background(), c.B().Sadd().Key(utils.AVAIL_TICKER_SET).Member(sym).Build())
-	return nil
-}
-
 // Query specific candle resolutions and time ranges from the Pyth-API
 // and construct artificial data
-func (p *PythClientApp) ConstructPriceObsFromPythCandles(sym utils.SymbolPyth) (PriceObservations, error) {
+func (p *PythClientApp) ConstructPriceObsFromPythCandles(sym utils.SymbolPyth) (utils.PriceObservations, error) {
 	var candleRes utils.PythCandleResolution
 	candleRes.New(1, utils.MinuteCandle)
 	currentTimeSec := uint32(time.Now().UTC().Unix())
 	twoDayResolutionMinute, err := p.RetrieveCandlesFromPyth(sym, candleRes, currentTimeSec-86400*2, currentTimeSec)
 	if err != nil {
-		return PriceObservations{}, err
+		return utils.PriceObservations{}, err
 	}
 
 	candleRes.New(60, utils.MinuteCandle)
 	oneMonthResolution1h, err := p.RetrieveCandlesFromPyth(sym, candleRes, currentTimeSec-86400*30, currentTimeSec)
 	if err != nil {
-		return PriceObservations{}, err
+		return utils.PriceObservations{}, err
 	}
 	candleRes.New(1, utils.DayCandle)
 	// only one year allowed
 	dateTs := uint32(time.Now().Unix() - 3.15e7)
 	allTimeResolution1D, err := p.RetrieveCandlesFromPyth(sym, candleRes, dateTs, currentTimeSec)
 	if err != nil {
-		return PriceObservations{}, err
+		return utils.PriceObservations{}, err
 	}
 	var candles = []PythHistoryAPIResponse{twoDayResolutionMinute, oneMonthResolution1h, allTimeResolution1D}
 	// concatenate candles into price observations
-	var obs PriceObservations
+	var obs utils.PriceObservations
 	obs, err = PythCandlesToPriceObs(candles)
 	if err != nil {
-		return PriceObservations{}, err
+		return utils.PriceObservations{}, err
 	}
 	return obs, nil
 }
 
 // Construct price observations for triangulated currencies
 // symT is of the form btc-usd, path a Triangulation type
-func (p *PythClientApp) ConstructPriceObsForTriang(client *utils.RueidisClient, symT string, path d8x_futures.Triangulation) (PriceObservations, error) {
+func (p *PythClientApp) ConstructPriceObsForTriang(client *utils.RueidisClient, symT string, path d8x_futures.Triangulation) (utils.PriceObservations, error) {
 	currentTimeSec := uint32(time.Now().UTC().Unix())
 	// find starting time
 	var timeStart, timeEnd int64 = 0, int64(currentTimeSec) * 1000
 	for k := 0; k < len(path.Symbol); k++ {
-		sym := path.Symbol[k]
+		key := utils.TYPE_PYTH.ToString() + ":" + path.Symbol[k]
 		info, err := (*client.Client).Do(client.Ctx, (*client.Client).B().
-			TsInfo().Key(sym).Build()).AsMap()
+			TsInfo().Key(key).Build()).AsMap()
 
 		if err != nil {
 			// key does not exist
-			return PriceObservations{}, errors.New(err.Error() + " symbol:" + sym)
+			return utils.PriceObservations{}, errors.New(err.Error() + " symbol:" + key)
 		}
 		first := info["firstTimestamp"]
 		last := info["lastTimestamp"]
@@ -270,21 +246,21 @@ func (p *PythClientApp) ConstructPriceObsForTriang(client *utils.RueidisClient, 
 	if err != nil {
 		slog.Error("1day resolution triangulation error " + err.Error())
 	}
-	var candles = [][]OhlcData{oneDayResolutionMinute, twoDayResolution5Minute, oneMonthResolution1h, allTimeResolution1D}
-	var obs PriceObservations
-	obs, err = OhlcCandlesToPriceObs(candles, symT)
+	var candles = [][]utils.OhlcData{oneDayResolutionMinute, twoDayResolution5Minute, oneMonthResolution1h, allTimeResolution1D}
+	var obs utils.PriceObservations
+	obs, err = utils.OhlcCandlesToPriceObs(candles, symT)
 	if err != nil {
-		return PriceObservations{}, err
+		return utils.PriceObservations{}, err
 	}
 	return obs, nil
 }
 
-func (p *PythClientApp) triangulateCandles(client *utils.RueidisClient, path d8x_futures.Triangulation, fromTsMs int64, toTsMs int64, resolSec uint32) ([]OhlcData, error) {
-	var ohlcPath []*[]OhlcData
+func (p *PythClientApp) triangulateCandles(client *utils.RueidisClient, path d8x_futures.Triangulation, fromTsMs int64, toTsMs int64, resolSec uint32) ([]utils.OhlcData, error) {
+	var ohlcPath []*[]utils.OhlcData
 	var maxStart int64 = 0
 	for k := 0; k < len(path.Symbol); k++ {
 		sym := path.Symbol[k]
-		ohlc, err := Ohlc(client, sym, fromTsMs, toTsMs, resolSec)
+		ohlc, err := utils.Ohlc(client.Client, sym, utils.TYPE_PYTH, fromTsMs, toTsMs, resolSec)
 		if err != nil || len(ohlc) == 0 {
 			return nil, errors.New("ohlc not available for " + sym)
 		}
