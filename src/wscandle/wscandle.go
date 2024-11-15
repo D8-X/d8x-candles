@@ -51,7 +51,7 @@ func StartWSServer(config_ utils.SymbolManager, WS_ADDR string, REDIS_ADDR strin
 		Ctx:    ctx,
 	}
 	ctx = context.Background()
-	subscriber := redisClient.Subscribe(ctx, utils.PRICE_UPDATE_MSG)
+	subscriber := redisClient.Subscribe(ctx, utils.RDS_PRICE_UPDATE_MSG)
 	go server.SubscribePxUpdate(subscriber, ctx)
 	go server.ScheduleUpdateMarketAndBroadcast(5*time.Second, config)
 	http.HandleFunc("/ws", HandleWs)

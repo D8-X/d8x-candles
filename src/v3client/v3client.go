@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/D8-X/d8x-futures-go-sdk/pkg/d8x_futures"
+	d8xUtils "github.com/D8-X/d8x-futures-go-sdk/utils"
 	ethereum "github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
@@ -66,7 +67,7 @@ func NewV3Client(configV3, configRpc, redisAddr, redisPw string) (*V3Client, err
 		v3.RelevantPoolAddrs = append(v3.RelevantPoolAddrs, common.HexToAddress(addr))
 	}
 	// create relevant timeseries in Redis
-	err = uniutils.InitRedisIndices(v3.Config.Indices, utils.TYPE_V3, &client)
+	err = uniutils.InitRedisIndices(v3.Config.Indices, d8xUtils.PXTYPE_V3, &client)
 	if err != nil {
 		return nil, err
 	}
@@ -87,7 +88,7 @@ func NewV3Client(configV3, configRpc, redisAddr, redisPw string) (*V3Client, err
 func (v3 *V3Client) Run() error {
 	v3.Filter()
 	slog.Info("filtering historical v3 data complete")
-	key := utils.AVAIL_TICKER_SET + ":" + utils.TYPE_V3.ToString()
+	key := utils.RDS_AVAIL_TICKER_SET + ":" + d8xUtils.PXTYPE_V3.ToString()
 	for j := range v3.Config.Indices {
 		// set market hours for index symbol
 		sym := v3.Config.Indices[j].Symbol
@@ -168,7 +169,7 @@ func (v3 *V3Client) onSwap(poolAddr string, log types.Log) {
 	}
 	price := SqrtPriceX96ToPrice(event.SqrtPriceX96)
 	nowTs := time.Now().UnixMilli()
-	err = utils.RedisAddPriceObs(v3.Ruedi, utils.TYPE_V3, sym, price, nowTs)
+	err = utils.RedisAddPriceObs(v3.Ruedi, d8xUtils.PXTYPE_V3, sym, price, nowTs)
 	if err != nil {
 		slog.Error("onSwap: failed to insert new obs", "error", err)
 		return
@@ -185,7 +186,7 @@ func (v3 *V3Client) onSwap(poolAddr string, log types.Log) {
 		var px float64 = 1
 		px, _, err := utils.RedisCalcTriangPrice(
 			v3.Ruedi,
-			utils.TYPE_V3,
+			d8xUtils.PXTYPE_V3,
 			v3.Triangulations[pxIdx.Symbol],
 		)
 		if err != nil {
@@ -193,12 +194,12 @@ func (v3 *V3Client) onSwap(poolAddr string, log types.Log) {
 			return
 		}
 		// write the updated price
-		err = utils.RedisAddPriceObs(v3.Ruedi, utils.TYPE_V3, pxIdx.Symbol, px, nowTs)
+		err = utils.RedisAddPriceObs(v3.Ruedi, d8xUtils.PXTYPE_V3, pxIdx.Symbol, px, nowTs)
 		if err != nil {
 			slog.Error("onSwap: failed to RedisAddPriceObs", "error", err)
 			return
 		}
-		symUpdated += utils.TYPE_V3.ToString() + ":" + pxIdx.Symbol + ";"
+		symUpdated += d8xUtils.PXTYPE_V3.ToString() + ":" + pxIdx.Symbol + ";"
 	}
 	symUpdated = strings.TrimSuffix(symUpdated, ";")
 	utils.RedisPublishIdxPriceChange(v3.Ruedi, symUpdated)

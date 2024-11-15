@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"testing"
 
+	d8xUtils "github.com/D8-X/d8x-futures-go-sdk/utils"
 	"github.com/redis/rueidis"
 )
 
@@ -74,7 +75,7 @@ func TestRueidis(t *testing.T) {
 	fmt.Print(r)
 	dp := ParseTsRange(r)
 	fmt.Print(dp)
-	dp2, err := RangeAggr(&client, "btc-usd", TYPE_PYTH, 1693809900000, 1693896300000, 300000, "max")
+	dp2, err := RangeAggr(&client, "btc-usd", d8xUtils.PXTYPE_PYTH, 1693809900000, 1693896300000, 300000, AGGR_MAX)
 	if err != nil {
 		panic(err)
 	}
@@ -93,20 +94,20 @@ func TestRedisAggr(t *testing.T) {
 	sym := "rds-tst"
 	for k := 0; k < 50; k++ {
 		var timestampMs int64 = 1 + int64(k)*1000
-		RedisAddPriceObs(&client, TYPE_PYTH, sym, float64(k), timestampMs)
+		RedisAddPriceObs(&client, d8xUtils.PXTYPE_PYTH, sym, float64(k), timestampMs)
 	}
-	obs, err := RangeAggr(&client, sym, TYPE_PYTH, 0, 50000, 0, "")
+	obs, err := RangeAggr(&client, sym, d8xUtils.PXTYPE_PYTH, 0, 50000, 0, AGGR_NONE)
 	if err != nil {
 		t.Error(err)
 		return
 	}
 	fmt.Println(obs)
 	var bucket int64 = 10000
-	aF, err := RangeAggr(&client, sym, TYPE_PYTH, 0, 50000, bucket, "first")
+	aF, err := RangeAggr(&client, sym, d8xUtils.PXTYPE_PYTH, 0, 50000, bucket, AGGR_FIRST)
 	if err != nil {
 		panic(err)
 	}
-	aL, err := RangeAggr(&client, sym, TYPE_PYTH, 0, 50000, bucket, "last")
+	aL, err := RangeAggr(&client, sym, d8xUtils.PXTYPE_PYTH, 0, 50000, bucket, AGGR_LAST)
 	if err != nil {
 		panic(err)
 	}

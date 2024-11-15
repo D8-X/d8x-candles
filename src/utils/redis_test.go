@@ -3,6 +3,7 @@ package utils
 import (
 	"testing"
 
+	d8xUtils "github.com/D8-X/d8x-futures-go-sdk/utils"
 	"github.com/redis/rueidis"
 )
 
@@ -15,11 +16,11 @@ func TestCcyAvailability(t *testing.T) {
 	if err != nil {
 		t.FailNow()
 	}
-	err = RedisSetCcyAvailable(&client, TYPE_PYTH, []string{"ETH", "BTC", "USDC"})
+	err = RedisSetCcyAvailable(&client, d8xUtils.PXTYPE_PYTH, []string{"ETH", "BTC", "USDC"})
 	if err != nil {
 		t.FailNow()
 	}
-	avail, err := RedisAreCcyAvailable(&client, TYPE_PYTH, []string{"BTC", "ETH", "USD"})
+	avail, err := RedisAreCcyAvailable(&client, d8xUtils.PXTYPE_PYTH, []string{"BTC", "ETH", "USD"})
 	if err != nil {
 		t.FailNow()
 	}

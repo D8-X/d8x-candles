@@ -3,9 +3,10 @@ package v3client
 import (
 	"d8x-candles/env"
 	"d8x-candles/src/uniutils"
-	"d8x-candles/src/utils"
 	"fmt"
 	"testing"
+
+	d8xUtils "github.com/D8-X/d8x-futures-go-sdk/utils"
 )
 
 func TestFilter(t *testing.T) {
@@ -19,7 +20,7 @@ func TestFilter(t *testing.T) {
 	}
 	eventSigHash := uniutils.GetEventSignatureHash(SWAP_EVENT_SIGNATURE)
 	fltr, err := uniutils.NewFilter(
-		utils.TYPE_V3,
+		d8xUtils.PXTYPE_V3,
 		v3.Config.Indices,
 		v3.RpcHndl,
 		SWAP_EVENT_ABI,

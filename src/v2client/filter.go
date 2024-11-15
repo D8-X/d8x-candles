@@ -2,16 +2,16 @@ package v2client
 
 import (
 	"d8x-candles/src/uniutils"
-	"d8x-candles/src/utils"
 	"log/slog"
 
+	d8xUtils "github.com/D8-X/d8x-futures-go-sdk/utils"
 	"github.com/ethereum/go-ethereum/core/types"
 )
 
 func (v2 *V2Client) Filter() error {
 	eventSigHash := uniutils.GetEventSignatureHash(SYNC_EVENT_SIGNATURE)
 	fltr, err := uniutils.NewFilter(
-		utils.TYPE_V2,
+		d8xUtils.PXTYPE_V2,
 		v2.Config.Indices,
 		v2.RpcHndl,
 		SYNC_EVENT_ABI,

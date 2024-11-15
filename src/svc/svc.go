@@ -14,6 +14,7 @@ import (
 	"os"
 
 	d8xConf "github.com/D8-X/d8x-futures-go-sdk/config"
+	d8xUtils "github.com/D8-X/d8x-futures-go-sdk/utils"
 	"github.com/spf13/viper"
 )
 
@@ -114,7 +115,7 @@ func StreamPolyMarkets() {
 	}
 	found := false
 	for _, el := range config.PriceFeedIds {
-		if el.Type == utils.TYPE_POLYMARKET.ToString() {
+		if el.Type == d8xUtils.PXTYPE_POLYMARKET {
 			found = true
 			break
 		}

@@ -55,9 +55,9 @@ func (p *PolyClient) cleanPolyTickerAvailability() {
 
 	// clean ticker availability
 	cl := *p.RedisClient.Client
-	key := utils.AVAIL_TICKER_SET + ":" + utils.TYPE_POLYMARKET.ToString()
+	key := utils.RDS_AVAIL_TICKER_SET + ":" + d8xUtils.PXTYPE_POLYMARKET.ToString()
 	for _, ids := range p.priceFeedUniverse {
-		if ids.Type != utils.TYPE_POLYMARKET.ToString() {
+		if ids.Type != d8xUtils.PXTYPE_POLYMARKET {
 			continue
 		}
 		fmt.Printf("deleting availability in REDIS for %s\n", ids.Symbol)
@@ -87,7 +87,7 @@ func NewPolyClient(oracleEndpt, REDIS_ADDR, REDIS_PW, storkEndpoint, storkCreden
 	// now add
 	pc.priceFeedUniverse = make(map[string]d8xUtils.PriceFeedId, 0)
 	for _, el := range config {
-		if el.Type != utils.TYPE_POLYMARKET.ToString() {
+		if el.Type != d8xUtils.PXTYPE_POLYMARKET {
 			continue
 		}
 		sym := strings.ToUpper(el.Symbol)
@@ -139,11 +139,11 @@ func (p *PolyClient) enableTicker(sym string) {
 	}
 	p.muSyms.Unlock()
 
-	utils.RedisReCreateTimeSeries(p.RedisClient.Client, utils.TYPE_POLYMARKET, sym)
+	utils.RedisReCreateTimeSeries(p.RedisClient.Client, d8xUtils.PXTYPE_POLYMARKET, sym)
 
 	// set symbol available
 	c := *p.RedisClient.Client
-	key := utils.AVAIL_TICKER_SET + ":" + utils.TYPE_POLYMARKET.ToString()
+	key := utils.RDS_AVAIL_TICKER_SET + ":" + d8xUtils.PXTYPE_POLYMARKET.ToString()
 	c.Do(context.Background(), c.B().Sadd().Key(key).Member(sym).Build())
 	p.FetchMktInfo([]string{sym})
 	if m.Closed {
@@ -230,6 +230,6 @@ func (p *PolyClient) FetchMktInfo(syms []string) {
 			NextOpen:  0,
 			NextClose: m.EndDateISOTs,
 		}
-		utils.RedisSetMarketHours(p.RedisClient.Client, sym, hrs, utils.TYPE_POLYMARKET.ToString())
+		utils.RedisSetMarketHours(p.RedisClient.Client, sym, hrs, d8xUtils.PXTYPE_POLYMARKET.ToString())
 	}
 }

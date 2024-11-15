@@ -10,7 +10,6 @@ import (
 	"sync"
 
 	embed "github.com/D8-X/d8x-futures-go-sdk/config"
-	"github.com/D8-X/d8x-futures-go-sdk/utils"
 	d8xUtils "github.com/D8-X/d8x-futures-go-sdk/utils"
 )
 
@@ -56,14 +55,14 @@ func (sm *SymbolManager) New(fileName string) error {
 	return nil
 }
 
-func (c *SymbolManager) ExtractCCY(pxType PriceType) ([]string, error) {
+func (c *SymbolManager) ExtractCCY(pxType d8xUtils.PriceType) ([]string, error) {
 	config, err := embed.GetDefaultPriceConfigByName("PythEVMStable")
 	if err != nil {
 		return nil, err
 	}
 	syms := make(map[string]bool)
 	for _, item := range config.PriceFeedIds {
-		if item.Type != pxType.ToString() {
+		if item.Type != pxType {
 			continue
 		}
 		ccys := strings.Split(item.Symbol, "-")
@@ -93,9 +92,9 @@ func (c *SymbolManager) extractPythIdToSymbolMap() error {
 	for _, sym := range config.CandleIrrelevant {
 		irrelevantSyms[strings.ToUpper(sym)] = struct{}{}
 	}
-	c.PriceFeedIds = make([]utils.PriceFeedId, 0, len(config.PriceFeedIds))
+	c.PriceFeedIds = make([]d8xUtils.PriceFeedId, 0, len(config.PriceFeedIds))
 	for k, el := range config.PriceFeedIds {
-		if el.Type != TYPE_PYTH.ToString() {
+		if el.Type != d8xUtils.PXTYPE_PYTH {
 			continue
 		}
 		s := strings.ToUpper(el.Symbol)

@@ -13,6 +13,7 @@ import (
 	"sync"
 	"time"
 
+	d8xUtils "github.com/D8-X/d8x-futures-go-sdk/utils"
 	"github.com/gorilla/websocket"
 	redis "github.com/redis/go-redis/v9"
 )
@@ -31,9 +32,9 @@ type ClientConn struct {
 // Server is the struct to handle the Server functions & manage the Subscriptions
 type Server struct {
 	Subscriptions     Subscriptions
-	LastCandles       map[string]*utils.OhlcData //symbol:period->OHLC
-	MarketResponses   map[string]MarketResponse  //symbol->market response
-	TickerToPriceType map[string]utils.PriceType //symbol->corresponding price type
+	LastCandles       map[string]*utils.OhlcData    //symbol:period->OHLC
+	MarketResponses   map[string]MarketResponse     //symbol->market response
+	TickerToPriceType map[string]d8xUtils.PriceType //symbol->corresponding price type
 	RedisTSClient     *utils.RueidisClient
 	MsgCount          int
 }
@@ -70,7 +71,7 @@ func NewServer() *Server {
 		Subscriptions:     make(Subscriptions),
 		LastCandles:       make(map[string]*utils.OhlcData),
 		MarketResponses:   make(map[string]MarketResponse),
-		TickerToPriceType: make(map[string]utils.PriceType),
+		TickerToPriceType: make(map[string]d8xUtils.PriceType),
 	}
 	s.Subscriptions[MARKETS_TOPIC] = make(Clients)
 	return &s
@@ -217,8 +218,14 @@ func (s *Server) UpdateMarketResponses() {
 	var anchorTime24hMs int64 = nowUTCms - 86400000
 	// symbols
 	c := *s.RedisTSClient.Client
-	for _, priceType := range utils.PriceTypes {
-		key := utils.AVAIL_TICKER_SET + priceType.ToString()
+	relevTypes := []d8xUtils.PriceType{
+		d8xUtils.PXTYPE_PYTH,
+		d8xUtils.PXTYPE_POLYMARKET,
+		d8xUtils.PXTYPE_V2,
+		d8xUtils.PXTYPE_V3,
+	}
+	for _, priceType := range relevTypes {
+		key := utils.RDS_AVAIL_TICKER_SET + priceType.ToString()
 		members, err := c.Do(context.Background(), c.B().Smembers().Key(key).Build()).AsStrSlice()
 		if err != nil {
 			slog.Error("UpdateMarketResponses:", "key", key, "error", err)
@@ -240,12 +247,20 @@ func (s *Server) updtMarketForSym(sym string, anchorTime24hMs int64) error {
 		return err
 	}
 	const d = 86400000
-	px24, err := utils.RangeAggr(s.RedisTSClient.Client, sym, s.TickerToPriceType[sym], anchorTime24hMs, anchorTime24hMs+d, 60000, "first")
+	px24, err := utils.RangeAggr(
+		s.RedisTSClient.Client,
+		sym,
+		s.TickerToPriceType[sym],
+		anchorTime24hMs,
+		anchorTime24hMs+d,
+		60000,
+		utils.AGGR_FIRST,
+	)
 	var ret float64
 	if err != nil || len(px24) == 0 || px24[0].Value == 0 {
 		px24 = nil
 	} else {
-		if m.AssetType == utils.TYPE_POLYMARKET.ToString() {
+		if m.AssetType == d8xUtils.PXTYPE_POLYMARKET.ToString() {
 			// absolute change for betting markets
 			ret = px.Value - px24[0].Value
 		} else {
@@ -287,7 +302,7 @@ func (s *Server) SubscribeCandles(conn *ClientConn, clientID string, topic strin
 
 	if _, exists := s.TickerToPriceType[sym]; !exists {
 		pxtype, avail, ready := s.IsSymbolAvailable(sym)
-		if pxtype == utils.TYPE_UNKNOWN {
+		if pxtype == d8xUtils.PXTYPE_UNKNOWN {
 			// symbol not supported
 			return errorResponse("subscribe", topic, "symbol not supported")
 		}
@@ -321,34 +336,34 @@ func (s *Server) SubscribeCandles(conn *ClientConn, clientID string, topic strin
 
 // IsSymbolAvailable returns the price source, whether the symbol can be
 // triangulated and whether it is readily available
-func (s *Server) IsSymbolAvailable(sym string) (utils.PriceType, bool, bool) {
+func (s *Server) IsSymbolAvailable(sym string) (d8xUtils.PriceType, bool, bool) {
 	// first priority: Pyth-type
-	if utils.RedisIsSymbolAvailable(s.RedisTSClient.Client, utils.TYPE_PYTH, sym) {
-		return utils.TYPE_PYTH, true, true
+	if utils.RedisIsSymbolAvailable(s.RedisTSClient.Client, d8xUtils.PXTYPE_PYTH, sym) {
+		return d8xUtils.PXTYPE_PYTH, true, true
 	}
 	ccys := strings.Split(sym, "-")
-	avail, err := utils.RedisAreCcyAvailable(s.RedisTSClient.Client, utils.TYPE_PYTH, ccys)
+	avail, err := utils.RedisAreCcyAvailable(s.RedisTSClient.Client, d8xUtils.PXTYPE_PYTH, ccys)
 	if err == nil && avail[0] && avail[1] {
 		// we send the ticker request even if available (other process could have crashed)
 		// if the symbol can be triangulated, this will be done now
 		c := *s.RedisTSClient.Client
 		err = c.Do(
 			context.Background(),
-			c.B().Publish().Channel(utils.TICKER_REQUEST).Message(sym).Build(),
+			c.B().Publish().Channel(utils.RDS_TICKER_REQUEST).Message(sym).Build(),
 		).Error()
 		if err != nil {
 			slog.Error("IsSymbolAvailable " + sym + "error:" + err.Error())
 		}
-		return utils.TYPE_PYTH, false, true
+		return d8xUtils.PXTYPE_PYTH, false, true
 	}
 	// V2 and V3 are not triangulated on demand, hence we directly query the symbol
-	if utils.RedisIsSymbolAvailable(s.RedisTSClient.Client, utils.TYPE_V2, sym) {
-		return utils.TYPE_V2, true, true
+	if utils.RedisIsSymbolAvailable(s.RedisTSClient.Client, d8xUtils.PXTYPE_V2, sym) {
+		return d8xUtils.PXTYPE_V2, true, true
 	}
-	if utils.RedisIsSymbolAvailable(s.RedisTSClient.Client, utils.TYPE_V3, sym) {
-		return utils.TYPE_V3, true, true
+	if utils.RedisIsSymbolAvailable(s.RedisTSClient.Client, d8xUtils.PXTYPE_V3, sym) {
+		return d8xUtils.PXTYPE_V3, true, true
 	}
-	return utils.TYPE_UNKNOWN, false, false
+	return d8xUtils.PXTYPE_UNKNOWN, false, false
 }
 
 func isValidCandleTopic(topic string) bool {

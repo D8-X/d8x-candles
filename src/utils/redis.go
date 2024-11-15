@@ -10,18 +10,29 @@ import (
 	"time"
 
 	"github.com/D8-X/d8x-futures-go-sdk/pkg/d8x_futures"
+	d8xUtils "github.com/D8-X/d8x-futures-go-sdk/utils"
 	"github.com/redis/rueidis"
 	"golang.org/x/exp/slog"
 )
 
 // REDIS set name
-const AVAIL_TICKER_SET string = "avail" // :pricetype
-const AVAIL_CCY_SET string = "avail_ccy"
-const TICKER_REQUEST = "request"
-const PRICE_UPDATE_MSG = "px_update"
+const RDS_AVAIL_TICKER_SET string = "avail" // :d8xUtils.PriceType
+const RDS_AVAIL_CCY_SET string = "avail_ccy"
+const RDS_TICKER_REQUEST = "request"
+const RDS_PRICE_UPDATE_MSG = "px_update"
+
+type Aggr int
+
+const (
+	AGGR_MIN Aggr = iota
+	AGGR_MAX
+	AGGR_FIRST
+	AGGR_LAST
+	AGGR_NONE
+)
 
 // RedisCreateIfNotExistsTs creates a time-series for the given symbol
-func RedisCreateIfNotExistsTs(rClient *rueidis.Client, pxtype PriceType, symbol string) error {
+func RedisCreateIfNotExistsTs(rClient *rueidis.Client, pxtype d8xUtils.PriceType, symbol string) error {
 	ctx := context.Background()
 	key := pxtype.ToString() + ":" + symbol
 	client := *rClient
@@ -45,7 +56,7 @@ func RedisCreateIfNotExistsTs(rClient *rueidis.Client, pxtype PriceType, symbol 
 	return nil
 }
 
-func RedisAddPriceObs(client *rueidis.Client, pxtype PriceType, sym string, price float64, timestampMs int64) error {
+func RedisAddPriceObs(client *rueidis.Client, pxtype d8xUtils.PriceType, sym string, price float64, timestampMs int64) error {
 	ctx := context.Background()
 	c := *client
 	ts := strconv.FormatInt(timestampMs, 10)
@@ -59,7 +70,7 @@ func RedisAddPriceObs(client *rueidis.Client, pxtype PriceType, sym string, pric
 }
 
 // sym of the form ETH-USD
-func PricesToRedis(client *rueidis.Client, sym string, pxtype PriceType, obs PriceObservations) error {
+func PricesToRedis(client *rueidis.Client, sym string, pxtype d8xUtils.PriceType, obs PriceObservations) error {
 	err := RedisReCreateTimeSeries(client, pxtype, sym)
 	if err != nil {
 		return err
@@ -78,12 +89,12 @@ func PricesToRedis(client *rueidis.Client, sym string, pxtype PriceType, obs Pri
 	wg.Wait()
 	// set the symbol as available
 	c := *client
-	key := AVAIL_TICKER_SET + ":" + pxtype.ToString()
+	key := RDS_AVAIL_TICKER_SET + ":" + pxtype.ToString()
 	c.Do(context.Background(), c.B().Sadd().Key(key).Member(sym).Build())
 	return nil
 }
 
-func RedisGetFirstTimestamp(client *rueidis.Client, pxtype PriceType, sym string) int64 {
+func RedisGetFirstTimestamp(client *rueidis.Client, pxtype d8xUtils.PriceType, sym string) int64 {
 	ctx := context.Background()
 	c := *client
 	key := pxtype.ToString() + ":" + sym
@@ -108,7 +119,7 @@ func RedisGetFirstTimestamp(client *rueidis.Client, pxtype PriceType, sym string
 // of the oldest price involved
 func RedisCalcTriangPrice(
 	redisClient *rueidis.Client,
-	pxtype PriceType,
+	pxtype d8xUtils.PriceType,
 	triang d8x_futures.Triangulation,
 ) (float64, int64, error) {
 
@@ -154,11 +165,11 @@ func RedisCalcTriangPrice(
 func RedisPublishIdxPriceChange(redisClient *rueidis.Client, symbols string) error {
 	c := *redisClient
 	return c.Do(context.Background(),
-		c.B().Publish().Channel(PRICE_UPDATE_MSG).Message(symbols).Build()).Error()
+		c.B().Publish().Channel(RDS_PRICE_UPDATE_MSG).Message(symbols).Build()).Error()
 }
 
 // RedisReCreateTimeSeries destroys existing timeseries and re-creates it
-func RedisReCreateTimeSeries(client *rueidis.Client, pxtype PriceType, sym string) error {
+func RedisReCreateTimeSeries(client *rueidis.Client, pxtype d8xUtils.PriceType, sym string) error {
 	ctx := context.Background()
 	c := *client
 	key := pxtype.ToString() + ":" + sym
@@ -185,10 +196,10 @@ func RedisReCreateTimeSeries(client *rueidis.Client, pxtype PriceType, sym strin
 }
 
 // RedisSetCcyAvailable sets currencies available, e.g., ccys=[]string{"USDC", "BTC", ...}
-func RedisSetCcyAvailable(client *rueidis.Client, pxtype PriceType, ccys []string) error {
+func RedisSetCcyAvailable(client *rueidis.Client, pxtype d8xUtils.PriceType, ccys []string) error {
 	ctx := context.Background()
 	c := *client
-	setKey := AVAIL_CCY_SET + ":" + pxtype.ToString()
+	setKey := RDS_AVAIL_CCY_SET + ":" + pxtype.ToString()
 	// Delete the entire set
 	cmds := c.B().Del().Key(setKey).Build()
 	if res := c.Do(ctx, cmds); res.Error() == nil {
@@ -202,10 +213,10 @@ func RedisSetCcyAvailable(client *rueidis.Client, pxtype PriceType, ccys []strin
 
 // RedisAreCcyAvailable checks which of the provided currencies are available in the AVAIL_CCY_SET
 // and returns a boolean array corresponding to ccys
-func RedisAreCcyAvailable(client *rueidis.Client, pxtype PriceType, ccys []string) ([]bool, error) {
+func RedisAreCcyAvailable(client *rueidis.Client, pxtype d8xUtils.PriceType, ccys []string) ([]bool, error) {
 	ctx := context.Background()
 	c := *client
-	setKey := AVAIL_CCY_SET + ":" + pxtype.ToString()
+	setKey := RDS_AVAIL_CCY_SET + ":" + pxtype.ToString()
 	cmd := c.B().Smembers().Key(setKey).Build()
 	availCcys, err := c.Do(ctx, cmd).AsStrSlice()
 	if err != nil {
@@ -223,9 +234,9 @@ func RedisAreCcyAvailable(client *rueidis.Client, pxtype PriceType, ccys []strin
 	return avail, nil
 }
 
-func RedisIsSymbolAvailable(client *rueidis.Client, pxtype PriceType, sym string) bool {
+func RedisIsSymbolAvailable(client *rueidis.Client, pxtype d8xUtils.PriceType, sym string) bool {
 	ctx := context.Background()
-	key := AVAIL_TICKER_SET + ":" + pxtype.ToString()
+	key := RDS_AVAIL_TICKER_SET + ":" + pxtype.ToString()
 	c := *client
 	cmd := c.B().Sismember().Key(key).Member(sym).Build()
 	isMember, err := c.Do(ctx, cmd).AsBool()
@@ -272,7 +283,7 @@ func RedisGetMarketInfo(ctx context.Context, client *rueidis.Client, ticker stri
 	// closing period)
 	now := time.Now().UTC().Unix()
 	var isClosed bool
-	if hm["asset_type"] == TYPE_POLYMARKET.ToString() {
+	if hm["asset_type"] == d8xUtils.PXTYPE_POLYMARKET.ToString() {
 		// we cannot rely on nxtOpen and nxtClose
 		isClosed = !isOpen
 	} else {
@@ -288,4 +299,97 @@ func RedisGetMarketInfo(ctx context.Context, client *rueidis.Client, ticker stri
 	}
 	var m = MarketInfo{MarketHours: mh, AssetType: asset}
 	return m, nil
+}
+
+// OhlcFromRedis queries OHLC data from REDIS price cache, timestamps in ms
+// sym is of the form btc-usd
+func OhlcFromRedis(client *rueidis.Client, sym string, pxtype d8xUtils.PriceType, fromTs int64, toTs int64, resolSec uint32) ([]OhlcData, error) {
+
+	timeBucket := int64(resolSec) * 1000
+	//agg.Count = 100
+	// collect aggregations
+	aggregations := []Aggr{AGGR_FIRST, AGGR_MAX, AGGR_MIN, AGGR_LAST}
+
+	var redisData []*[]DataPoint
+	for _, a := range aggregations {
+		data, err := RangeAggr(client, sym, pxtype, fromTs, toTs, timeBucket, a)
+		if err != nil {
+			return []OhlcData{}, err
+		}
+		redisData = append(redisData, &data)
+	}
+
+	// store in candle format
+	var ohlc []OhlcData
+	var tOld int64 = 0
+	for k := 0; k < len(*redisData[0]); k++ {
+		var data OhlcData
+		data.TsMs = (*redisData[0])[k].Timestamp
+		data.Time = ConvertTimestampToISO8601(data.TsMs)
+		data.O = (*redisData[0])[k].Value
+		data.H = (*redisData[1])[k].Value
+		data.L = (*redisData[2])[k].Value
+		data.C = (*redisData[3])[k].Value
+
+		// insert artificial data for gaps before adding 'data'
+		numGaps := (data.TsMs - tOld) / timeBucket
+		for j := 0; j < int(numGaps)-1 && k > 0; j++ {
+			var dataGap OhlcData
+			dataGap.TsMs = tOld + int64(j+1)*timeBucket
+			dataGap.Time = ConvertTimestampToISO8601(dataGap.TsMs)
+			// set all data to close of previous OHLC observation
+			dataGap.O = (*redisData[3])[k].Value
+			dataGap.H = (*redisData[3])[k].Value
+			dataGap.L = (*redisData[3])[k].Value
+			dataGap.C = (*redisData[3])[k].Value
+			ohlc = append(ohlc, dataGap)
+		}
+		tOld = data.TsMs
+		ohlc = append(ohlc, data)
+	}
+	return ohlc, nil
+}
+
+// RangeAggr aggregates the redis prices for the given symbol/price type over the given horizon and bucketDuration according
+// to 'aggr'
+func RangeAggr(r *rueidis.Client, sym string, pxtype d8xUtils.PriceType, fromTs int64, toTs int64, bucketDur int64, aggr Aggr) ([]DataPoint, error) {
+	key := pxtype.ToString() + ":" + sym
+	var cmd rueidis.Completed
+	fromTs = int64(fromTs/bucketDur) * bucketDur
+	switch aggr {
+	case AGGR_MIN:
+		cmd = (*r).B().TsRange().Key(key).
+			Fromtimestamp(strconv.FormatInt(fromTs, 10)).Totimestamp(strconv.FormatInt(toTs, 10)).
+			Align("-").
+			AggregationMin().Bucketduration(bucketDur).Build()
+	case AGGR_MAX:
+		cmd = (*r).B().TsRange().Key(key).
+			Fromtimestamp(strconv.FormatInt(fromTs, 10)).Totimestamp(strconv.FormatInt(toTs, 10)).
+			Align("-").
+			AggregationMax().Bucketduration(bucketDur).Build()
+	case AGGR_FIRST:
+		cmd = (*r).B().TsRange().Key(key).
+			Fromtimestamp(strconv.FormatInt(fromTs, 10)).Totimestamp(strconv.FormatInt(toTs, 10)).
+			Align("-").
+			AggregationFirst().Bucketduration(bucketDur).Build()
+	case AGGR_LAST:
+		cmd = (*r).B().TsRange().Key(key).
+			Fromtimestamp(strconv.FormatInt(fromTs, 10)).Totimestamp(strconv.FormatInt(toTs, 10)).
+			Align("-").
+			AggregationLast().Bucketduration(bucketDur).Build()
+	case AGGR_NONE: //no aggregation
+		cmd = (*r).B().TsRange().Key(key).
+			Fromtimestamp(strconv.FormatInt(fromTs, 10)).Totimestamp(strconv.FormatInt(toTs, 10)).
+			Align("-").
+			Build()
+	default:
+		return []DataPoint{}, errors.New("invalid aggr type")
+	}
+	raw, err := (*r).Do(context.Background(), cmd).ToAny()
+	if err != nil {
+		return []DataPoint{}, err
+	}
+	data := ParseTsRange(raw)
+
+	return data, nil
 }

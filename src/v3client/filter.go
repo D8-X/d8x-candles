@@ -2,17 +2,17 @@ package v3client
 
 import (
 	"d8x-candles/src/uniutils"
-	"d8x-candles/src/utils"
 	"log"
 	"math/big"
 
+	d8xUtils "github.com/D8-X/d8x-futures-go-sdk/utils"
 	"github.com/ethereum/go-ethereum/core/types"
 )
 
 func (v3 *V3Client) Filter() error {
 	eventSigHash := uniutils.GetEventSignatureHash(SWAP_EVENT_SIGNATURE)
 	fltr, err := uniutils.NewFilter(
-		utils.TYPE_V3,
+		d8xUtils.PXTYPE_V3,
 		v3.Config.Indices,
 		v3.RpcHndl,
 		SWAP_EVENT_ABI,

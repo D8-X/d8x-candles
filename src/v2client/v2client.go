@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/D8-X/d8x-futures-go-sdk/pkg/d8x_futures"
+	d8xUtils "github.com/D8-X/d8x-futures-go-sdk/utils"
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
@@ -83,7 +84,7 @@ func NewV2Client(configV2, configRpc, redisAddr, redisPw string) (*V2Client, err
 		v2.RelevantPoolAddrs = append(v2.RelevantPoolAddrs, common.HexToAddress(addr))
 	}
 	// create relevant timeseries in Redis
-	err = uniutils.InitRedisIndices(v2.Config.Indices, utils.TYPE_V2, &client)
+	err = uniutils.InitRedisIndices(v2.Config.Indices, d8xUtils.PXTYPE_V2, &client)
 	if err != nil {
 		return nil, err
 	}
@@ -107,7 +108,7 @@ func (v2 *V2Client) Run() error {
 	slog.Info("start filtering historical v2 events")
 	v2.Filter()
 	slog.Info("filtering historical v2 data complete")
-	key := utils.AVAIL_TICKER_SET + ":" + utils.TYPE_V2.ToString()
+	key := utils.RDS_AVAIL_TICKER_SET + ":" + d8xUtils.PXTYPE_V2.ToString()
 	for j := range v2.Config.Indices {
 		// set market hours for index symbol
 		sym := v2.Config.Indices[j].Symbol
@@ -186,7 +187,7 @@ func (v2 *V2Client) onSync(log types.Log) {
 	// store mid-price
 	utils.RedisAddPriceObs(
 		v2.Ruedi,
-		utils.TYPE_V2,
+		d8xUtils.PXTYPE_V2,
 		info.Symbol,
 		px,
 		time.Now().UnixMilli(),
@@ -208,7 +209,7 @@ func (v2 *V2Client) idxPriceUpdate(poolAddr string) error {
 		var px float64 = 1
 		px, oldestTs, err := utils.RedisCalcTriangPrice(
 			v2.Ruedi,
-			utils.TYPE_V2,
+			d8xUtils.PXTYPE_V2,
 			v2.Triangulations[pxIdx.Symbol],
 		)
 		if err != nil {
@@ -217,7 +218,7 @@ func (v2 *V2Client) idxPriceUpdate(poolAddr string) error {
 		symbol := pxIdx.Symbol
 		err = utils.RedisAddPriceObs(
 			v2.Ruedi,
-			utils.TYPE_V2,
+			d8xUtils.PXTYPE_V2,
 			symbol,
 			px,
 			oldestTs,

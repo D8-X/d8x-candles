@@ -1,111 +1,16 @@
 package utils
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"log/slog"
-	"strconv"
 	"time"
-
-	"github.com/redis/rueidis"
 )
-
-// Ohlc queries OHLC data from REDIS price cache, timestamps in ms
-// sym is of the form btc-usd
-func Ohlc(client *rueidis.Client, sym string, pxtype PriceType, fromTs int64, toTs int64, resolSec uint32) ([]OhlcData, error) {
-
-	timeBucket := int64(resolSec) * 1000
-	//agg.Count = 100
-	// collect aggregations
-	aggregations := []string{"first", "max", "min", "last"}
-
-	var redisData []*[]DataPoint
-	for _, a := range aggregations {
-		data, err := RangeAggr(client, sym, pxtype, fromTs, toTs, timeBucket, a)
-		if err != nil {
-			return []OhlcData{}, err
-		}
-		redisData = append(redisData, &data)
-	}
-
-	// store in candle format
-	var ohlc []OhlcData
-	var tOld int64 = 0
-	for k := 0; k < len(*redisData[0]); k++ {
-		var data OhlcData
-		data.TsMs = (*redisData[0])[k].Timestamp
-		data.Time = ConvertTimestampToISO8601(data.TsMs)
-		data.O = (*redisData[0])[k].Value
-		data.H = (*redisData[1])[k].Value
-		data.L = (*redisData[2])[k].Value
-		data.C = (*redisData[3])[k].Value
-
-		// insert artificial data for gaps before adding 'data'
-		numGaps := (data.TsMs - tOld) / timeBucket
-		for j := 0; j < int(numGaps)-1 && k > 0; j++ {
-			var dataGap OhlcData
-			dataGap.TsMs = tOld + int64(j+1)*timeBucket
-			dataGap.Time = ConvertTimestampToISO8601(dataGap.TsMs)
-			// set all data to close of previous OHLC observation
-			dataGap.O = (*redisData[3])[k].Value
-			dataGap.H = (*redisData[3])[k].Value
-			dataGap.L = (*redisData[3])[k].Value
-			dataGap.C = (*redisData[3])[k].Value
-			ohlc = append(ohlc, dataGap)
-		}
-		tOld = data.TsMs
-		ohlc = append(ohlc, data)
-	}
-	return ohlc, nil
-}
 
 func ConvertTimestampToISO8601(timestampMs int64) string {
 	timestamp := time.Unix(0, timestampMs*int64(time.Millisecond))
 	iso8601 := timestamp.UTC().Format("2006-01-02T15:04:05.000Z")
 	return iso8601
-}
-
-func RangeAggr(r *rueidis.Client, sym string, pxtype PriceType, fromTs int64, toTs int64, bucketDur int64, aggr string) ([]DataPoint, error) {
-	key := pxtype.ToString() + ":" + sym
-	var cmd rueidis.Completed
-	fromTs = int64(fromTs/bucketDur) * bucketDur
-	switch aggr {
-	case "min":
-		cmd = (*r).B().TsRange().Key(key).
-			Fromtimestamp(strconv.FormatInt(fromTs, 10)).Totimestamp(strconv.FormatInt(toTs, 10)).
-			Align("-").
-			AggregationMin().Bucketduration(bucketDur).Build()
-	case "max":
-		cmd = (*r).B().TsRange().Key(key).
-			Fromtimestamp(strconv.FormatInt(fromTs, 10)).Totimestamp(strconv.FormatInt(toTs, 10)).
-			Align("-").
-			AggregationMax().Bucketduration(bucketDur).Build()
-	case "first":
-		cmd = (*r).B().TsRange().Key(key).
-			Fromtimestamp(strconv.FormatInt(fromTs, 10)).Totimestamp(strconv.FormatInt(toTs, 10)).
-			Align("-").
-			AggregationFirst().Bucketduration(bucketDur).Build()
-	case "last":
-		cmd = (*r).B().TsRange().Key(key).
-			Fromtimestamp(strconv.FormatInt(fromTs, 10)).Totimestamp(strconv.FormatInt(toTs, 10)).
-			Align("-").
-			AggregationLast().Bucketduration(bucketDur).Build()
-	case "": //no aggregation
-		cmd = (*r).B().TsRange().Key(key).
-			Fromtimestamp(strconv.FormatInt(fromTs, 10)).Totimestamp(strconv.FormatInt(toTs, 10)).
-			Align("-").
-			Build()
-	default:
-		return []DataPoint{}, errors.New("invalid aggr type")
-	}
-	raw, err := (*r).Do(context.Background(), cmd).ToAny()
-	if err != nil {
-		return []DataPoint{}, err
-	}
-	data := ParseTsRange(raw)
-
-	return data, nil
 }
 
 func ParseTsRange(data interface{}) []DataPoint {

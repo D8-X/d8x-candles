@@ -6,10 +6,16 @@ import (
 	"time"
 
 	"github.com/D8-X/d8x-futures-go-sdk/pkg/d8x_futures"
+	d8xUtils "github.com/D8-X/d8x-futures-go-sdk/utils"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/redis/rueidis"
 	"golang.org/x/crypto/sha3"
 )
+
+/*
+	Functions shared between v2client and v3client
+
+*/
 
 // Index represents each index in the "indices" array
 type ConfigIndex struct {
@@ -19,7 +25,7 @@ type ConfigIndex struct {
 
 const LOOKBACK_SEC = 86400 * 5 // now-LOOKBACK_SEC is when we start gathering history
 
-func InitRedisIndices(indices []ConfigIndex, pxtype utils.PriceType, client *rueidis.Client) error {
+func InitRedisIndices(indices []ConfigIndex, pxtype d8xUtils.PriceType, client *rueidis.Client) error {
 	for j := range indices {
 		err := utils.RedisCreateIfNotExistsTs(client, pxtype, indices[j].Symbol)
 		if err != nil {
@@ -49,7 +55,7 @@ func TriangFromStringSlice(tr []string) d8x_futures.Triangulation {
 
 // missingSymsInHist determines symbols for which historical data
 // should be added to redis
-func missingSymsInHist(indices []ConfigIndex, unitype utils.PriceType, client *rueidis.Client) map[string]bool {
+func missingSymsInHist(indices []ConfigIndex, unitype d8xUtils.PriceType, client *rueidis.Client) map[string]bool {
 	// identify all symbols
 	symRequired := make(map[string]bool)
 	for j := range indices {

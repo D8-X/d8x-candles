@@ -4,13 +4,15 @@ import (
 	"d8x-candles/src/utils"
 	"log/slog"
 	"time"
+
+	d8xUtils "github.com/D8-X/d8x-futures-go-sdk/utils"
 )
 
 // construct candle stick data from redis
 func GetInitialCandles(
 	client *utils.RueidisClient,
 	sym string,
-	pxtype utils.PriceType,
+	pxtype d8xUtils.PriceType,
 	p utils.CandlePeriod,
 ) []utils.OhlcData {
 
@@ -34,7 +36,7 @@ func GetInitialCandles(
 	}
 
 	resolSec := uint32(p.TimeMs / 1000)
-	data, err := utils.Ohlc(client.Client, sym, pxtype, fromTsMs, tMs, resolSec)
+	data, err := utils.OhlcFromRedis(client.Client, sym, pxtype, fromTsMs, tMs, resolSec)
 	if err != nil {
 		slog.Error("Error initial candles for sym " + sym)
 		return []utils.OhlcData{}

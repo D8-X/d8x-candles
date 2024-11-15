@@ -40,7 +40,7 @@ func TestPolyClient(t *testing.T) {
 		{
 			Symbol: "EL24-USD",
 			Id:     "0x3011e4ede0f6befa0ad3f571001d3e1ffeef3d4af78c3112aaac90416e3a43e7",
-			Type:   utils.TYPE_POLYMARKET.ToString(),
+			Type:   d8xUtils.PXTYPE_POLYMARKET,
 			Origin: "0xdd22472e552920b8438158ea7238bfadfa4f736aa4cee91a6b86c39ead110917",
 		},
 	}
@@ -76,7 +76,7 @@ func TestPolyClient2(t *testing.T) {
 		{
 			Symbol: "trump-usd",
 			Id:     "0x3011e4ede0f6befa0ad3f571001d3e1ffeef3d4af78c3112aaac90416e3a43e7",
-			Type:   utils.TYPE_POLYMARKET.ToString(),
+			Type:   d8xUtils.PXTYPE_POLYMARKET,
 			Origin: "0xdd22472e552920b8438158ea7238bfadfa4f736aa4cee91a6b86c39ead110917",
 		},
 	}
@@ -112,7 +112,7 @@ func TestMktInfoUpdate(t *testing.T) {
 		{
 			Symbol: "EL24-USD",
 			Id:     "0x3011e4ede0f6befa0ad3f571001d3e1ffeef3d4af78c3112aaac90416e3a43e7",
-			Type:   utils.TYPE_POLYMARKET.ToString(),
+			Type:   d8xUtils.PXTYPE_POLYMARKET,
 			Origin: "0xdd22472e552920b8438158ea7238bfadfa4f736aa4cee91a6b86c39ead110917",
 		},
 	}

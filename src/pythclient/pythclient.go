@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/D8-X/d8x-futures-go-sdk/pkg/d8x_futures"
+	d8xUtils "github.com/D8-X/d8x-futures-go-sdk/utils"
 	"github.com/redis/rueidis"
 )
 
@@ -76,11 +77,11 @@ func NewPythClientApp(symMngr *utils.SymbolManager, REDIS_ADDR string, REDIS_PW 
 }
 
 func setCCYAvailable(symMngr *utils.SymbolManager, ruedi *rueidis.Client) error {
-	syms, err := symMngr.ExtractCCY(utils.TYPE_PYTH)
+	syms, err := symMngr.ExtractCCY(d8xUtils.PXTYPE_PYTH)
 	if err != nil {
 		return err
 	}
-	return utils.RedisSetCcyAvailable(ruedi, utils.TYPE_PYTH, syms)
+	return utils.RedisSetCcyAvailable(ruedi, d8xUtils.PXTYPE_PYTH, syms)
 }
 
 // symMap maps pyth ids to internal symbol (btc-usd)
@@ -105,7 +106,7 @@ func (p *PythClientApp) ScheduleCompaction(waitTime time.Duration) {
 	tickerUpdate := time.NewTicker(waitTime)
 	for {
 		<-tickerUpdate.C
-		utils.CompactAllPriceObs(p.RedisClient.Client, utils.TYPE_PYTH)
+		utils.CompactAllPriceObs(p.RedisClient.Client, d8xUtils.PXTYPE_PYTH)
 		slog.Info("Compaction completed.")
 	}
 }
@@ -118,9 +119,9 @@ func (p *PythClientApp) clearPythTickerAvailability() {
 	// clean ticker availability
 	cl := *p.RedisClient.Client
 	config := p.SymbolMngr.PriceFeedIds
-	key := utils.AVAIL_TICKER_SET + ":" + utils.TYPE_PYTH.ToString()
+	key := utils.RDS_AVAIL_TICKER_SET + ":" + d8xUtils.PXTYPE_PYTH.ToString()
 	for _, ids := range config {
-		if ids.Type != utils.TYPE_PYTH.ToString() {
+		if ids.Type != d8xUtils.PXTYPE_PYTH {
 			continue
 		}
 		fmt.Printf("deleting availability for %s\n", ids.Symbol)

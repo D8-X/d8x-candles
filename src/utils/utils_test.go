@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	d8xUtils "github.com/D8-X/d8x-futures-go-sdk/utils"
 	"github.com/redis/rueidis"
 	"github.com/spf13/viper"
 )
@@ -48,7 +49,7 @@ func TestRedisGetFirstTimestamp(t *testing.T) {
 		fmt.Printf("error %v", err)
 		t.FailNow()
 	}
-	ts := RedisGetFirstTimestamp(&client, TYPE_PYTH, "BTC-USD")
+	ts := RedisGetFirstTimestamp(&client, d8xUtils.PXTYPE_PYTH, "BTC-USD")
 	fmt.Println(ts)
 	tsNow := time.Now().UnixMilli()
 	diff := (tsNow - ts) / 1000

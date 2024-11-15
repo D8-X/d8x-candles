@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	d8xUtils "github.com/D8-X/d8x-futures-go-sdk/utils"
 	ethereum "github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
@@ -29,16 +30,16 @@ type BlockObs struct {
 
 type Filter struct {
 	Indices    []ConfigIndex
-	UniType    utils.PriceType
+	UniType    d8xUtils.PriceType
 	Prices     map[uint64]*BlockObs
 	RpcHndl    *globalrpc.GlobalRpc
 	Abi        abi.ABI
 	EvtSigHash common.Hash
-	handleFunc func(*Filter, types.Log)
+	handleFunc func(*Filter, types.Log) // function that handles events
 }
 
 func NewFilter(
-	unitype utils.PriceType,
+	unitype d8xUtils.PriceType,
 	indices []ConfigIndex,
 	rpcHndl *globalrpc.GlobalRpc,
 	eventAbi string,
