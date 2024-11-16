@@ -1,6 +1,7 @@
 package pythclient
 
 import (
+	"context"
 	"d8x-candles/src/utils"
 	"encoding/json"
 	"fmt"
@@ -161,9 +162,9 @@ func (p *PythClientApp) QueryPriceFeedInfo(sym string, id string) {
 }
 
 func (p *PythClientApp) setMarketHours(ticker string, mh utils.MarketHours, assetType d8xUtils.AssetClass) error {
-	return utils.RedisSetMarketHours(p.RedisClient.Client, ticker, mh, assetType)
+	return utils.RedisSetMarketHours(p.RedisClient, ticker, mh, assetType)
 }
 
 func (p *PythClientApp) GetMarketInfo(ticker string) (utils.MarketInfo, error) {
-	return utils.RedisGetMarketInfo(p.RedisClient.Ctx, p.RedisClient.Client, ticker)
+	return utils.RedisGetMarketInfo(context.Background(), p.RedisClient, ticker)
 }

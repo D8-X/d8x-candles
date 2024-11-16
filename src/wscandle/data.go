@@ -1,16 +1,18 @@
 package wscandle
 
 import (
+	"context"
 	"d8x-candles/src/utils"
 	"log/slog"
 	"time"
 
 	d8xUtils "github.com/D8-X/d8x-futures-go-sdk/utils"
+	"github.com/redis/rueidis"
 )
 
 // construct candle stick data from redis
 func GetInitialCandles(
-	client *utils.RueidisClient,
+	client *rueidis.Client,
 	sym string,
 	pxtype d8xUtils.PriceType,
 	p utils.CandlePeriod,
@@ -23,7 +25,7 @@ func GetInitialCandles(
 	key := pxtype.String() + ":" + sym
 	if p.DisplayRangeMs == 0 {
 		// all data
-		a, err := (*client.Client).Do(client.Ctx, (*client.Client).B().
+		a, err := (*client).Do(context.Background(), (*client).B().
 			TsInfo().Key(key).Build()).AsMap()
 		if err != nil {
 			slog.Error("Error initial candles for sym " + sym)
@@ -36,7 +38,7 @@ func GetInitialCandles(
 	}
 
 	resolSec := uint32(p.TimeMs / 1000)
-	data, err := utils.OhlcFromRedis(client.Client, sym, pxtype, fromTsMs, tMs, resolSec)
+	data, err := utils.OhlcFromRedis(client, sym, pxtype, fromTsMs, tMs, resolSec)
 	if err != nil {
 		slog.Error("Error initial candles for sym " + sym)
 		return []utils.OhlcData{}

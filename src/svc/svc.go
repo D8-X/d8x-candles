@@ -38,12 +38,18 @@ func RunCandleCharts() {
 		fmt.Println("Error:", err.Error())
 		return
 	}
-	wscandle.StartWSServer(c.CandlePeriodsMs,
+
+	ws, err := wscandle.NewWsCandle(c.CandlePeriodsMs,
 		viper.GetString(env.WS_ADDR),
 		viper.GetString(env.REDIS_ADDR),
 		viper.GetString(env.REDIS_PW),
 		viper.GetInt(env.REDIS_DB_NUM),
 	)
+	if err != nil {
+		fmt.Println("Error:", err.Error())
+		return
+	}
+	ws.StartWSServer()
 }
 
 func RunV3Client() {

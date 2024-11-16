@@ -1,15 +1,11 @@
 package utils
 
 import (
-	"context"
-	"errors"
 	"fmt"
 	"log/slog"
 	"math"
 	"strconv"
 	"strings"
-
-	"github.com/redis/rueidis"
 )
 
 type DataPoint struct {
@@ -20,11 +16,6 @@ type DataPoint struct {
 type PriceObservations struct {
 	T []uint32  `json:"t"` // time (ts seconds, start)
 	P []float64 `json:"p"` // price
-}
-
-type RueidisClient struct {
-	Client *rueidis.Client
-	Ctx    context.Context
 }
 
 type PriceUpdateResponse struct {
@@ -85,20 +76,6 @@ type Metadata struct {
 	Slot               int   `json:"slot"`
 	ProofAvailableTime int64 `json:"proof_available_time"`
 	PrevPublishTime    int64 `json:"prev_publish_time"`
-}
-
-func (r *RueidisClient) Get(key string) (DataPoint, error) {
-	vlast, err := (*r.Client).Do(r.Ctx, (*r.Client).B().TsGet().Key(key).Build()).ToArray()
-	if err != nil {
-		return DataPoint{}, err
-	}
-	if len(vlast) < 2 {
-		return DataPoint{}, errors.New("Could not find ts for " + key)
-	}
-	ts, _ := vlast[0].AsInt64()
-	v, _ := vlast[1].AsFloat64()
-	d := DataPoint{Timestamp: ts, Value: v}
-	return d, nil
 }
 
 type SymbolPyth struct {

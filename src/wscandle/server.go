@@ -15,7 +15,7 @@ import (
 
 	d8xUtils "github.com/D8-X/d8x-futures-go-sdk/utils"
 	"github.com/gorilla/websocket"
-	redis "github.com/redis/go-redis/v9"
+	"github.com/redis/rueidis"
 )
 
 // Subscriptions is a type for each string of topic and the clients that subscribe to it
@@ -35,7 +35,7 @@ type Server struct {
 	LastCandles       map[string]*utils.OhlcData    //symbol:period->OHLC
 	MarketResponses   map[string]MarketResponse     //symbol->market response
 	TickerToPriceType map[string]d8xUtils.PriceType //symbol->corresponding price type
-	RedisTSClient     *utils.RueidisClient
+	RedisTSClient     *rueidis.Client
 	MsgCount          int
 }
 
@@ -122,17 +122,17 @@ func (s *Server) HandleRequest(conn *ClientConn, cndlPeriods map[string]utils.Ca
 	if reqType == "SUBSCRIBE" {
 		if reqTopic == MARKETS_TOPIC {
 			msg := s.SubscribeMarkets(conn, clientID)
-			server.Send(conn, msg)
+			s.Send(conn, msg)
 		} else {
 			msg := s.SubscribeCandles(conn, clientID, reqTopic, cndlPeriods)
-			server.Send(conn, msg)
+			s.Send(conn, msg)
 		}
 	} else if reqType == "UNSUBSCRIBE" {
 		// unsubscribe
 		if reqTopic == MARKETS_TOPIC {
 			delete(s.Subscriptions[reqTopic], clientID)
 		} else {
-			server.UnsubscribeCandles(clientID, reqTopic)
+			s.UnsubscribeCandles(clientID, reqTopic)
 		}
 	} //else: ignore
 }
@@ -160,18 +160,24 @@ func (s *Server) SubscribeMarkets(conn *ClientConn, clientID string) []byte {
 	return s.buildMarketResponse("subscribe")
 }
 
-func (s *Server) ScheduleUpdateMarketAndBroadcast(waitTime time.Duration) {
+func (s *Server) ScheduleUpdateMarketAndBroadcast(ctx context.Context, waitTime time.Duration) {
 	tickerUpdate := time.NewTicker(waitTime)
+	defer tickerUpdate.Stop()
 	s.UpdateMarketAndBroadcast()
 	for {
-		<-tickerUpdate.C // if no subscribers we update infrequently
-		if len(server.Subscriptions[MARKETS_TOPIC]) == 0 &&
-			rand.Float64() < 0.95 {
-			slog.Info("UpdateMarketAndBroadcast: no subscribers")
-			break
+		select {
+		case <-ctx.Done():
+			slog.Info("stopping market update scheduler")
+			return
+		case <-tickerUpdate.C: // if no subscribers we update infrequently
+			if len(s.Subscriptions[MARKETS_TOPIC]) == 0 &&
+				rand.Float64() < 0.95 {
+				slog.Info("UpdateMarketAndBroadcast: no subscribers")
+				break
+			}
+			s.UpdateMarketAndBroadcast()
+			fmt.Println("Market info data updated.")
 		}
-		s.UpdateMarketAndBroadcast()
-		fmt.Println("Market info data updated.")
 	}
 
 }
@@ -201,11 +207,11 @@ func (s *Server) buildMarketResponse(typeRes string) []byte {
 func (s *Server) SendMarketResponses() {
 	jsonData := s.buildMarketResponse("update")
 	// update subscribers
-	clients := server.Subscriptions[MARKETS_TOPIC]
+	clients := s.Subscriptions[MARKETS_TOPIC]
 	var wg sync.WaitGroup
 	for _, conn := range clients {
 		wg.Add(1)
-		go server.SendWithWait(conn, jsonData, &wg)
+		go s.SendWithWait(conn, jsonData, &wg)
 	}
 	wg.Wait()
 }
@@ -217,7 +223,7 @@ func (s *Server) UpdateMarketResponses() {
 	//yesterday:
 	var anchorTime24hMs int64 = nowUTCms - 86400000
 	// symbols
-	c := *s.RedisTSClient.Client
+	c := *s.RedisTSClient
 	relevTypes := []d8xUtils.PriceType{
 		d8xUtils.PXTYPE_PYTH,
 		d8xUtils.PXTYPE_POLYMARKET,
@@ -238,17 +244,17 @@ func (s *Server) UpdateMarketResponses() {
 }
 
 func (s *Server) updtMarketForSym(sym string, anchorTime24hMs int64) error {
-	m, err := utils.RedisGetMarketInfo(s.RedisTSClient.Ctx, s.RedisTSClient.Client, sym)
+	m, err := utils.RedisGetMarketInfo(context.Background(), s.RedisTSClient, sym)
 	if err != nil {
 		return err
 	}
-	px, err := s.RedisTSClient.Get(sym)
+	px, err := utils.RedisTsGet(s.RedisTSClient, sym, s.TickerToPriceType[sym])
 	if err != nil {
 		return err
 	}
 	const d = 86400000
 	px24, err := utils.RangeAggr(
-		s.RedisTSClient.Client,
+		s.RedisTSClient,
 		sym,
 		s.TickerToPriceType[sym],
 		anchorTime24hMs,
@@ -338,15 +344,15 @@ func (s *Server) SubscribeCandles(conn *ClientConn, clientID string, topic strin
 // triangulated and whether it is readily available
 func (s *Server) IsSymbolAvailable(sym string) (d8xUtils.PriceType, bool, bool) {
 	// first priority: Pyth-type
-	if utils.RedisIsSymbolAvailable(s.RedisTSClient.Client, d8xUtils.PXTYPE_PYTH, sym) {
+	if utils.RedisIsSymbolAvailable(s.RedisTSClient, d8xUtils.PXTYPE_PYTH, sym) {
 		return d8xUtils.PXTYPE_PYTH, true, true
 	}
 	ccys := strings.Split(sym, "-")
-	avail, err := utils.RedisAreCcyAvailable(s.RedisTSClient.Client, d8xUtils.PXTYPE_PYTH, ccys)
+	avail, err := utils.RedisAreCcyAvailable(s.RedisTSClient, d8xUtils.PXTYPE_PYTH, ccys)
 	if err == nil && avail[0] && avail[1] {
 		// we send the ticker request even if available (other process could have crashed)
 		// if the symbol can be triangulated, this will be done now
-		c := *s.RedisTSClient.Client
+		c := *s.RedisTSClient
 		err = c.Do(
 			context.Background(),
 			c.B().Publish().Channel(utils.RDS_TICKER_REQUEST).Message(sym).Build(),
@@ -357,10 +363,10 @@ func (s *Server) IsSymbolAvailable(sym string) (d8xUtils.PriceType, bool, bool) 
 		return d8xUtils.PXTYPE_PYTH, false, true
 	}
 	// V2 and V3 are not triangulated on demand, hence we directly query the symbol
-	if utils.RedisIsSymbolAvailable(s.RedisTSClient.Client, d8xUtils.PXTYPE_V2, sym) {
+	if utils.RedisIsSymbolAvailable(s.RedisTSClient, d8xUtils.PXTYPE_V2, sym) {
 		return d8xUtils.PXTYPE_V2, true, true
 	}
-	if utils.RedisIsSymbolAvailable(s.RedisTSClient.Client, d8xUtils.PXTYPE_V3, sym) {
+	if utils.RedisIsSymbolAvailable(s.RedisTSClient, d8xUtils.PXTYPE_V3, sym) {
 		return d8xUtils.PXTYPE_V3, true, true
 	}
 	return d8xUtils.PXTYPE_UNKNOWN, false, false
@@ -403,51 +409,50 @@ func errorResponse(reqType string, reqTopic string, msg string) []byte {
 	return jsonData
 }
 
-// subscribe the server to redis pub/sub
-func (s *Server) SubscribePxUpdate(sub *redis.PubSub, ctx context.Context) {
-	for {
-		msg, err := sub.ReceiveMessage(ctx)
-		if err != nil {
-			panic(err)
-		}
-		s.MsgCount++
-		if s.MsgCount%500 == 0 {
-			slog.Info(fmt.Sprintf("REDIS received %d messages since last report (now: %s)", s.MsgCount, msg.Payload))
-			s.MsgCount = 0
-		}
-
-		symbols := strings.Split(msg.Payload, ";")
-		s.candleUpdates(symbols)
+// subscribe the server to rueidis pub/sub
+func (s *Server) HandlePxUpdateFromRedis(msg rueidis.PubSubMessage, candlePeriodsMs map[string]utils.CandlePeriod) {
+	s.MsgCount++
+	if s.MsgCount%500 == 0 {
+		slog.Info(fmt.Sprintf("REDIS received %d messages since last report (now: %s)", s.MsgCount, msg.Message))
+		s.MsgCount = 0
 	}
+	symbols := strings.Split(msg.Message, ";")
+	for j := range symbols {
+		symbols[j] = strings.Split(symbols[j], ":")[1]
+	}
+	s.candleUpdates(symbols, candlePeriodsMs)
 }
 
 // process price updates triggered by redis pub message for
 // candles
-func (s *Server) candleUpdates(symbols []string) {
+func (s *Server) candleUpdates(symbols []string, candlePeriodsMs map[string]utils.CandlePeriod) {
 
 	var wg sync.WaitGroup
 	for _, sym := range symbols {
-		c := (*s.RedisTSClient)
-		pxLast, err := c.Get(sym)
+		pxtype, exists := s.TickerToPriceType[sym]
+		if !exists {
+			continue
+		}
+		pxLast, err := utils.RedisTsGet(s.RedisTSClient, sym, pxtype)
 
 		if err != nil {
 			slog.Error(fmt.Sprintf("Error parsing date:" + err.Error()))
 			return
 		}
-		for _, prd := range candlePeriodsMs {
-			key := sym + ":" + prd.Name
+		for _, period := range candlePeriodsMs {
+			key := sym + ":" + period.Name
 			lastCandle := s.LastCandles[key]
 			if lastCandle == nil {
 				s.LastCandles[key] = &utils.OhlcData{}
 				lastCandle = s.LastCandles[key]
 			}
-			if pxLast.Timestamp > lastCandle.TsMs+int64(prd.TimeMs) {
+			if pxLast.Timestamp > lastCandle.TsMs+int64(period.TimeMs) {
 				// new candle
 				lastCandle.O = pxLast.Value
 				lastCandle.H = pxLast.Value
 				lastCandle.L = pxLast.Value
 				lastCandle.C = pxLast.Value
-				nextTs := (pxLast.Timestamp / int64(prd.TimeMs)) * int64(prd.TimeMs)
+				nextTs := (pxLast.Timestamp / int64(period.TimeMs)) * int64(period.TimeMs)
 				lastCandle.TsMs = nextTs
 				lastCandle.Time = utils.ConvertTimestampToISO8601(nextTs)
 			} else {
@@ -457,7 +462,7 @@ func (s *Server) candleUpdates(symbols []string) {
 				lastCandle.L = math.Min(pxLast.Value, lastCandle.L)
 			}
 			// update subscribers
-			clients := server.Subscriptions[key]
+			clients := s.Subscriptions[key]
 			r := ServerResponse{Type: "update", Topic: strings.ToLower(key), Data: lastCandle}
 			jsonData, err := json.Marshal(r)
 			if err != nil {
@@ -465,7 +470,7 @@ func (s *Server) candleUpdates(symbols []string) {
 			}
 			for _, conn := range clients {
 				wg.Add(1)
-				go server.SendWithWait(conn, jsonData, &wg)
+				go s.SendWithWait(conn, jsonData, &wg)
 			}
 		}
 	}

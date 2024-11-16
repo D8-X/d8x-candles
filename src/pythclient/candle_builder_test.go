@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	d8xUtils "github.com/D8-X/d8x-futures-go-sdk/utils"
 	"github.com/redis/rueidis"
 	"github.com/spf13/viper"
 )
@@ -77,7 +78,7 @@ func TestPythDataToRedisPriceObs(t *testing.T) {
 	sym2.New("Fx.USD/CHF", "", "USD/CHF")
 	symbols := []utils.SymbolPyth{sym1, sym2}
 	api.PythDataToRedisPriceObs(symbols)
-	vlast, _ := api.RedisClient.Get(sym1.Symbol)
+	vlast, _ := utils.RedisTsGet(api.RedisClient, sym1.Symbol, d8xUtils.PXTYPE_PYTH)
 	fmt.Print(vlast)
 }
 
@@ -93,23 +94,18 @@ func createHistApi(t *testing.T) PythClientApp {
 	v := loadEnv()
 	REDIS_ADDR := v.GetString("REDIS_ADDR")
 	REDIS_PW := v.GetString("REDIS_PW")
-	ctx := context.Background()
 	client, err := rueidis.NewClient(
 		rueidis.ClientOption{InitAddress: []string{REDIS_ADDR}, Password: REDIS_PW})
 	if err != nil {
 		t.Errorf("Error :%v", err)
 		t.FailNow()
 	}
-	redisTSClient := utils.RueidisClient{
-		Client: &client,
-		Ctx:    ctx,
-	}
 	capacity := 30
 	refillRate := 3.0 // 3 tokens per second
 	tb := utils.NewTokenBucket(capacity, refillRate)
 	api := PythClientApp{
 		BaseUrl:     "https://benchmarks.pyth.network/",
-		RedisClient: &redisTSClient,
+		RedisClient: &client,
 		TokenBucket: tb,
 	}
 	return api
@@ -139,12 +135,12 @@ func TestFetchMktInfo(t *testing.T) {
 
 	api := createHistApi(t)
 	api.FetchMktInfo([]string{"chf-usdc"})
-	a, err := utils.RedisGetMarketInfo(api.RedisClient.Ctx, api.RedisClient.Client, "chf-usdc")
+	a, err := utils.RedisGetMarketInfo(context.Background(), api.RedisClient, "CHF-USDC")
 	if err != nil {
 		panic(err)
 	}
 	fmt.Print(a)
-	_, err = utils.RedisGetMarketInfo(api.RedisClient.Ctx, api.RedisClient.Client, "bs-ws")
+	_, err = utils.RedisGetMarketInfo(context.Background(), api.RedisClient, "bs-ws")
 
 	if err != nil {
 		fmt.Print("intended error" + err.Error())

@@ -43,7 +43,7 @@ func (s *StreamManager) AddSymbolToTriangTarget(symT string, path *d8x_futures.T
 // SubscribeTickerRequest the to redis pub/sub utils.TICKER_REQUEST
 // makes triangulation or direct ticker available if possible
 func (p *PythClientApp) SubscribeTickerRequest(errChan chan error) {
-	client := *p.RedisClient.Client
+	client := *p.RedisClient
 	err := client.Receive(context.Background(), client.B().Subscribe().Channel(utils.RDS_TICKER_REQUEST).Build(),
 		func(msg rueidis.PubSubMessage) {
 			p.enableTicker(msg.Message)
@@ -116,7 +116,7 @@ func (p *PythClientApp) EnableTriangulation(symT string) bool {
 		slog.Error("triangulation " + symT + ":" + err.Error())
 		return false
 	}
-	err = utils.PricesToRedis(p.RedisClient.Client, symT, d8xUtils.PXTYPE_PYTH, o)
+	err = utils.PricesToRedis(p.RedisClient, symT, d8xUtils.PXTYPE_PYTH, o)
 	if err != nil {
 		slog.Error("triangulation " + symT + ":" + err.Error())
 		return false

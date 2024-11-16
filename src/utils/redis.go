@@ -299,6 +299,21 @@ func RedisGetMarketInfo(ctx context.Context, client *rueidis.Client, ticker stri
 	return m, nil
 }
 
+func RedisTsGet(client *rueidis.Client, sym string, pxtype d8xUtils.PriceType) (DataPoint, error) {
+	key := pxtype.String() + ":" + sym
+	vlast, err := (*client).Do(context.Background(), (*client).B().TsGet().Key(key).Build()).ToArray()
+	if err != nil {
+		return DataPoint{}, err
+	}
+	if len(vlast) < 2 {
+		return DataPoint{}, errors.New("Could not find ts for " + key)
+	}
+	ts, _ := vlast[0].AsInt64()
+	v, _ := vlast[1].AsFloat64()
+	d := DataPoint{Timestamp: ts, Value: v}
+	return d, nil
+}
+
 // OhlcFromRedis queries OHLC data from REDIS price cache, timestamps in ms
 // sym is of the form btc-usd
 func OhlcFromRedis(client *rueidis.Client, sym string, pxtype d8xUtils.PriceType, fromTs int64, toTs int64, resolSec uint32) ([]OhlcData, error) {

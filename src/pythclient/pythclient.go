@@ -28,7 +28,7 @@ type SubscribeRequest struct {
 
 type PythClientApp struct {
 	BaseUrl     string
-	RedisClient *utils.RueidisClient
+	RedisClient *rueidis.Client
 	TokenBucket *utils.TokenBucket
 	SymbolMngr  *utils.SymbolManager
 	MsgCount    map[string]int
@@ -42,10 +42,7 @@ func NewPythClientApp(symMngr *utils.SymbolManager, REDIS_ADDR string, REDIS_PW 
 	if err != nil {
 		return nil, fmt.Errorf("redis connection %s", err.Error())
 	}
-	redisTSClient := &utils.RueidisClient{
-		Client: &client,
-		Ctx:    context.Background(),
-	}
+	redisTSClient := &client
 	//https://docs.pyth.network/benchmarks/rate-limits
 	capacity := 30
 	refillRate := 9.0
@@ -106,7 +103,7 @@ func (p *PythClientApp) ScheduleCompaction(waitTime time.Duration) {
 	tickerUpdate := time.NewTicker(waitTime)
 	for {
 		<-tickerUpdate.C
-		utils.CompactAllPriceObs(p.RedisClient.Client, d8xUtils.PXTYPE_PYTH)
+		utils.CompactAllPriceObs(p.RedisClient, d8xUtils.PXTYPE_PYTH)
 		slog.Info("Compaction completed.")
 	}
 }
@@ -117,7 +114,7 @@ func (p *PythClientApp) clearPythTickerAvailability() {
 	p.SymbolMngr.SymConstructionMutx.Lock()
 	defer p.SymbolMngr.SymConstructionMutx.Unlock()
 	// clean ticker availability
-	cl := *p.RedisClient.Client
+	cl := *p.RedisClient
 	config := p.SymbolMngr.PriceFeedIds
 	key := utils.RDS_AVAIL_TICKER_SET + ":" + d8xUtils.PXTYPE_PYTH.String()
 	for _, ids := range config {

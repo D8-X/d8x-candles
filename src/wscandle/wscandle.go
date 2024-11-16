@@ -3,13 +3,13 @@ package wscandle
 import (
 	"context"
 	"d8x-candles/src/utils"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
-	"github.com/redis/go-redis/v9"
 	"github.com/redis/rueidis"
 )
 
@@ -24,44 +24,85 @@ const (
 	maxMessageSize = 512
 )
 
-var upgrader = websocket.Upgrader{}
+type WsCandle struct {
+	Upgrader        websocket.Upgrader
+	Server          *Server
+	CandlePeriodsMs map[string]utils.CandlePeriod
+	Client          *rueidis.Client
+	WsAddr          string
+}
 
-// Initialize server with empty subscription
-var server = NewServer()
-var candlePeriodsMs map[string]utils.CandlePeriod
-var redisClient *redis.Client
+func NewWsCandle(cndlPeriodsMs map[string]utils.CandlePeriod, WS_ADDR string, REDIS_ADDR string, REDIS_PW string, RedisDb int) (*WsCandle, error) {
+	var ws WsCandle
+	ws.WsAddr = WS_ADDR
+	ws.Upgrader = websocket.Upgrader{}
 
-func StartWSServer(cndlPeriodsMs map[string]utils.CandlePeriod, WS_ADDR string, REDIS_ADDR string, REDIS_PW string, RedisDb int) error {
-	candlePeriodsMs = cndlPeriodsMs
-	// Redis connection
-	redisClient = redis.NewClient(&redis.Options{
-		Addr:     REDIS_ADDR,
-		Password: REDIS_PW,
-		DB:       RedisDb,
-	})
+	ws.CandlePeriodsMs = cndlPeriodsMs
+	// Initialize server with empty subscription
+	ws.Server = NewServer()
 	client, err := rueidis.NewClient(
 		rueidis.ClientOption{InitAddress: []string{REDIS_ADDR}, Password: REDIS_PW})
 	if err != nil {
-		return err
+		return nil, err
 	}
-	ctx := context.Background()
-	server.RedisTSClient = &utils.RueidisClient{
-		Client: &client,
-		Ctx:    ctx,
-	}
-	ctx = context.Background()
-	subscriber := redisClient.Subscribe(ctx, utils.RDS_PRICE_UPDATE_MSG)
-	go server.SubscribePxUpdate(subscriber, ctx)
-	go server.ScheduleUpdateMarketAndBroadcast(5 * time.Second)
-	http.HandleFunc("/ws", HandleWs)
-	slog.Info("Listening on " + WS_ADDR + "/ws")
-	slog.Error(http.ListenAndServe(WS_ADDR, nil).Error())
-	return nil
+	ws.Server.RedisTSClient = &client
+	return &ws, nil
 }
 
-func HandleWs(w http.ResponseWriter, r *http.Request) {
-	upgrader.CheckOrigin = func(r *http.Request) bool { return true }
-	c, err := upgrader.Upgrade(w, r, nil)
+func (ws *WsCandle) StartWSServer() error {
+	errChan := make(chan error, 2)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel() // Cancel all goroutines when an error occurs
+	go ws.subscribePriceUpdate(ctx, errChan)
+	go ws.Server.ScheduleUpdateMarketAndBroadcast(ctx, 5*time.Minute)
+	go ws.listen(ctx, errChan)
+	err := <-errChan
+	return err
+}
+
+func (ws *WsCandle) listen(ctx context.Context, errChan chan error) {
+	// register websocket handler
+	http.HandleFunc("/ws", ws.HandleWs)
+	// create http server
+	server := &http.Server{
+		Addr:    ws.WsAddr,
+		Handler: http.DefaultServeMux, // Use your desired handler
+	}
+
+	// Start the server in a separate goroutine
+	go func() {
+		slog.Info("Listening on " + ws.WsAddr + "/ws")
+		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			errChan <- fmt.Errorf("HTTP server failed: %w", err)
+		}
+	}()
+
+	// Wait for either context cancellation or server failure
+	select {
+	case <-ctx.Done():
+		slog.Info("Context canceled; shutting down HTTP server")
+		server.Shutdown(context.Background())
+	case <-errChan:
+		slog.Info("HTTP server stopped; initiating shutdown")
+	}
+}
+
+// subscribePriceUpdate redis pub/sub utils.RDS_TICKER_REQUEST
+func (ws *WsCandle) subscribePriceUpdate(ctx context.Context, errChan chan error) {
+	c := *ws.Server.RedisTSClient
+	cmd := c.B().Subscribe().Channel(utils.RDS_PRICE_UPDATE_MSG).Build()
+	err := c.Receive(ctx, cmd,
+		func(msg rueidis.PubSubMessage) {
+			ws.Server.HandlePxUpdateFromRedis(msg, ws.CandlePeriodsMs)
+		})
+	if err != nil {
+		errChan <- err
+	}
+}
+
+func (ws *WsCandle) HandleWs(w http.ResponseWriter, r *http.Request) {
+	ws.Upgrader.CheckOrigin = func(r *http.Request) bool { return true }
+	c, err := ws.Upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		slog.Info("upgrade:" + err.Error())
 		return
@@ -76,12 +117,12 @@ func HandleWs(w http.ResponseWriter, r *http.Request) {
 	// create channel to signal client health
 	done := make(chan struct{})
 
-	go writePump(c, clientID, done)
-	readPump(&conn, clientID, done)
+	go ws.writePump(c, clientID, done)
+	ws.readPump(&conn, clientID, done)
 }
 
 // readPump process incoming messages and set the settings
-func readPump(conn *ClientConn, clientID string, done chan<- struct{}) {
+func (ws *WsCandle) readPump(conn *ClientConn, clientID string, done chan<- struct{}) {
 	// set limit, deadline to read & pong handler
 	conn.Conn.SetReadLimit(maxMessageSize)
 	conn.Conn.SetReadDeadline(time.Now().Add(pongWait))
@@ -97,7 +138,7 @@ func readPump(conn *ClientConn, clientID string, done chan<- struct{}) {
 		// if error occured
 		if err != nil {
 			// remove from the client
-			server.RemoveClient(clientID)
+			ws.Server.RemoveClient(clientID)
 			// set health status to unhealthy by closing channel
 			close(done)
 			// stop process
@@ -105,12 +146,12 @@ func readPump(conn *ClientConn, clientID string, done chan<- struct{}) {
 		}
 
 		// if no error, process incoming message
-		server.HandleRequest(conn, candlePeriodsMs, clientID, msg)
+		ws.Server.HandleRequest(conn, ws.CandlePeriodsMs, clientID, msg)
 	}
 }
 
 // writePump sends ping to the client
-func writePump(conn *websocket.Conn, clientID string, done <-chan struct{}) {
+func (ws *WsCandle) writePump(conn *websocket.Conn, clientID string, done <-chan struct{}) {
 	// create ping ticker
 	ticker := time.NewTicker(pingPeriod)
 	defer ticker.Stop()
@@ -122,7 +163,7 @@ func writePump(conn *websocket.Conn, clientID string, done <-chan struct{}) {
 			err := conn.WriteControl(websocket.PingMessage, []byte{}, time.Now().Add(writeWait))
 			if err != nil {
 				// if error sending ping, remove this client from the server
-				server.RemoveClient(clientID)
+				ws.Server.RemoveClient(clientID)
 				// stop sending ping
 				return
 			}
