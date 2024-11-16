@@ -210,7 +210,7 @@ func (p *PythClientApp) ConstructPriceObsForTriang(client *utils.RueidisClient, 
 	// find starting time
 	var timeStart, timeEnd int64 = 0, int64(currentTimeSec) * 1000
 	for k := 0; k < len(path.Symbol); k++ {
-		key := d8xUtils.PXTYPE_PYTH.ToString() + ":" + path.Symbol[k]
+		key := d8xUtils.PXTYPE_PYTH.String() + ":" + path.Symbol[k]
 		info, err := (*client.Client).Do(client.Ctx, (*client.Client).B().
 			TsInfo().Key(key).Build()).AsMap()
 
@@ -339,7 +339,7 @@ func (p *PythClientApp) OnPriceUpdate(pxData utils.PriceData, id string) {
 		slog.Info(fmt.Sprintf("Received 500 price updates since last report. Now %s, price=%.4f", sym, px))
 	}
 
-	pubMsg := d8xUtils.PXTYPE_PYTH.ToString() + ":" + sym
+	pubMsg := d8xUtils.PXTYPE_PYTH.String() + ":" + sym
 
 	// triangulations
 	p.StreamMngr.s2DTRWMu.RLock()
@@ -374,7 +374,7 @@ func (p *PythClientApp) OnPriceUpdate(pxData utils.PriceData, id string) {
 		p.StreamMngr.lastPx[tsym] = pxTriang
 		p.StreamMngr.lastPxRWMu.Unlock()
 
-		pubMsg += ";" + d8xUtils.PXTYPE_PYTH.ToString() + ":" + tsym
+		pubMsg += ";" + d8xUtils.PXTYPE_PYTH.String() + ":" + tsym
 		utils.RedisAddPriceObs(p.RedisClient.Client, d8xUtils.PXTYPE_PYTH, tsym, pxTriang, pxData.PublishTime*1000)
 		p.MsgCount["t"] = (p.MsgCount["t"] + 1) % 500
 		if p.MsgCount["t"] == 0 {

@@ -28,12 +28,11 @@ var upgrader = websocket.Upgrader{}
 
 // Initialize server with empty subscription
 var server = NewServer()
-var config utils.SymbolManager
+var candlePeriodsMs map[string]utils.CandlePeriod
 var redisClient *redis.Client
 
-func StartWSServer(config_ utils.SymbolManager, WS_ADDR string, REDIS_ADDR string, REDIS_PW string, RedisDb int) error {
-	config = config_
-
+func StartWSServer(cndlPeriodsMs map[string]utils.CandlePeriod, WS_ADDR string, REDIS_ADDR string, REDIS_PW string, RedisDb int) error {
+	candlePeriodsMs = cndlPeriodsMs
 	// Redis connection
 	redisClient = redis.NewClient(&redis.Options{
 		Addr:     REDIS_ADDR,
@@ -53,7 +52,7 @@ func StartWSServer(config_ utils.SymbolManager, WS_ADDR string, REDIS_ADDR strin
 	ctx = context.Background()
 	subscriber := redisClient.Subscribe(ctx, utils.RDS_PRICE_UPDATE_MSG)
 	go server.SubscribePxUpdate(subscriber, ctx)
-	go server.ScheduleUpdateMarketAndBroadcast(5*time.Second, config)
+	go server.ScheduleUpdateMarketAndBroadcast(5 * time.Second)
 	http.HandleFunc("/ws", HandleWs)
 	slog.Info("Listening on " + WS_ADDR + "/ws")
 	slog.Error(http.ListenAndServe(WS_ADDR, nil).Error())
@@ -106,7 +105,7 @@ func readPump(conn *ClientConn, clientID string, done chan<- struct{}) {
 		}
 
 		// if no error, process incoming message
-		server.HandleRequest(conn, config, clientID, msg)
+		server.HandleRequest(conn, candlePeriodsMs, clientID, msg)
 	}
 }
 

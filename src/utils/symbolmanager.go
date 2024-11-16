@@ -23,14 +23,15 @@ type SymbolManager struct {
 }
 
 // New initializes a new SymbolManager
-func (sm *SymbolManager) New(fileName string) error {
+func NewSymbolManager(fileName string) (*SymbolManager, error) {
+	var sm SymbolManager
 	data, err := os.ReadFile(fileName)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	err = json.Unmarshal(data, &sm.ConfigFile)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if len(sm.ConfigFile.PythPriceEndpoints) == 0 {
 		// legacy config
@@ -45,14 +46,14 @@ func (sm *SymbolManager) New(fileName string) error {
 	}
 	err = sm.extractPythIdToSymbolMap()
 	if err != nil {
-		return err
+		return nil, err
 	}
 	sm.SymConstructionMutx = &sync.Mutex{}
 	err = sm.extractCandlePeriods()
 	if err != nil {
-		return err
+		return nil, err
 	}
-	return nil
+	return &sm, nil
 }
 
 func (c *SymbolManager) ExtractCCY(pxType d8xUtils.PriceType) ([]string, error) {

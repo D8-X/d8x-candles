@@ -107,7 +107,7 @@ func (s *Server) RemoveClient(clientID string) {
 
 // Process incoming websocket message
 // https://github.com/madeindra/golang-websocket/
-func (s *Server) HandleRequest(conn *ClientConn, config utils.SymbolManager, clientID string, message []byte) {
+func (s *Server) HandleRequest(conn *ClientConn, cndlPeriods map[string]utils.CandlePeriod, clientID string, message []byte) {
 
 	var data ClientMessage
 	err := json.Unmarshal(message, &data)
@@ -124,7 +124,7 @@ func (s *Server) HandleRequest(conn *ClientConn, config utils.SymbolManager, cli
 			msg := s.SubscribeMarkets(conn, clientID)
 			server.Send(conn, msg)
 		} else {
-			msg := s.SubscribeCandles(conn, clientID, reqTopic, config)
+			msg := s.SubscribeCandles(conn, clientID, reqTopic, cndlPeriods)
 			server.Send(conn, msg)
 		}
 	} else if reqType == "UNSUBSCRIBE" {
@@ -160,7 +160,7 @@ func (s *Server) SubscribeMarkets(conn *ClientConn, clientID string) []byte {
 	return s.buildMarketResponse("subscribe")
 }
 
-func (s *Server) ScheduleUpdateMarketAndBroadcast(waitTime time.Duration, config utils.SymbolManager) {
+func (s *Server) ScheduleUpdateMarketAndBroadcast(waitTime time.Duration) {
 	tickerUpdate := time.NewTicker(waitTime)
 	s.UpdateMarketAndBroadcast()
 	for {
@@ -225,7 +225,7 @@ func (s *Server) UpdateMarketResponses() {
 		d8xUtils.PXTYPE_V3,
 	}
 	for _, priceType := range relevTypes {
-		key := utils.RDS_AVAIL_TICKER_SET + priceType.ToString()
+		key := utils.RDS_AVAIL_TICKER_SET + priceType.String()
 		members, err := c.Do(context.Background(), c.B().Smembers().Key(key).Build()).AsStrSlice()
 		if err != nil {
 			slog.Error("UpdateMarketResponses:", "key", key, "error", err)
@@ -260,7 +260,7 @@ func (s *Server) updtMarketForSym(sym string, anchorTime24hMs int64) error {
 	if err != nil || len(px24) == 0 || px24[0].Value == 0 {
 		px24 = nil
 	} else {
-		if m.AssetType == d8xUtils.PXTYPE_POLYMARKET.ToString() {
+		if m.AssetType == d8xUtils.ACLASS_POLYMKT {
 			// absolute change for betting markets
 			ret = px.Value - px24[0].Value
 		} else {
@@ -272,7 +272,7 @@ func (s *Server) updtMarketForSym(sym string, anchorTime24hMs int64) error {
 
 	var mr = MarketResponse{
 		Sym:           strings.ToLower(sym),
-		AssetType:     m.AssetType,
+		AssetType:     m.AssetType.String(),
 		Ret24hPerc:    ret * 100,
 		CurrentPx:     px.Value,
 		IsOpen:        m.MarketHours.IsOpen,
@@ -284,7 +284,7 @@ func (s *Server) updtMarketForSym(sym string, anchorTime24hMs int64) error {
 }
 
 // Subscribe the client to a candle-topic (e.g. btc-usd:15m)
-func (s *Server) SubscribeCandles(conn *ClientConn, clientID string, topic string, config utils.SymbolManager) []byte {
+func (s *Server) SubscribeCandles(conn *ClientConn, clientID string, topic string, cndlPeriods map[string]utils.CandlePeriod) []byte {
 	if !isValidCandleTopic(topic) {
 		slog.Info("invalid candle topic requested:" + topic)
 		return errorResponse("subscribe", topic, "usage: symbol:period")
@@ -294,7 +294,7 @@ func (s *Server) SubscribeCandles(conn *ClientConn, clientID string, topic strin
 		// usage: symbol:period
 		return errorResponse("subscribe", topic, "usage: symbol:period")
 	}
-	p := config.CandlePeriodsMs[period]
+	p := cndlPeriods[period]
 	if p.TimeMs == 0 {
 		// period not supported
 		return errorResponse("subscribe", topic, "period not supported")
@@ -376,7 +376,7 @@ func isValidCandleTopic(topic string) bool {
 func (s *Server) candleResponse(sym string, p utils.CandlePeriod) []byte {
 	pxtype := s.TickerToPriceType[sym]
 	slog.Info("Subscription for symbol " +
-		pxtype.ToString() + ":" + sym +
+		pxtype.String() + ":" + sym +
 		" Period " + fmt.Sprint(p.TimeMs/60000) + "m")
 	data := GetInitialCandles(s.RedisTSClient, sym, pxtype, p)
 	topic := sym + ":" + p.Name
@@ -434,7 +434,7 @@ func (s *Server) candleUpdates(symbols []string) {
 			slog.Error(fmt.Sprintf("Error parsing date:" + err.Error()))
 			return
 		}
-		for _, prd := range config.CandlePeriodsMs {
+		for _, prd := range candlePeriodsMs {
 			key := sym + ":" + prd.Name
 			lastCandle := s.LastCandles[key]
 			if lastCandle == nil {

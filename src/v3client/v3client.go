@@ -88,7 +88,7 @@ func NewV3Client(configV3, configRpc, redisAddr, redisPw string) (*V3Client, err
 func (v3 *V3Client) Run() error {
 	v3.Filter()
 	slog.Info("filtering historical v3 data complete")
-	key := utils.RDS_AVAIL_TICKER_SET + ":" + d8xUtils.PXTYPE_V3.ToString()
+	key := utils.RDS_AVAIL_TICKER_SET + ":" + d8xUtils.PXTYPE_V3.String()
 	for j := range v3.Config.Indices {
 		// set market hours for index symbol
 		sym := v3.Config.Indices[j].Symbol
@@ -96,7 +96,7 @@ func (v3 *V3Client) Run() error {
 			v3.Ruedi,
 			sym,
 			utils.MarketHours{IsOpen: true, NextOpen: 0, NextClose: 0},
-			"crypto",
+			d8xUtils.ACLASS_CRYPTO,
 		)
 		// set index symbol as available in redis
 		c := *v3.Ruedi
@@ -199,7 +199,7 @@ func (v3 *V3Client) onSwap(poolAddr string, log types.Log) {
 			slog.Error("onSwap: failed to RedisAddPriceObs", "error", err)
 			return
 		}
-		symUpdated += d8xUtils.PXTYPE_V3.ToString() + ":" + pxIdx.Symbol + ";"
+		symUpdated += d8xUtils.PXTYPE_V3.String() + ":" + pxIdx.Symbol + ";"
 	}
 	symUpdated = strings.TrimSuffix(symUpdated, ";")
 	utils.RedisPublishIdxPriceChange(v3.Ruedi, symUpdated)

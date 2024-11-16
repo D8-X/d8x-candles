@@ -38,7 +38,7 @@ func RunCandleCharts() {
 		fmt.Println("Error:", err.Error())
 		return
 	}
-	wscandle.StartWSServer(c,
+	wscandle.StartWSServer(c.CandlePeriodsMs,
 		viper.GetString(env.WS_ADDR),
 		viper.GetString(env.REDIS_ADDR),
 		viper.GetString(env.REDIS_PW),
@@ -162,20 +162,19 @@ func StreamPyth() {
 		return
 	}
 
-	err = pythclient.Run(&c, viper.GetString(env.REDIS_ADDR), viper.GetString(env.REDIS_PW))
+	err = pythclient.Run(c, viper.GetString(env.REDIS_ADDR), viper.GetString(env.REDIS_PW))
 	if err != nil {
 		slog.Error(err.Error())
 	}
 }
 
-func loadConfig() (utils.SymbolManager, error) {
+func loadConfig() (*utils.SymbolManager, error) {
 	fileName := viper.GetString(env.CONFIG_PATH)
-	var c utils.SymbolManager
-	err := c.New(fileName)
+	mngr, err := utils.NewSymbolManager(fileName)
 	if err != nil {
-		return utils.SymbolManager{}, err
+		return nil, err
 	}
-	return c, nil
+	return mngr, nil
 }
 
 func loadEnv(requiredEnvs []string) error {

@@ -55,7 +55,7 @@ func (p *PolyClient) cleanPolyTickerAvailability() {
 
 	// clean ticker availability
 	cl := *p.RedisClient.Client
-	key := utils.RDS_AVAIL_TICKER_SET + ":" + d8xUtils.PXTYPE_POLYMARKET.ToString()
+	key := utils.RDS_AVAIL_CCY_SET + ":" + d8xUtils.PXTYPE_POLYMARKET.String()
 	for _, ids := range p.priceFeedUniverse {
 		if ids.Type != d8xUtils.PXTYPE_POLYMARKET {
 			continue
@@ -143,7 +143,7 @@ func (p *PolyClient) enableTicker(sym string) {
 
 	// set symbol available
 	c := *p.RedisClient.Client
-	key := utils.RDS_AVAIL_TICKER_SET + ":" + d8xUtils.PXTYPE_POLYMARKET.ToString()
+	key := utils.RDS_AVAIL_TICKER_SET + ":" + d8xUtils.PXTYPE_POLYMARKET.String()
 	c.Do(context.Background(), c.B().Sadd().Key(key).Member(sym).Build())
 	p.FetchMktInfo([]string{sym})
 	if m.Closed {
@@ -230,6 +230,6 @@ func (p *PolyClient) FetchMktInfo(syms []string) {
 			NextOpen:  0,
 			NextClose: m.EndDateISOTs,
 		}
-		utils.RedisSetMarketHours(p.RedisClient.Client, sym, hrs, d8xUtils.PXTYPE_POLYMARKET.ToString())
+		utils.RedisSetMarketHours(p.RedisClient.Client, sym, hrs, d8xUtils.ACLASS_POLYMKT)
 	}
 }

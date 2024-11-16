@@ -108,11 +108,11 @@ func (v2 *V2Client) Run() error {
 	slog.Info("start filtering historical v2 events")
 	v2.Filter()
 	slog.Info("filtering historical v2 data complete")
-	key := utils.RDS_AVAIL_TICKER_SET + ":" + d8xUtils.PXTYPE_V2.ToString()
+	key := utils.RDS_AVAIL_TICKER_SET + ":" + d8xUtils.PXTYPE_V2.String()
 	for j := range v2.Config.Indices {
 		// set market hours for index symbol
 		sym := v2.Config.Indices[j].Symbol
-		utils.RedisSetMarketHours(v2.Ruedi, sym, utils.MarketHours{IsOpen: true, NextOpen: 0, NextClose: 0}, "crypto")
+		utils.RedisSetMarketHours(v2.Ruedi, sym, utils.MarketHours{IsOpen: true, NextOpen: 0, NextClose: 0}, d8xUtils.ACLASS_CRYPTO)
 		// set index symbol as available in redis
 		c := *v2.Ruedi
 		c.Do(context.Background(), c.B().Sadd().Key(key).Member(sym).Build())

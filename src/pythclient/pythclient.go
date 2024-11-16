@@ -119,7 +119,7 @@ func (p *PythClientApp) clearPythTickerAvailability() {
 	// clean ticker availability
 	cl := *p.RedisClient.Client
 	config := p.SymbolMngr.PriceFeedIds
-	key := utils.RDS_AVAIL_TICKER_SET + ":" + d8xUtils.PXTYPE_PYTH.ToString()
+	key := utils.RDS_AVAIL_TICKER_SET + ":" + d8xUtils.PXTYPE_PYTH.String()
 	for _, ids := range config {
 		if ids.Type != d8xUtils.PXTYPE_PYTH {
 			continue

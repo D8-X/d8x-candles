@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"math/big"
 	"strings"
+
+	d8xUtils "github.com/D8-X/d8x-futures-go-sdk/utils"
 )
 
 type OhlcData struct {
@@ -44,5 +46,5 @@ type MarketHours struct {
 
 type MarketInfo struct {
 	MarketHours MarketHours
-	AssetType   string `json:"assetType"`
+	AssetType   d8xUtils.AssetClass `json:"assetType"`
 }

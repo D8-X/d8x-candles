@@ -12,7 +12,7 @@ import (
 // Compact price observations so that aggregations needed for candles remain the same
 func CompactAllPriceObs(client *rueidis.Client, pxtype d8xUtils.PriceType) {
 	c := *client
-	key := RDS_AVAIL_TICKER_SET + ":" + pxtype.ToString()
+	key := RDS_AVAIL_TICKER_SET + ":" + pxtype.String()
 	members, err := c.Do(context.Background(), c.B().Smembers().Key(key).Build()).AsStrSlice()
 	if err != nil {
 		slog.Error("UpdateMarketResponses:" + err.Error())
@@ -31,7 +31,7 @@ func CompactAllPriceObs(client *rueidis.Client, pxtype d8xUtils.PriceType) {
 // Reduce the data in REDIS for the given symbol, so that
 // we are able to still display the same candles
 func CompactPriceObs(client *rueidis.Client, sym string, pxtype d8xUtils.PriceType) error {
-	key := pxtype.ToString() + ":" + sym
+	key := pxtype.String() + ":" + sym
 	info, err := (*client).Do(context.Background(), (*client).B().
 		TsInfo().Key(key).Build()).AsMap()
 	if err != nil {

@@ -98,7 +98,7 @@ func createHistApi(t *testing.T) PythClientApp {
 		rueidis.ClientOption{InitAddress: []string{REDIS_ADDR}, Password: REDIS_PW})
 	if err != nil {
 		t.Errorf("Error :%v", err)
-		return PythClientApp{}
+		t.FailNow()
 	}
 	redisTSClient := utils.RueidisClient{
 		Client: &client,
@@ -126,8 +126,8 @@ func timestampFromTimeString(timestr string) (uint32, error) {
 
 func TestQueryPriceFeedInfo(t *testing.T) {
 	api := createHistApi(t)
-	api.QueryPriceFeedInfo("eth-usd", "0xff61491a931112ddf1bd8147cd1b641375f79f5825126d665480874634fd0ace")
-	r, err := api.GetMarketInfo("eth-usd")
+	api.QueryPriceFeedInfo("ETH-USD", "0xff61491a931112ddf1bd8147cd1b641375f79f5825126d665480874634fd0ace")
+	r, err := api.GetMarketInfo("ETH-USD")
 	if err != nil {
 		t.Errorf("Error parsing date:%v", err)
 		return
@@ -136,12 +136,7 @@ func TestQueryPriceFeedInfo(t *testing.T) {
 }
 
 func TestFetchMktInfo(t *testing.T) {
-	var c utils.SymbolManager
-	err := c.New("../../config/prices.config.json")
-	if err != nil {
-		t.Errorf("Error:%v", err)
-		return
-	}
+
 	api := createHistApi(t)
 	api.FetchMktInfo([]string{"chf-usdc"})
 	a, err := utils.RedisGetMarketInfo(api.RedisClient.Ctx, api.RedisClient.Client, "chf-usdc")

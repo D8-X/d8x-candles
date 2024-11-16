@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
-	"strings"
 	"sync"
 	"time"
 
@@ -34,7 +33,7 @@ const (
 // RedisCreateIfNotExistsTs creates a time-series for the given symbol
 func RedisCreateIfNotExistsTs(rClient *rueidis.Client, pxtype d8xUtils.PriceType, symbol string) error {
 	ctx := context.Background()
-	key := pxtype.ToString() + ":" + symbol
+	key := pxtype.String() + ":" + symbol
 	client := *rClient
 	exists, err := client.Do(ctx, client.B().Exists().Key(key).Build()).AsBool()
 	if err != nil {
@@ -60,7 +59,7 @@ func RedisAddPriceObs(client *rueidis.Client, pxtype d8xUtils.PriceType, sym str
 	ctx := context.Background()
 	c := *client
 	ts := strconv.FormatInt(timestampMs, 10)
-	key := pxtype.ToString() + ":" + sym
+	key := pxtype.String() + ":" + sym
 	resp := c.Do(ctx,
 		c.B().TsAdd().Key(key).Timestamp(ts).Value(price).Build())
 	if resp.Error() != nil {
@@ -89,7 +88,7 @@ func PricesToRedis(client *rueidis.Client, sym string, pxtype d8xUtils.PriceType
 	wg.Wait()
 	// set the symbol as available
 	c := *client
-	key := RDS_AVAIL_TICKER_SET + ":" + pxtype.ToString()
+	key := RDS_AVAIL_TICKER_SET + ":" + pxtype.String()
 	c.Do(context.Background(), c.B().Sadd().Key(key).Member(sym).Build())
 	return nil
 }
@@ -97,7 +96,7 @@ func PricesToRedis(client *rueidis.Client, sym string, pxtype d8xUtils.PriceType
 func RedisGetFirstTimestamp(client *rueidis.Client, pxtype d8xUtils.PriceType, sym string) int64 {
 	ctx := context.Background()
 	c := *client
-	key := pxtype.ToString() + ":" + sym
+	key := pxtype.String() + ":" + sym
 	cmd := c.B().TsRange().Key(key).Fromtimestamp("0").Totimestamp("+").Count(1).Build()
 	result, err := c.Do(ctx, cmd).ToArray()
 	if err != nil || len(result) == 0 {
@@ -128,7 +127,7 @@ func RedisCalcTriangPrice(
 	var px float64 = 1
 	tsOldest := time.Now().UnixMilli()
 	for j, sym := range triang.Symbol {
-		key := pxtype.ToString() + ":" + sym
+		key := pxtype.String() + ":" + sym
 		cmd := client.B().TsGet().Key(key).Build()
 		res, err := client.Do(ctx, cmd).ToArray()
 		if err != nil {
@@ -172,7 +171,7 @@ func RedisPublishIdxPriceChange(redisClient *rueidis.Client, symbols string) err
 func RedisReCreateTimeSeries(client *rueidis.Client, pxtype d8xUtils.PriceType, sym string) error {
 	ctx := context.Background()
 	c := *client
-	key := pxtype.ToString() + ":" + sym
+	key := pxtype.String() + ":" + sym
 	slog.Info("create " + key)
 	_, err := c.Do(ctx, c.B().
 		TsInfo().Key(key).Build()).AsMap()
@@ -199,7 +198,7 @@ func RedisReCreateTimeSeries(client *rueidis.Client, pxtype d8xUtils.PriceType, 
 func RedisSetCcyAvailable(client *rueidis.Client, pxtype d8xUtils.PriceType, ccys []string) error {
 	ctx := context.Background()
 	c := *client
-	setKey := RDS_AVAIL_CCY_SET + ":" + pxtype.ToString()
+	setKey := RDS_AVAIL_CCY_SET + ":" + pxtype.String()
 	// Delete the entire set
 	cmds := c.B().Del().Key(setKey).Build()
 	if res := c.Do(ctx, cmds); res.Error() == nil {
@@ -216,7 +215,7 @@ func RedisSetCcyAvailable(client *rueidis.Client, pxtype d8xUtils.PriceType, ccy
 func RedisAreCcyAvailable(client *rueidis.Client, pxtype d8xUtils.PriceType, ccys []string) ([]bool, error) {
 	ctx := context.Background()
 	c := *client
-	setKey := RDS_AVAIL_CCY_SET + ":" + pxtype.ToString()
+	setKey := RDS_AVAIL_CCY_SET + ":" + pxtype.String()
 	cmd := c.B().Smembers().Key(setKey).Build()
 	availCcys, err := c.Do(ctx, cmd).AsStrSlice()
 	if err != nil {
@@ -236,7 +235,7 @@ func RedisAreCcyAvailable(client *rueidis.Client, pxtype d8xUtils.PriceType, ccy
 
 func RedisIsSymbolAvailable(client *rueidis.Client, pxtype d8xUtils.PriceType, sym string) bool {
 	ctx := context.Background()
-	key := RDS_AVAIL_TICKER_SET + ":" + pxtype.ToString()
+	key := RDS_AVAIL_TICKER_SET + ":" + pxtype.String()
 	c := *client
 	cmd := c.B().Sismember().Key(key).Member(sym).Build()
 	isMember, err := c.Do(ctx, cmd).AsBool()
@@ -247,10 +246,9 @@ func RedisIsSymbolAvailable(client *rueidis.Client, pxtype d8xUtils.PriceType, s
 	return isMember
 }
 
-func RedisSetMarketHours(rc *rueidis.Client, sym string, mh MarketHours, assetType string) error {
+func RedisSetMarketHours(rc *rueidis.Client, sym string, mh MarketHours, assetType d8xUtils.AssetClass) error {
 	ctx := context.Background()
 
-	assetType = strings.ToLower(assetType)
 	c := *rc
 	var nxto, nxtc string
 
@@ -261,7 +259,7 @@ func RedisSetMarketHours(rc *rueidis.Client, sym string, mh MarketHours, assetTy
 		FieldValue().FieldValue("is_open", strconv.FormatBool(mh.IsOpen)).
 		FieldValue("nxt_open", nxto).
 		FieldValue("nxt_close", nxtc).
-		FieldValue("asset_type", assetType).Build())
+		FieldValue("asset_type", assetType.String()).Build())
 	return nil
 }
 
@@ -277,13 +275,13 @@ func RedisGetMarketInfo(ctx context.Context, client *rueidis.Client, ticker stri
 	isOpen, _ := strconv.ParseBool(hm["is_open"])
 	nxtOpen, _ := strconv.ParseInt(hm["nxt_open"], 10, 64)
 	nxtClose, _ := strconv.ParseInt(hm["nxt_close"], 10, 64)
-	asset := hm["asset_type"]
+	asset := d8xUtils.AssetClassMap[hm["asset_type"]]
 	// determine market open/close based on current timestamp and
 	// next close ts (can be outdated as long as not outdated for more than
 	// closing period)
 	now := time.Now().UTC().Unix()
 	var isClosed bool
-	if hm["asset_type"] == d8xUtils.PXTYPE_POLYMARKET.ToString() {
+	if asset == d8xUtils.ACLASS_POLYMKT {
 		// we cannot rely on nxtOpen and nxtClose
 		isClosed = !isOpen
 	} else {
@@ -353,7 +351,7 @@ func OhlcFromRedis(client *rueidis.Client, sym string, pxtype d8xUtils.PriceType
 // RangeAggr aggregates the redis prices for the given symbol/price type over the given horizon and bucketDuration according
 // to 'aggr'
 func RangeAggr(r *rueidis.Client, sym string, pxtype d8xUtils.PriceType, fromTs int64, toTs int64, bucketDur int64, aggr Aggr) ([]DataPoint, error) {
-	key := pxtype.ToString() + ":" + sym
+	key := pxtype.String() + ":" + sym
 	var cmd rueidis.Completed
 	fromTs = int64(fromTs/bucketDur) * bucketDur
 	switch aggr {

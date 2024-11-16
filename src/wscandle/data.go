@@ -20,7 +20,7 @@ func GetInitialCandles(
 	tMs := t.UnixNano() / int64(time.Millisecond)
 	tMs = (tMs / int64(p.TimeMs)) * int64(p.TimeMs) //floor
 	var fromTsMs int64
-	key := pxtype.ToString() + ":" + sym
+	key := pxtype.String() + ":" + sym
 	if p.DisplayRangeMs == 0 {
 		// all data
 		a, err := (*client.Client).Do(client.Ctx, (*client.Client).B().

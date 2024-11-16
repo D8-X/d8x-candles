@@ -10,6 +10,8 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
+	d8xUtils "github.com/D8-X/d8x-futures-go-sdk/utils"
 )
 
 type PriceFeedApiResponse struct {
@@ -58,7 +60,7 @@ func (p *PythClientApp) FetchMktInfo(symbols []string) {
 		asset := strings.ToLower(strings.Split(origin, ".")[0])
 		if asset == "crypto" {
 			// crypto markets are always open, huray
-			p.setMarketHours(sym, utils.MarketHours{IsOpen: true, NextOpen: 0, NextClose: 0}, "crypto")
+			p.setMarketHours(sym, utils.MarketHours{IsOpen: true, NextOpen: 0, NextClose: 0}, d8xUtils.ACLASS_CRYPTO)
 			continue
 		}
 		slog.Info("Fetching market info for " + sym)
@@ -76,7 +78,7 @@ outerLoop:
 	for symT, path := range p.StreamMngr.SymToTriangPath {
 		isOpen := true
 		var nxtOpen, nxtClose int64 = 0, math.MaxInt64
-		var assetType string = "crypto"
+		assetType := d8xUtils.ACLASS_CRYPTO
 		for k := 0; k < len(path.Symbol); k++ {
 			m, err := p.GetMarketInfo(path.Symbol[k])
 			if err != nil {
@@ -84,7 +86,7 @@ outerLoop:
 				slog.Error("Error triangulated feeds info " + symT + " at " + path.Symbol[k])
 				continue outerLoop
 			}
-			if m.AssetType != "crypto" {
+			if m.AssetType != d8xUtils.ACLASS_CRYPTO {
 				// dominant asset type for triangulations is
 				// the non-crypto asset
 				assetType = m.AssetType
@@ -102,7 +104,7 @@ outerLoop:
 				}
 			}
 		}
-		if assetType == "crypto" {
+		if assetType == d8xUtils.ACLASS_CRYPTO {
 			nxtClose = 0
 		}
 
@@ -115,6 +117,7 @@ outerLoop:
 }
 
 func (p *PythClientApp) QueryPriceFeedInfo(sym string, id string) {
+	// example: https://benchmarks.pyth.network/v1/price_feeds/0xff61491a931112ddf1bd8147cd1b641375f79f5825126d665480874634fd0ace
 	const endpoint = "/v1/price_feeds/"
 	// we need the mainnet id
 	url := strings.TrimSuffix(p.BaseUrl, "/") + endpoint + id
@@ -148,16 +151,16 @@ func (p *PythClientApp) QueryPriceFeedInfo(sym string, id string) {
 	}
 	// check whether id provided is indeed for the symbol we aim to store
 	symSource := strings.ToUpper(apiResponse.Attributes["generic_symbol"])
-	if symSource != strings.ReplaceAll(sym, "-", "") {
+	if symSource != strings.ReplaceAll(strings.ToUpper(sym), "-", "") {
 		slog.Error("Error: price_feeds GET id is for " + symSource +
 			" but symbol " + sym)
 		return
 	}
-	p.setMarketHours(sym, apiResponse.MarketHours, apiResponse.Attributes["asset_type"])
+	asset := d8xUtils.OriginToAssetClass(apiResponse.Attributes["symbol"]) //"Crypto.ETH/USD"
+	p.setMarketHours(sym, apiResponse.MarketHours, asset)
 }
 
-func (p *PythClientApp) setMarketHours(ticker string, mh utils.MarketHours, assetType string) error {
-	assetType = strings.ToLower(assetType)
+func (p *PythClientApp) setMarketHours(ticker string, mh utils.MarketHours, assetType d8xUtils.AssetClass) error {
 	return utils.RedisSetMarketHours(p.RedisClient.Client, ticker, mh, assetType)
 }
 
