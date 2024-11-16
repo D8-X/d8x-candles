@@ -32,6 +32,7 @@ type ClientConn struct {
 // Server is the struct to handle the Server functions & manage the Subscriptions
 type Server struct {
 	Subscriptions     Subscriptions
+	SubMu             sync.RWMutex                  // Mutex to protect Subscriptions
 	LastCandles       map[string]*utils.OhlcData    //symbol:period->OHLC
 	MarketResponses   map[string]MarketResponse     //symbol->market response
 	TickerToPriceType map[string]d8xUtils.PriceType //symbol->corresponding price type
@@ -99,6 +100,8 @@ func (s *Server) SendWithWait(conn *ClientConn, message []byte, wg *sync.WaitGro
 // RemoveClient removes the clients from the server subscription map
 func (s *Server) RemoveClient(clientID string) {
 	// loop all topics
+	s.SubMu.Lock()
+	defer s.SubMu.Unlock()
 	for _, client := range s.Subscriptions {
 		// delete the client from all the topic's client map
 		delete(client, clientID)
@@ -129,35 +132,52 @@ func (s *Server) HandleRequest(conn *ClientConn, cndlPeriods map[string]utils.Ca
 		}
 	} else if reqType == "UNSUBSCRIBE" {
 		// unsubscribe
-		if reqTopic == MARKETS_TOPIC {
-			delete(s.Subscriptions[reqTopic], clientID)
-		} else {
-			s.UnsubscribeCandles(clientID, reqTopic)
-		}
+		s.UnsubscribeTopic(clientID, reqTopic)
+
 	} //else: ignore
 }
 
 // Unsubscribe the client from a candle-topic (e.g. btc-usd:15m)
-func (s *Server) UnsubscribeCandles(clientID string, topic string) {
+func (s *Server) UnsubscribeTopic(clientID string, topic string) {
+	s.SubMu.Lock()
+	defer s.SubMu.Unlock()
 	// if topic exists, check the client map
 	if _, exist := s.Subscriptions[topic]; exist {
-		client := s.Subscriptions[topic]
+		clients := s.Subscriptions[topic]
 		// remove the client from the topic's client map
-		delete(client, clientID)
+		delete(clients, clientID)
 	}
 }
 
 // Subscribe the client to market updates (markets)
 func (s *Server) SubscribeMarkets(conn *ClientConn, clientID string) []byte {
-	clients := s.Subscriptions[MARKETS_TOPIC]
-	// if client already subscribed, stop the process
-	if _, subbed := clients[clientID]; subbed {
-		return errorResponse("subscribe", MARKETS_TOPIC, "client already subscribed")
-	}
-	// if not subbed, add to client map
-	clients[clientID] = conn
+	s.subscribeTopic(conn, MARKETS_TOPIC, clientID)
 	// data to send
 	return s.buildMarketResponse("subscribe")
+}
+
+// subscribeTopic subscribes a client to a topic. Creates topic if not existent.
+// Returns true if the client is not subscribed yet
+func (s *Server) subscribeTopic(conn *ClientConn, topic string, clientID string) {
+	s.SubMu.Lock()
+	defer s.SubMu.Unlock()
+	clients, exist := s.Subscriptions[topic]
+	if !exist {
+		// if topic does not exist, create a new topic
+		clients = make(Clients)
+		s.Subscriptions[topic] = clients
+	}
+	// if client not already subscribed, we add
+	if _, subbed := clients[clientID]; !subbed {
+		// not subscribed
+		clients[clientID] = conn
+	}
+}
+
+func (s *Server) numSubscribers(topic string) int {
+	s.SubMu.RLock()
+	defer s.SubMu.RUnlock()
+	return len(s.Subscriptions[topic])
 }
 
 func (s *Server) ScheduleUpdateMarketAndBroadcast(ctx context.Context, waitTime time.Duration) {
@@ -170,8 +190,7 @@ func (s *Server) ScheduleUpdateMarketAndBroadcast(ctx context.Context, waitTime 
 			slog.Info("stopping market update scheduler")
 			return
 		case <-tickerUpdate.C: // if no subscribers we update infrequently
-			if len(s.Subscriptions[MARKETS_TOPIC]) == 0 &&
-				rand.Float64() < 0.95 {
+			if s.numSubscribers(MARKETS_TOPIC) == 0 && rand.Float64() < 0.95 {
 				slog.Info("UpdateMarketAndBroadcast: no subscribers")
 				break
 			}
@@ -204,10 +223,29 @@ func (s *Server) buildMarketResponse(typeRes string) []byte {
 	return jsonData
 }
 
+// copyClients copies the clients for a given topic,
+// so that we don't need to hold the lock for too long
+func (s *Server) copyClients(topic string) Clients {
+	s.SubMu.RLock()
+	defer s.SubMu.RUnlock()
+	originalClients, exists := s.Subscriptions[topic]
+	if !exists {
+		return nil // Return nil if the topic doesn't exist
+	}
+	copiedClients := make(Clients, len(originalClients))
+	for id, conn := range originalClients {
+		copiedClients[id] = conn
+	}
+	return copiedClients
+}
+
 func (s *Server) SendMarketResponses() {
 	jsonData := s.buildMarketResponse("update")
-	// update subscribers
-	clients := s.Subscriptions[MARKETS_TOPIC]
+	clients := s.copyClients(MARKETS_TOPIC)
+	if clients == nil {
+		// no subscribers
+		return
+	}
 	var wg sync.WaitGroup
 	for _, conn := range clients {
 		wg.Add(1)
@@ -314,30 +352,31 @@ func (s *Server) SubscribeCandles(conn *ClientConn, clientID string, topic strin
 		}
 		if avail && !ready {
 			// symbol not available
+			redisSendTickerRequest(s.RedisTSClient, sym)
 			return errorResponse("subscribe", topic, "symbol not available yet")
 		}
 		// store the "source" of the symbol
 		s.TickerToPriceType[sym] = pxtype
 	}
-
-	if _, exist := s.Subscriptions[topic]; exist {
-		clients := s.Subscriptions[topic]
-		// if client already subscribed, stop the process
-		if _, subbed := clients[clientID]; subbed {
-			return errorResponse("subscribe", topic, "client already subscribed")
-		}
-		// not subscribed
-		clients[clientID] = conn
-		return s.candleResponse(sym, p)
+	if s.TickerToPriceType[sym] == d8xUtils.PXTYPE_PYTH {
+		redisSendTickerRequest(s.RedisTSClient, sym)
 	}
-
-	// if topic does not exist, create a new topic
-	newClient := make(Clients)
-	s.Subscriptions[topic] = newClient
-
-	// add the client to the topic
-	s.Subscriptions[topic][clientID] = conn
+	s.subscribeTopic(conn, topic, clientID)
 	return s.candleResponse(sym, p)
+}
+
+func redisSendTickerRequest(client *rueidis.Client, sym string) {
+	// we send the ticker request even if available (other process could have crashed)
+	// if the symbol can be triangulated, this will be done now
+	slog.Info("sending ticker request", "symbol", sym)
+	c := *client
+	err := c.Do(
+		context.Background(),
+		c.B().Publish().Channel(utils.RDS_TICKER_REQUEST).Message(sym).Build(),
+	).Error()
+	if err != nil {
+		slog.Error("IsSymbolAvailable " + sym + "error:" + err.Error())
+	}
 }
 
 // IsSymbolAvailable returns the price source, whether the symbol can be
@@ -350,16 +389,6 @@ func (s *Server) IsSymbolAvailable(sym string) (d8xUtils.PriceType, bool, bool) 
 	ccys := strings.Split(sym, "-")
 	avail, err := utils.RedisAreCcyAvailable(s.RedisTSClient, d8xUtils.PXTYPE_PYTH, ccys)
 	if err == nil && avail[0] && avail[1] {
-		// we send the ticker request even if available (other process could have crashed)
-		// if the symbol can be triangulated, this will be done now
-		c := *s.RedisTSClient
-		err = c.Do(
-			context.Background(),
-			c.B().Publish().Channel(utils.RDS_TICKER_REQUEST).Message(sym).Build(),
-		).Error()
-		if err != nil {
-			slog.Error("IsSymbolAvailable " + sym + "error:" + err.Error())
-		}
 		return d8xUtils.PXTYPE_PYTH, false, true
 	}
 	// V2 and V3 are not triangulated on demand, hence we directly query the symbol
@@ -423,8 +452,7 @@ func (s *Server) HandlePxUpdateFromRedis(msg rueidis.PubSubMessage, candlePeriod
 	s.candleUpdates(symbols, candlePeriodsMs)
 }
 
-// process price updates triggered by redis pub message for
-// candles
+// process price updates triggered by redis pub message for candles
 func (s *Server) candleUpdates(symbols []string, candlePeriodsMs map[string]utils.CandlePeriod) {
 
 	var wg sync.WaitGroup
@@ -462,7 +490,7 @@ func (s *Server) candleUpdates(symbols []string, candlePeriodsMs map[string]util
 				lastCandle.L = math.Min(pxLast.Value, lastCandle.L)
 			}
 			// update subscribers
-			clients := s.Subscriptions[key]
+			clients := s.copyClients(key)
 			r := ServerResponse{Type: "update", Topic: strings.ToLower(key), Data: lastCandle}
 			jsonData, err := json.Marshal(r)
 			if err != nil {
