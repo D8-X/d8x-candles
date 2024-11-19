@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"log/slog"
 	"os"
 	"strings"
 
@@ -30,12 +31,12 @@ type UniswapV2Pool struct {
 	TokenDec  []uint8        `json:"tokenDec"` // ordered token decimals
 }
 
-// loadV2PoolConfig loads config/v2_pools.json
-func loadV2PoolConfig(filename string) (V2PoolConfig, error) {
-	var pools V2PoolConfig
+// loadV2PoolConfig loads config/v2_pools.json.
+func loadV2PoolConfig(filename string, chainId int) (*V2PoolConfig, error) {
+	var allPools []V2PoolConfig
 	jsonFile, err := os.Open(filename)
 	if err != nil {
-		return V2PoolConfig{}, err
+		return nil, err
 	}
 	defer jsonFile.Close()
 
@@ -45,10 +46,23 @@ func loadV2PoolConfig(filename string) (V2PoolConfig, error) {
 		log.Fatalf("Failed to read file: %v", err)
 	}
 	// Unmarshal the JSON data
-	err = json.Unmarshal(byteValue, &pools)
+	err = json.Unmarshal(byteValue, &allPools)
 	if err != nil {
-		return V2PoolConfig{}, fmt.Errorf("error unmarshalling JSON: %v", err)
+		return nil, fmt.Errorf("error unmarshalling JSON: %v", err)
 	}
+	// find chain
+	idx := -1
+	for j, pools := range allPools {
+		if pools.ChainID == chainId {
+			idx = j
+			break
+		}
+	}
+	if idx == -1 {
+		slog.Info("no V2 pool config defined for chain", "chain", chainId)
+		return nil, nil
+	}
+	pools := allPools[idx]
 	for j := range pools.Indices {
 		pools.Indices[j].Symbol = strings.ToUpper(pools.Indices[j].Symbol)
 		for k := 1; k < len(pools.Indices[j].Triang); k += 2 {
@@ -58,5 +72,5 @@ func loadV2PoolConfig(filename string) (V2PoolConfig, error) {
 	for j := range pools.Pools {
 		pools.Pools[j].Symbol = strings.ToUpper(pools.Pools[j].Symbol)
 	}
-	return pools, nil
+	return &pools, nil
 }

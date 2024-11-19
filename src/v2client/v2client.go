@@ -30,7 +30,7 @@ type SyncEvent struct {
 }
 
 type V2Client struct {
-	Config            V2PoolConfig
+	Config            *V2PoolConfig
 	Ruedi             *rueidis.Client
 	RpcHndl           *globalrpc.GlobalRpc
 	RelevantPoolAddrs []common.Address
@@ -40,12 +40,16 @@ type V2Client struct {
 	SyncEventAbi      abi.ABI
 }
 
-func NewV2Client(configV2, configRpc, redisAddr, redisPw string) (*V2Client, error) {
+func NewV2Client(configV2, configRpc, redisAddr, redisPw string, chainId int) (*V2Client, error) {
 	var v2 V2Client
 	var err error
-	v2.Config, err = loadV2PoolConfig(configV2)
+	v2.Config, err = loadV2PoolConfig(configV2, chainId)
 	if err != nil {
 		return nil, err
+	}
+	if v2.Config == nil {
+		// no pool config for given chain
+		return nil, nil
 	}
 	// ruedis client
 	client, err := rueidis.NewClient(

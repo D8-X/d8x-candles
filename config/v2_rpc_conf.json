@@ -1,9 +1,9 @@
 {
+    "chainId": 8453,
     "description": "Base websocket and http rpc used for univ2 listener",
     "wss": ["wss://base.gateway.tenderly.co", 
         "wss://base-rpc.publicnode.com",
         "wss://base.callstaticrpc.com"],
-    "chainId": 8453,
     "https": ["https://mainnet.base.org", 
         "https://base.llamarpc.com", 
         "https://developer-access-mainnet.base.org",

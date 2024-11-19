@@ -31,13 +31,18 @@ type V3Client struct {
 	SwapEventAbi      abi.ABI
 }
 
-func NewV3Client(configV3, configRpc, redisAddr, redisPw string) (*V3Client, error) {
+func NewV3Client(configV3, configRpc, redisAddr, redisPw string, chainId int) (*V3Client, error) {
 	var v3 V3Client
 	var err error
-	v3.Config, err = loadV2PoolConfig(configV3)
+	v3.Config, err = loadV3PoolConfig(configV3, chainId)
 	if err != nil {
 		return nil, err
 	}
+	if v3.Config == nil {
+		slog.Info("no v3 config found for chain", "chain", chainId)
+		return nil, nil
+	}
+
 	// ruedis client
 	client, err := rueidis.NewClient(
 		rueidis.ClientOption{InitAddress: []string{redisAddr}, Password: redisPw})

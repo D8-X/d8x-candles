@@ -27,6 +27,7 @@ type SwapEvent struct {
 }
 
 type Config struct {
+	ChainId int                    `json:"chainId"`
 	Indices []uniutils.ConfigIndex `json:"indices"`
 	Pools   []ConfigPool           `json:"pools"`
 }
@@ -42,7 +43,8 @@ type RpcConfig struct {
 	Https []string `json:"https"`
 }
 
-func loadV2PoolConfig(filename string) (*Config, error) {
+// returns nil, nil if no config specified for given chain
+func loadV3PoolConfig(filename string, chainId int) (*Config, error) {
 	// Read the file contents
 	data, err := os.ReadFile(filename) // Use os.ReadFile in Go 1.16+
 	if err != nil {
@@ -50,27 +52,39 @@ func loadV2PoolConfig(filename string) (*Config, error) {
 	}
 
 	// Unmarshal the JSON data into the Response struct
-	var response Config
-	if err := json.Unmarshal(data, &response); err != nil {
+	var configs []Config
+	if err := json.Unmarshal(data, &configs); err != nil {
 		return nil, fmt.Errorf("error unmarshaling JSON: %w", err)
 	}
+	// find chain id
+	idx := -1
+	for j, config := range configs {
+		if config.ChainId == chainId {
+			idx = j
+			break
+		}
+	}
+	if idx == -1 {
+		return nil, nil
+	}
+	config := configs[idx]
 	// uppercase/lowercase
-	for j, pool := range response.Pools {
+	for j, pool := range config.Pools {
 		// pool address -> pool data
 		// avoid uppercase/lowercase issues by converting to
 		// address and let the library choose uppercase/lowercase
-		response.Pools[j].Addr = common.HexToAddress(pool.Addr).Hex()
+		config.Pools[j].Addr = common.HexToAddress(pool.Addr).Hex()
 		// uppercase symbols
-		response.Pools[j].Symbol = strings.ToUpper(response.Pools[j].Symbol)
+		config.Pools[j].Symbol = strings.ToUpper(config.Pools[j].Symbol)
 	}
 	// uppercase symbols
-	for j := range response.Indices {
-		response.Indices[j].Symbol = strings.ToUpper(response.Indices[j].Symbol)
-		for k := 1; k < len(response.Indices[j].Triang); k += 2 {
-			response.Indices[j].Triang[k] = strings.ToUpper(response.Indices[j].Triang[k])
+	for j := range config.Indices {
+		config.Indices[j].Symbol = strings.ToUpper(config.Indices[j].Symbol)
+		for k := 1; k < len(config.Indices[j].Triang); k += 2 {
+			config.Indices[j].Triang[k] = strings.ToUpper(config.Indices[j].Triang[k])
 		}
 	}
-	return &response, nil
+	return &config, nil
 }
 
 func LoadRPCConfig(filename string) (RpcConfig, error) {

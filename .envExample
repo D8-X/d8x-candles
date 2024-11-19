@@ -14,6 +14,7 @@ CONFIG_V3_RPC="./config/v3_rpc_conf.json"
 CONFIG_V3_IDX="./config/v3_idx_conf.json"
 CONFIG_V2_RPC="./config/v2_rpc_conf.json"
 CONFIG_V2_IDX="./config/v2_idx_conf.json"
+CHAIN_ID=8453 # required to choose v2 and v3 config
 
 STORK_CREDENTIALS="user:pw"
 STORK_ENDPOINT="https://url.stork-oracle.network/"

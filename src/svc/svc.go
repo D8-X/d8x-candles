@@ -67,10 +67,17 @@ func RunV3Client() {
 		viper.GetString(env.CONFIG_V3_IDX),
 		viper.GetString(env.CONFIG_V3_RPC),
 		viper.GetString(env.REDIS_ADDR),
-		viper.GetString(env.REDIS_PW))
+		viper.GetString(env.REDIS_PW),
+		viper.GetInt(env.CHAIN_ID),
+	)
 	if err != nil {
 		fmt.Println("error:", err.Error())
 		panic(err)
+	}
+	if v3 == nil {
+		// no config defined for given chain,
+		// stop program
+		return
 	}
 	err = v3.Run()
 	if err != nil {
@@ -94,10 +101,17 @@ func RunV2Client() {
 		viper.GetString(env.CONFIG_V2_IDX),
 		viper.GetString(env.CONFIG_V2_RPC),
 		viper.GetString(env.REDIS_ADDR),
-		viper.GetString(env.REDIS_PW))
+		viper.GetString(env.REDIS_PW),
+		viper.GetInt(env.CHAIN_ID),
+	)
 	if err != nil {
 		fmt.Println("error:", err.Error())
 		panic(err)
+	}
+	if v2 == nil {
+		// no config defined for given chain,
+		// stop program
+		return
 	}
 	err = v2.Run()
 	if err != nil {

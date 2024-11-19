@@ -39,6 +39,29 @@ services:
         max-file: "10"
     configs:
       - prices_conf
+
+  v2-client:
+    build:
+      context: .
+      dockerfile: cmd/v2-client/Dockerfile
+    environment:
+      - REDIS_PW=${REDIS_PW}
+      - REDIS_ADDR=${REDIS_ADDR}
+      - CONFIG_V2_RPC=/v2_rpc_conf
+      - CONFIG_V2_IDX=/v2_idx_conf
+      - CHAIN_ID=${CHAIN_ID}
+    depends_on:
+      - redis-timeseries
+    networks:
+      - app-net
+    restart: on-failure
+    logging:
+      options:
+        max-size: "10m"
+        max-file: "10"
+    configs:
+      - v2_rpc_conf
+      - v2_idx_conf
       
   v3-client:
     build:
@@ -49,6 +72,7 @@ services:
       - REDIS_ADDR=${REDIS_ADDR}
       - CONFIG_V3_RPC=/v3_rpc_conf
       - CONFIG_V3_IDX=/v3_idx_conf
+      - CHAIN_ID=${CHAIN_ID}
     depends_on:
       - redis-timeseries
     networks:
@@ -105,5 +129,9 @@ configs:
     file: ./config/v3_idx_conf.json
   v3_rpc_conf:
     file: ./config/v3_rpc_conf.json
+  v2_idx_conf:
+    file: ./config/v2_idx_conf.json
+  v2_rpc_conf:
+    file: ./config/v2_rpc_conf.json
 networks:
   app-net:
