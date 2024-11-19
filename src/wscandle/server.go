@@ -306,7 +306,18 @@ func (srv *Server) updtMarketForSym(sym string, anchorTime24hMs int64) error {
 	if err != nil {
 		return err
 	}
-	pxtype, _ := srv.getTickerToPriceType(sym)
+	var pxtype d8xUtils.PriceType
+	var exists bool
+	pxtype, exists = srv.getTickerToPriceType(sym)
+	if !exists {
+		var avail, ready bool
+		pxtype, avail, ready = srv.IsSymbolAvailable(sym)
+		if !avail || !ready {
+			return fmt.Errorf("sym %s not ready for market info", sym)
+		}
+		// store the "source" of the symbol
+		srv.setTickerToPriceType(sym, pxtype)
+	}
 	px, err := utils.RedisTsGet(srv.RedisTSClient, sym, pxtype)
 	if err != nil {
 		return err
