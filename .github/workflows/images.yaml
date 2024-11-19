@@ -22,6 +22,8 @@ jobs:
               image: ghcr.io/d8-x/d8x-candles-ws-server
             - dockerfile: ./cmd/poly-client/Dockerfile
               image: ghcr.io/d8-x/d8x-candles-poly-client
+            - dockerfile: ./cmd/v2-client/Dockerfile
+              image: ghcr.io/d8-x/d8x-candles-v2-client
             - dockerfile: ./cmd/v3-client/Dockerfile
               image: ghcr.io/d8-x/d8x-candles-v3-client
     runs-on: ubuntu-22.04
