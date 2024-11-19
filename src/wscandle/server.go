@@ -276,7 +276,7 @@ func (srv *Server) UpdateMarketResponses() {
 		d8xUtils.PXTYPE_V3,
 	}
 	for _, priceType := range relevTypes {
-		key := utils.RDS_AVAIL_TICKER_SET + priceType.String()
+		key := utils.RDS_AVAIL_TICKER_SET + ":" + priceType.String()
 		members, err := c.Do(context.Background(), c.B().Smembers().Key(key).Build()).AsStrSlice()
 		if err != nil {
 			slog.Error("UpdateMarketResponses:", "key", key, "error", err)
