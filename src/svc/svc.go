@@ -62,6 +62,7 @@ func RunV3Client() {
 		fmt.Println("Error:", err.Error())
 		panic(err)
 	}
+	fmt.Printf("starting V3 client for chain %d\n", viper.GetInt(env.CHAIN_ID))
 	v3, err := v3client.NewV3Client(
 		viper.GetString(env.CONFIG_RPC),
 		viper.GetString(env.REDIS_ADDR),
@@ -94,6 +95,7 @@ func RunV2Client() {
 		fmt.Println("Error:", err.Error())
 		panic(err)
 	}
+	fmt.Printf("starting V2 client for chain %d\n", viper.GetInt(env.CHAIN_ID))
 	v2, err := v2client.NewV2Client(
 		viper.GetString(env.CONFIG_RPC),
 		viper.GetString(env.REDIS_ADDR),
