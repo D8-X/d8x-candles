@@ -54,7 +54,7 @@ func (ws *WsCandle) StartWSServer() error {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel() // Cancel all goroutines when an error occurs
 	go ws.subscribePriceUpdate(ctx, errChan)
-	go ws.Server.ScheduleUpdateMarketAndBroadcast(ctx, 5*time.Minute)
+	go ws.Server.ScheduleUpdateMarketAndBroadcast(ctx, 1*time.Minute)
 	go ws.listen(ctx, errChan)
 	err := <-errChan
 	return err
