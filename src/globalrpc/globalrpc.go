@@ -28,10 +28,10 @@ type Receipt struct {
 
 // NewGlobalRpc initializes a new RPC handler for the given config-filename and
 // redis credentials
-func NewGlobalRpc(configname, redisAddr, redisPw string) (*GlobalRpc, error) {
+func NewGlobalRpc(configname string, chainId int, redisAddr, redisPw string) (*GlobalRpc, error) {
 	var gr GlobalRpc
 	var err error
-	gr.Config, err = loadRPCConfig(configname)
+	gr.Config, err = loadRPCConfig(configname, chainId)
 	if err != nil {
 		return nil, err
 	}

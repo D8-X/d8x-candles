@@ -31,10 +31,10 @@ type V3Client struct {
 	SwapEventAbi      abi.ABI
 }
 
-func NewV3Client(configV3, configRpc, redisAddr, redisPw string, chainId int) (*V3Client, error) {
+func NewV3Client(configRpc, redisAddr, redisPw string, chainId int) (*V3Client, error) {
 	var v3 V3Client
 	var err error
-	v3.Config, err = loadV3PoolConfig(configV3, chainId)
+	v3.Config, err = loadV3PoolConfig(chainId)
 	if err != nil {
 		return nil, err
 	}
@@ -50,7 +50,7 @@ func NewV3Client(configV3, configRpc, redisAddr, redisPw string, chainId int) (*
 		return nil, err
 	}
 	v3.Ruedi = &client
-	v3.RpcHndl, err = globalrpc.NewGlobalRpc(configRpc, redisAddr, redisPw)
+	v3.RpcHndl, err = globalrpc.NewGlobalRpc(configRpc, v3.Config.PoolChainId, redisAddr, redisPw)
 	if err != nil {
 		return nil, err
 	}

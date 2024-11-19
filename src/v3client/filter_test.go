@@ -11,9 +11,8 @@ import (
 
 func TestFilter(t *testing.T) {
 	v := loadEnv()
-	cUni := "../../config/v3_idx_conf.json"
-	cRpc := "../../config/v3_rpc_conf.json"
-	v3, err := NewV3Client(cUni, cRpc, v.GetString(env.REDIS_ADDR), v.GetString(env.REDIS_PW), v.GetInt(env.CHAIN_ID))
+	cRpc := "../../config/rpc_conf.json"
+	v3, err := NewV3Client(cRpc, v.GetString(env.REDIS_ADDR), v.GetString(env.REDIS_PW), v.GetInt(env.CHAIN_ID))
 	if err != nil {
 		fmt.Printf("error %v", err)
 		t.FailNow()

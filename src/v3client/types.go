@@ -1,6 +1,7 @@
 package v3client
 
 import (
+	"d8x-candles/config"
 	"d8x-candles/src/uniutils"
 	"encoding/json"
 	"fmt"
@@ -27,9 +28,10 @@ type SwapEvent struct {
 }
 
 type Config struct {
-	ChainId int                    `json:"chainId"`
-	Indices []uniutils.ConfigIndex `json:"indices"`
-	Pools   []ConfigPool           `json:"pools"`
+	ChainId     int                    `json:"chainId"`
+	PoolChainId int                    `json:"poolChainId"`
+	Indices     []uniutils.ConfigIndex `json:"indices"`
+	Pools       []ConfigPool           `json:"pools"`
 }
 
 // Pool represents each pool in the "pools" array
@@ -44,16 +46,16 @@ type RpcConfig struct {
 }
 
 // returns nil, nil if no config specified for given chain
-func loadV3PoolConfig(filename string, chainId int) (*Config, error) {
+func loadV3PoolConfig(chainId int) (*Config, error) {
 	// Read the file contents
-	data, err := os.ReadFile(filename) // Use os.ReadFile in Go 1.16+
+	byteValue, err := config.FetchConfigFromRepo("v3_idx_conf.json")
 	if err != nil {
-		return nil, fmt.Errorf("error reading file: %w", err)
+		return nil, err
 	}
 
 	// Unmarshal the JSON data into the Response struct
 	var configs []Config
-	if err := json.Unmarshal(data, &configs); err != nil {
+	if err := json.Unmarshal(byteValue, &configs); err != nil {
 		return nil, fmt.Errorf("error unmarshaling JSON: %w", err)
 	}
 	// find chain id

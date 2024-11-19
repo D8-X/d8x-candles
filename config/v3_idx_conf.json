@@ -1,5 +1,6 @@
 [{
-    "chainId": 8453,
+    "chainId": 80084,
+    "poolChainId": 80084,
     "indices" : [
         {"symbol":"DIRAC-HONEY", "triang": ["/", "HONEY-DIRAC"]},
         {"symbol":"BUDS-HONEY", "triang": ["/", "WBERA-BUDS", "/", "HONEY-WBERA"]},

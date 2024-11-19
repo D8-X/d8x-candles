@@ -48,7 +48,7 @@ func TestUrlToRedis(t *testing.T) {
 
 func TestReturnLock(t *testing.T) {
 	v := loadEnv()
-	gr, err := NewGlobalRpc("../../config/v3_rpc_conf.json", v.GetString(env.REDIS_ADDR), v.GetString(env.REDIS_PW))
+	gr, err := NewGlobalRpc("../../config/v3_rpc_conf.json", 8453, v.GetString(env.REDIS_ADDR), v.GetString(env.REDIS_PW))
 	if err != nil {
 		fmt.Println(err.Error())
 		t.FailNow()

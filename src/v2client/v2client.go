@@ -40,10 +40,10 @@ type V2Client struct {
 	SyncEventAbi      abi.ABI
 }
 
-func NewV2Client(configV2, configRpc, redisAddr, redisPw string, chainId int) (*V2Client, error) {
+func NewV2Client(configRpc, redisAddr, redisPw string, chainId int) (*V2Client, error) {
 	var v2 V2Client
 	var err error
-	v2.Config, err = loadV2PoolConfig(configV2, chainId)
+	v2.Config, err = loadV2PoolConfig(chainId)
 	if err != nil {
 		return nil, err
 	}
@@ -58,7 +58,7 @@ func NewV2Client(configV2, configRpc, redisAddr, redisPw string, chainId int) (*
 		return nil, err
 	}
 	v2.Ruedi = &client
-	v2.RpcHndl, err = globalrpc.NewGlobalRpc(configRpc, redisAddr, redisPw)
+	v2.RpcHndl, err = globalrpc.NewGlobalRpc(configRpc, v2.Config.PoolChainId, redisAddr, redisPw)
 	if err != nil {
 		return nil, err
 	}

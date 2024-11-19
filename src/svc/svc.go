@@ -54,8 +54,7 @@ func RunCandleCharts() {
 
 func RunV3Client() {
 	err := loadEnv([]string{
-		env.CONFIG_V3_IDX,
-		env.CONFIG_V3_RPC,
+		env.CONFIG_RPC,
 		env.REDIS_ADDR,
 		env.REDIS_PW,
 	})
@@ -64,8 +63,7 @@ func RunV3Client() {
 		panic(err)
 	}
 	v3, err := v3client.NewV3Client(
-		viper.GetString(env.CONFIG_V3_IDX),
-		viper.GetString(env.CONFIG_V3_RPC),
+		viper.GetString(env.CONFIG_RPC),
 		viper.GetString(env.REDIS_ADDR),
 		viper.GetString(env.REDIS_PW),
 		viper.GetInt(env.CHAIN_ID),
@@ -88,8 +86,7 @@ func RunV3Client() {
 
 func RunV2Client() {
 	err := loadEnv([]string{
-		env.CONFIG_V2_IDX,
-		env.CONFIG_V2_RPC,
+		env.CONFIG_RPC,
 		env.REDIS_ADDR,
 		env.REDIS_PW,
 	})
@@ -98,8 +95,7 @@ func RunV2Client() {
 		panic(err)
 	}
 	v2, err := v2client.NewV2Client(
-		viper.GetString(env.CONFIG_V2_IDX),
-		viper.GetString(env.CONFIG_V2_RPC),
+		viper.GetString(env.CONFIG_RPC),
 		viper.GetString(env.REDIS_ADDR),
 		viper.GetString(env.REDIS_PW),
 		viper.GetInt(env.CHAIN_ID),

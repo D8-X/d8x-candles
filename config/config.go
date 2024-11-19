@@ -3,8 +3,10 @@ package config
 import (
 	"embed"
 	"encoding/json"
+	"fmt"
 	"io"
 	"log"
+	"net/http"
 )
 
 //go:embed embedded/*
@@ -15,6 +17,10 @@ type ConfigCandlePeriod struct {
 	TimeMs         int    `json:"timeMs"`
 	DisplayRangeMs int    `json:"displayRangeMs"`
 }
+
+const (
+	SYNC_HUB_URL = "https://raw.githubusercontent.com/D8-X/sync-hub/refs/heads/main/d8x-candles/"
+)
 
 func GetCandlePeriodsConfig() ([]ConfigCandlePeriod, error) {
 	// Read the JSON file
@@ -33,4 +39,25 @@ func GetCandlePeriodsConfig() ([]ConfigCandlePeriod, error) {
 		return nil, err
 	}
 	return conf, nil
+}
+
+// FetchConfigFromRepo gets the config file from Github
+func FetchConfigFromRepo(configName string) ([]byte, error) {
+	url := SYNC_HUB_URL + configName
+	resp, err := http.Get(url)
+	if err != nil {
+		return nil, fmt.Errorf("error fetching config: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		return nil, fmt.Errorf("failed to fetch config, status code: %d", resp.StatusCode)
+	}
+
+	jsonData, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("error reading config: %v", err)
+	}
+
+	return jsonData, nil
 }

@@ -1,13 +1,11 @@
 package v2client
 
 import (
+	"d8x-candles/config"
 	"d8x-candles/src/uniutils"
 	"encoding/json"
 	"fmt"
-	"io"
-	"log"
 	"log/slog"
-	"os"
 	"strings"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -16,12 +14,13 @@ import (
 const SYNC_EVENT_SIGNATURE = "Sync(uint112,uint112)"
 
 type V2PoolConfig struct {
-	ChainID    int                    `json:"chainId"`
-	Factory    string                 `json:"factory"`
-	Multicall  string                 `json:"multicall"`
-	V2Router02 string                 `json:"v2Router02"`
-	Indices    []uniutils.ConfigIndex `json:"indices"`
-	Pools      []UniswapV2Pool        `json:"pools"`
+	ChainID     int                    `json:"chainId"`
+	PoolChainId int                    `json:"poolChainId"`
+	Factory     string                 `json:"factory"`
+	Multicall   string                 `json:"multicall"`
+	V2Router02  string                 `json:"v2Router02"`
+	Indices     []uniutils.ConfigIndex `json:"indices"`
+	Pools       []UniswapV2Pool        `json:"pools"`
 }
 
 type UniswapV2Pool struct {
@@ -32,18 +31,12 @@ type UniswapV2Pool struct {
 }
 
 // loadV2PoolConfig loads config/v2_pools.json.
-func loadV2PoolConfig(filename string, chainId int) (*V2PoolConfig, error) {
+func loadV2PoolConfig(chainId int) (*V2PoolConfig, error) {
+
 	var allPools []V2PoolConfig
-	jsonFile, err := os.Open(filename)
+	byteValue, err := config.FetchConfigFromRepo("v2_idx_conf.json")
 	if err != nil {
 		return nil, err
-	}
-	defer jsonFile.Close()
-
-	// Read the file's contents into a byte slice
-	byteValue, err := io.ReadAll(jsonFile)
-	if err != nil {
-		log.Fatalf("Failed to read file: %v", err)
 	}
 	// Unmarshal the JSON data
 	err = json.Unmarshal(byteValue, &allPools)

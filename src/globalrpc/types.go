@@ -32,8 +32,8 @@ func (t RPCType) String() string {
 	}
 }
 
-func loadRPCConfig(filename string) (RpcConfig, error) {
-	var rpc RpcConfig
+func loadRPCConfig(filename string, chainId int) (RpcConfig, error) {
+	var rpcs []RpcConfig
 	jsonFile, err := os.Open(filename)
 	if err != nil {
 		return RpcConfig{}, err
@@ -46,9 +46,14 @@ func loadRPCConfig(filename string) (RpcConfig, error) {
 		log.Fatalf("Failed to read file: %v", err)
 	}
 	// Unmarshal the JSON data
-	err = json.Unmarshal(byteValue, &rpc)
+	err = json.Unmarshal(byteValue, &rpcs)
 	if err != nil {
 		return RpcConfig{}, fmt.Errorf("error unmarshalling JSON: %v", err)
 	}
-	return rpc, nil
+	for j := range rpcs {
+		if rpcs[j].ChainId == chainId {
+			return rpcs[j], nil
+		}
+	}
+	return RpcConfig{}, fmt.Errorf("no rpcs found in config for chain %d", chainId)
 }
