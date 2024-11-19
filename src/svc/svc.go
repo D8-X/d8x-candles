@@ -5,6 +5,7 @@ import (
 	"d8x-candles/src/polyclient"
 	"d8x-candles/src/pythclient"
 	"d8x-candles/src/utils"
+	"d8x-candles/src/v2client"
 	"d8x-candles/src/v3client"
 	"d8x-candles/src/wscandle"
 	"errors"
@@ -13,6 +14,7 @@ import (
 	"os"
 
 	d8xConf "github.com/D8-X/d8x-futures-go-sdk/config"
+	d8xUtils "github.com/D8-X/d8x-futures-go-sdk/utils"
 	"github.com/spf13/viper"
 )
 
@@ -36,18 +38,23 @@ func RunCandleCharts() {
 		fmt.Println("Error:", err.Error())
 		return
 	}
-	wscandle.StartWSServer(c,
+
+	ws, err := wscandle.NewWsCandle(c.CandlePeriodsMs,
 		viper.GetString(env.WS_ADDR),
 		viper.GetString(env.REDIS_ADDR),
 		viper.GetString(env.REDIS_PW),
 		viper.GetInt(env.REDIS_DB_NUM),
 	)
+	if err != nil {
+		fmt.Println("Error:", err.Error())
+		return
+	}
+	ws.StartWSServer()
 }
 
 func RunV3Client() {
 	err := loadEnv([]string{
-		env.CONFIG_V3_IDX,
-		env.CONFIG_V3_RPC,
+		env.CONFIG_RPC,
 		env.REDIS_ADDR,
 		env.REDIS_PW,
 	})
@@ -56,15 +63,53 @@ func RunV3Client() {
 		panic(err)
 	}
 	v3, err := v3client.NewV3Client(
-		viper.GetString(env.CONFIG_V3_IDX),
-		viper.GetString(env.CONFIG_V3_RPC),
+		viper.GetString(env.CONFIG_RPC),
 		viper.GetString(env.REDIS_ADDR),
-		viper.GetString(env.REDIS_PW))
+		viper.GetString(env.REDIS_PW),
+		viper.GetInt(env.CHAIN_ID),
+	)
 	if err != nil {
 		fmt.Println("error:", err.Error())
 		panic(err)
 	}
+	if v3 == nil {
+		// no config defined for given chain,
+		// stop program
+		return
+	}
 	err = v3.Run()
+	if err != nil {
+		fmt.Println("error:", err.Error())
+		panic(err)
+	}
+}
+
+func RunV2Client() {
+	err := loadEnv([]string{
+		env.CONFIG_RPC,
+		env.REDIS_ADDR,
+		env.REDIS_PW,
+	})
+	if err != nil {
+		fmt.Println("Error:", err.Error())
+		panic(err)
+	}
+	v2, err := v2client.NewV2Client(
+		viper.GetString(env.CONFIG_RPC),
+		viper.GetString(env.REDIS_ADDR),
+		viper.GetString(env.REDIS_PW),
+		viper.GetInt(env.CHAIN_ID),
+	)
+	if err != nil {
+		fmt.Println("error:", err.Error())
+		panic(err)
+	}
+	if v2 == nil {
+		// no config defined for given chain,
+		// stop program
+		return
+	}
+	err = v2.Run()
 	if err != nil {
 		fmt.Println("error:", err.Error())
 		panic(err)
@@ -86,7 +131,7 @@ func StreamPolyMarkets() {
 	}
 	found := false
 	for _, el := range config.PriceFeedIds {
-		if el.Type == utils.POLYMARKET_TYPE {
+		if el.Type == d8xUtils.PXTYPE_POLYMARKET {
 			found = true
 			break
 		}
@@ -133,20 +178,19 @@ func StreamPyth() {
 		return
 	}
 
-	err = pythclient.Run(&c, viper.GetString(env.REDIS_ADDR), viper.GetString(env.REDIS_PW))
+	err = pythclient.Run(c, viper.GetString(env.REDIS_ADDR), viper.GetString(env.REDIS_PW))
 	if err != nil {
 		slog.Error(err.Error())
 	}
 }
 
-func loadConfig() (utils.SymbolManager, error) {
+func loadConfig() (*utils.SymbolManager, error) {
 	fileName := viper.GetString(env.CONFIG_PATH)
-	var c utils.SymbolManager
-	err := c.New(fileName)
+	mngr, err := utils.NewSymbolManager(fileName)
 	if err != nil {
-		return utils.SymbolManager{}, err
+		return nil, err
 	}
-	return c, nil
+	return mngr, nil
 }
 
 func loadEnv(requiredEnvs []string) error {

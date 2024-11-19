@@ -1,10 +1,12 @@
-package v3client
+package uniutils
 
 import (
 	"context"
+	"d8x-candles/src/globalrpc"
 	"errors"
 	"math/big"
 	"strconv"
+	"time"
 
 	"github.com/ethereum/go-ethereum/ethclient"
 	"golang.org/x/exp/slog"
@@ -79,4 +81,33 @@ func binSearch(client *ethclient.Client, numA uint64, numB uint64, ts uint64) (u
 
 	}
 	return numP, tsP, numCalls, nil
+}
+
+// blockTs gets the block timestamp of the given block number using
+// several trials
+func BlockTs(blockNum int64, rpcHndl *globalrpc.GlobalRpc) (uint64, error) {
+	var rec globalrpc.Receipt
+	var err error
+	var client *ethclient.Client
+	ctx := context.Background()
+	for trial := 0; trial < 3; trial++ {
+		rec, err = rpcHndl.GetAndLockRpc(globalrpc.TypeHTTPS, 15)
+		defer rpcHndl.ReturnLock(rec)
+		if err != nil {
+			continue
+		}
+		client, err = ethclient.Dial(rec.Url)
+		if err != nil {
+			slog.Info("error ethclient dial", "error", err, "url", rec.Url)
+			continue
+		}
+		blk, err := BlockByNumberL2Compat(client, ctx, big.NewInt(blockNum))
+		if err != nil {
+			slog.Info("error BlockByNumberL2Compat", "error", err, "url", rec.Url)
+			time.Sleep(500 * time.Millisecond)
+			continue
+		}
+		return blk.Time(), nil
+	}
+	return 0, nil
 }

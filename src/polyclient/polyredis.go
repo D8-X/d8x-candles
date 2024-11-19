@@ -7,14 +7,15 @@ import (
 	"log/slog"
 	"sync"
 
+	d8xUtils "github.com/D8-X/d8x-futures-go-sdk/utils"
 	"github.com/redis/rueidis"
 )
 
 // SubscribeTickerRequest redis pub/sub utils.TICKER_REQUEST
 // makes ticker available if possible
 func (p *PolyClient) SubscribeTickerRequest(errChan chan error) {
-	client := *p.RedisClient.Client
-	err := client.Receive(context.Background(), client.B().Subscribe().Channel(utils.TICKER_REQUEST).Build(),
+	client := *p.RedisClient
+	err := client.Receive(context.Background(), client.B().Subscribe().Channel(utils.RDS_TICKER_REQUEST).Build(),
 		func(msg rueidis.PubSubMessage) {
 			p.enableTicker(msg.Message)
 		})
@@ -34,26 +35,28 @@ func (p *PolyClient) HistoryToRedis(sym string, obs []utils.PolyHistory) {
 		wg.Add(1)
 		go func(sym string, t int64, val float64) {
 			defer wg.Done()
-			utils.RedisAddPriceObs(p.RedisClient.Client, sym, val, t)
+			utils.RedisAddPriceObs(p.RedisClient, d8xUtils.PXTYPE_POLYMARKET, sym, val, t)
 		}(sym, t, val)
 	}
 	// set the symbol as available
-	c := *p.RedisClient.Client
+	c := *p.RedisClient
 	fmt.Printf("make %s available in REDIS\n", sym)
-	c.Do(context.Background(), c.B().Sadd().Key(utils.AVAIL_TICKER_SET).Member(sym).Build())
+	key := utils.RDS_AVAIL_TICKER_SET + ":" + d8xUtils.PXTYPE_POLYMARKET.String()
+	c.Do(context.Background(), c.B().Sadd().Key(key).Member(sym).Build())
 	wg.Wait()
 }
 
 // OnNewPrice stores the new price in redis and informs subscribers
 func (p *PolyClient) OnNewPrice(sym string, px float64, tsMs int64) {
-	err := utils.RedisAddPriceObs(p.RedisClient.Client, sym, px, tsMs)
+	err := utils.RedisAddPriceObs(p.RedisClient, d8xUtils.PXTYPE_POLYMARKET, sym, px, tsMs)
 	if err != nil {
 		slog.Error(fmt.Sprintf("failed to update price for %s in redis: %v", sym, err))
 		return
 	}
 
 	// publish updates to listeners
-	err = utils.RedisPublishPriceChange(p.RedisClient.Client, sym)
+	key := d8xUtils.PXTYPE_POLYMARKET.String() + ":" + sym
+	err = utils.RedisPublishIdxPriceChange(p.RedisClient, key)
 	if err != nil {
 		slog.Error("Redis Pub" + err.Error())
 	}
