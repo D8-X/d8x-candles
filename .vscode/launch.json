@@ -29,6 +29,14 @@
             "cwd": "${workspaceFolder}"
         },
         {
+            "name": "Launch V2 Client",
+            "type": "go",
+            "request": "launch",
+            "mode": "auto",
+            "program": "${workspaceFolder}/cmd/v2-client/main.go",
+            "cwd": "${workspaceFolder}"
+        },
+        {
             "name": "Launch V3 Client",
             "type": "go",
             "request": "launch",

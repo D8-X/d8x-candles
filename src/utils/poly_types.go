@@ -5,11 +5,6 @@ import (
 	"strconv"
 )
 
-const (
-	POLYMARKET_TYPE = "polymarket"
-	PYTH_TYPE       = "pyth"
-)
-
 type SymbolPoly struct {
 	AssetType   string
 	Symbol      string

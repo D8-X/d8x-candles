@@ -4,10 +4,13 @@ import (
 	"context"
 	"d8x-candles/src/utils"
 	"fmt"
+	"log/slog"
 	"testing"
 	"time"
 
+	d8xUtils "github.com/D8-X/d8x-futures-go-sdk/utils"
 	"github.com/redis/rueidis"
+	"github.com/spf13/viper"
 )
 
 func TestRetrieveCandle(t *testing.T) {
@@ -75,30 +78,34 @@ func TestPythDataToRedisPriceObs(t *testing.T) {
 	sym2.New("Fx.USD/CHF", "", "USD/CHF")
 	symbols := []utils.SymbolPyth{sym1, sym2}
 	api.PythDataToRedisPriceObs(symbols)
-	vlast, _ := api.RedisClient.Get(sym1.Symbol)
+	vlast, _ := utils.RedisTsGet(api.RedisClient, sym1.Symbol, d8xUtils.PXTYPE_PYTH)
 	fmt.Print(vlast)
 }
 
+func loadEnv() *viper.Viper {
+	viper.SetConfigFile("../../.env")
+	if err := viper.ReadInConfig(); err != nil {
+		slog.Error("could not load .env file" + err.Error())
+	}
+	return viper.GetViper()
+}
+
 func createHistApi(t *testing.T) PythClientApp {
-	REDIS_ADDR := "localhost:6379"
-	REDIS_PW := "23_*PAejOanJma"
-	ctx := context.Background()
+	v := loadEnv()
+	REDIS_ADDR := v.GetString("REDIS_ADDR")
+	REDIS_PW := v.GetString("REDIS_PW")
 	client, err := rueidis.NewClient(
 		rueidis.ClientOption{InitAddress: []string{REDIS_ADDR}, Password: REDIS_PW})
 	if err != nil {
 		t.Errorf("Error :%v", err)
-		return PythClientApp{}
-	}
-	redisTSClient := utils.RueidisClient{
-		Client: &client,
-		Ctx:    ctx,
+		t.FailNow()
 	}
 	capacity := 30
 	refillRate := 3.0 // 3 tokens per second
 	tb := utils.NewTokenBucket(capacity, refillRate)
 	api := PythClientApp{
 		BaseUrl:     "https://benchmarks.pyth.network/",
-		RedisClient: &redisTSClient,
+		RedisClient: &client,
 		TokenBucket: tb,
 	}
 	return api
@@ -115,8 +122,8 @@ func timestampFromTimeString(timestr string) (uint32, error) {
 
 func TestQueryPriceFeedInfo(t *testing.T) {
 	api := createHistApi(t)
-	api.QueryPriceFeedInfo("eth-usd", "0xff61491a931112ddf1bd8147cd1b641375f79f5825126d665480874634fd0ace")
-	r, err := api.GetMarketInfo("eth-usd")
+	api.QueryPriceFeedInfo("ETH-USD", "0xff61491a931112ddf1bd8147cd1b641375f79f5825126d665480874634fd0ace")
+	r, err := api.GetMarketInfo("ETH-USD")
 	if err != nil {
 		t.Errorf("Error parsing date:%v", err)
 		return
@@ -125,20 +132,15 @@ func TestQueryPriceFeedInfo(t *testing.T) {
 }
 
 func TestFetchMktInfo(t *testing.T) {
-	var c utils.SymbolManager
-	err := c.New("../../config/prices.config.json")
-	if err != nil {
-		t.Errorf("Error:%v", err)
-		return
-	}
+
 	api := createHistApi(t)
 	api.FetchMktInfo([]string{"chf-usdc"})
-	a, err := utils.GetMarketInfo(api.RedisClient.Ctx, api.RedisClient.Client, "chf-usdc")
+	a, err := utils.RedisGetMarketInfo(context.Background(), api.RedisClient, "CHF-USDC")
 	if err != nil {
 		panic(err)
 	}
 	fmt.Print(a)
-	_, err = utils.GetMarketInfo(api.RedisClient.Ctx, api.RedisClient.Client, "bs-ws")
+	_, err = utils.RedisGetMarketInfo(context.Background(), api.RedisClient, "bs-ws")
 
 	if err != nil {
 		fmt.Print("intended error" + err.Error())

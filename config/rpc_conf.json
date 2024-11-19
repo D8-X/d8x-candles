@@ -1,0 +1,22 @@
+[
+    {
+        "chainId": 80084,
+        "description": "websocket and http rpc used for v3 client",
+        "wss": ["wss://bera-testnet.nodeinfra.com", "wss://bartio.drpc.org"],
+        "https": ["https://bera-testnet.nodeinfra.com", 
+            "https://bartio.rpc.berachain.com", 
+            "https://bartio.drpc.org"]
+    },
+    {
+        "chainId": 8453,
+        "description": "Base websocket and http rpc used for univ2 listener",
+        "wss": ["wss://base.gateway.tenderly.co", 
+            "wss://base-rpc.publicnode.com",
+            "wss://base.callstaticrpc.com"],
+        "https": ["https://mainnet.base.org", 
+            "https://base.llamarpc.com", 
+            "https://developer-access-mainnet.base.org",
+            "https://1rpc.io/base",
+            "https://base.meowrpc.com"]
+    }
+]

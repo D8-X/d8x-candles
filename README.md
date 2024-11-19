@@ -8,6 +8,14 @@ Candle Stick Charts and index price service
 ## Regular Markets
 - Streams Pyth prices (http)
 
+## V2 and V3 Markets
+- stream fixed indices based on config file
+
+There could be clashes of symbols, for example ETH-USDC is likely sourced for V2 and Pyth. However, if the ticker is available
+from a pyth-type source, we are not using this as an index from a v2 or v3 source. Therefore, we define a price source priority:
+(1) Pyth, (2) V2, and (3) V3.
+
+
 ## Install
 - clone the repository
 - install docker, you can run `./host-setup.sh` to do so
@@ -155,14 +163,17 @@ docker run -d --name redis-stack -p 6379:6379 -e REDIS_ARGS="--requirepass yourp
 
 ### REDIS
 
+
+
 **stream universe**
 
 
 **prices**
 On price updates, we add the price and all affected triangulations to Redis:
 ```
+key := TYPE_PYTH+":"+sym //utils.PriceType +":"+sym
 resp := (*client.Client).Do(client.Ctx,
-		(*client.Client).B().TsAdd().Key(sym).Timestamp(ts).Value(value).Build())
+		(*client.Client).B().TsAdd().Key(key).Timestamp(ts).Value(value).Build())
 ```
 
 **pub/sub:**
@@ -179,7 +190,8 @@ When the websocket-service receives a ticker request that it is not already avai
 it will send a request `ticker_request` via pub channel and return "not available".
 
 **Availability on Demand:**
-If data is available, we set this in REDIS in the available ticker set `const AVAIL_TICKER_SET string = "avail"`: 
+If data is available, we set this in REDIS in the available ticker set 
+`const AVAIL_TICKER_SET string = "avail"` concatenated with ":pricetype" (such as univ2): 
 `SAdd(...)`. Index price feeds configured are always
 made available. Triangulated tickers can be made available. Once we make a triangulated key available,
 we also add the symbol to the available set.
