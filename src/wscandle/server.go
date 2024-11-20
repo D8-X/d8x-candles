@@ -393,7 +393,8 @@ func (srv *Server) SubscribeCandles(conn *ClientConn, clientID string, topic str
 		srv.setTickerToPriceType(sym, pxtype)
 	}
 
-	if pxtype, _ := srv.getTickerToPriceType(sym); pxtype == d8xUtils.PXTYPE_PYTH {
+	pxtype, _ := srv.getTickerToPriceType(sym)
+	if pxtype == d8xUtils.PXTYPE_PYTH || pxtype == d8xUtils.PXTYPE_POLYMARKET {
 		redisSendTickerRequest(srv.RedisTSClient, sym)
 	}
 	srv.subscribeTopic(conn, topic, clientID)
@@ -421,10 +422,20 @@ func (srv *Server) IsSymbolAvailable(sym string) (d8xUtils.PriceType, bool, bool
 	if utils.RedisIsSymbolAvailable(srv.RedisTSClient, d8xUtils.PXTYPE_PYTH, sym) {
 		return d8xUtils.PXTYPE_PYTH, true, true
 	}
+	if utils.RedisIsSymbolAvailable(srv.RedisTSClient, d8xUtils.PXTYPE_POLYMARKET, sym) {
+		return d8xUtils.PXTYPE_POLYMARKET, true, true
+	}
 	ccys := strings.Split(sym, "-")
 	avail, err := utils.RedisAreCcyAvailable(srv.RedisTSClient, d8xUtils.PXTYPE_PYTH, ccys)
 	if err == nil && avail[0] && avail[1] {
 		return d8xUtils.PXTYPE_PYTH, false, true
+	}
+	avail, err = utils.RedisAreCcyAvailable(srv.RedisTSClient, d8xUtils.PXTYPE_POLYMARKET, ccys)
+	if err == nil && avail[0] && avail[1] {
+		return d8xUtils.PXTYPE_POLYMARKET, false, true
+	}
+	if utils.RedisIsSymbolAvailable(srv.RedisTSClient, d8xUtils.PXTYPE_POLYMARKET, sym) {
+		return d8xUtils.PXTYPE_POLYMARKET, true, true
 	}
 	// V2 and V3 are not triangulated on demand, hence we directly query the symbol
 	if utils.RedisIsSymbolAvailable(srv.RedisTSClient, d8xUtils.PXTYPE_V2, sym) {

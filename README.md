@@ -219,3 +219,10 @@ hgetall XAU-USD:mkt_info
 5) "nxt_close"
 6) "1694206800"
 ```
+
+# Testing: redis
+```
+source .env
+docker run -d --name redis-stack -p 6379:6379 -e REDIS_ARGS="--requirepass $REDIS_PW" redis/redis-stack-server:latest
+docker exec -it redis-stack redis-cli -a $REDIS_PW
+```
