@@ -384,13 +384,13 @@ func (srv *Server) SubscribeCandles(conn *ClientConn, clientID string, topic str
 			// symbol not supported
 			return errorResponse("subscribe", topic, "symbol not supported")
 		}
+		// store the "source" of the symbol
+		srv.setTickerToPriceType(sym, pxtype)
 		if avail && !ready {
 			// symbol not available
 			redisSendTickerRequest(srv.RedisTSClient, sym)
 			return errorResponse("subscribe", topic, "symbol not available yet")
 		}
-		// store the "source" of the symbol
-		srv.setTickerToPriceType(sym, pxtype)
 	}
 
 	pxtype, _ := srv.getTickerToPriceType(sym)
@@ -428,11 +428,11 @@ func (srv *Server) IsSymbolAvailable(sym string) (d8xUtils.PriceType, bool, bool
 	ccys := strings.Split(sym, "-")
 	avail, err := utils.RedisAreCcyAvailable(srv.RedisTSClient, d8xUtils.PXTYPE_PYTH, ccys)
 	if err == nil && avail[0] && avail[1] {
-		return d8xUtils.PXTYPE_PYTH, false, true
+		return d8xUtils.PXTYPE_PYTH, true, false
 	}
 	avail, err = utils.RedisAreCcyAvailable(srv.RedisTSClient, d8xUtils.PXTYPE_POLYMARKET, ccys)
 	if err == nil && avail[0] && avail[1] {
-		return d8xUtils.PXTYPE_POLYMARKET, false, true
+		return d8xUtils.PXTYPE_POLYMARKET, true, false
 	}
 	if utils.RedisIsSymbolAvailable(srv.RedisTSClient, d8xUtils.PXTYPE_POLYMARKET, sym) {
 		return d8xUtils.PXTYPE_POLYMARKET, true, true
