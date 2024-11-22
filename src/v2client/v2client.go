@@ -220,6 +220,8 @@ func (v2 *V2Client) idxPriceUpdate(poolAddr string) error {
 			return err
 		}
 		symbol := pxIdx.Symbol
+		// scale price
+		px = px * pxIdx.ContractSize
 		err = utils.RedisAddPriceObs(
 			v2.Ruedi,
 			d8xUtils.PXTYPE_V2,

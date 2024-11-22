@@ -199,6 +199,7 @@ func (v3 *V3Client) onSwap(poolAddr string, log types.Log) {
 			return
 		}
 		// write the updated price
+		px = px * pxIdx.ContractSize
 		err = utils.RedisAddPriceObs(v3.Ruedi, d8xUtils.PXTYPE_V3, pxIdx.Symbol, px, nowTs)
 		if err != nil {
 			slog.Error("onSwap: failed to RedisAddPriceObs", "error", err)
