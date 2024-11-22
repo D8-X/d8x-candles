@@ -93,10 +93,26 @@ func NewPolyClient(oracleEndpt, REDIS_ADDR, REDIS_PW, storkEndpoint, storkCreden
 	}
 	// clean availability
 	pc.cleanPolyTickerAvailability()
-
+	// set availability based on config file
+	err = setCCYAvailable(config, &client)
+	if err != nil {
+		return nil, err
+	}
 	pc.activeSyms = make(map[string]ActiveState)
 	pc.muSyms = &sync.RWMutex{}
 	return &pc, nil
+}
+
+func setCCYAvailable(config []d8xUtils.PriceFeedId, ruedi *rueidis.Client) error {
+	syms := make([]string, 0)
+	for _, id := range config {
+		if id.AssetClass == d8xUtils.ACLASS_POLYMKT {
+			pair := strings.Split(id.Symbol, "-")
+			syms = append(syms, pair[0])
+		}
+	}
+	syms = append(syms, "USD")
+	return utils.RedisSetCcyAvailable(ruedi, d8xUtils.PXTYPE_POLYMARKET, syms)
 }
 
 // enableTicker makes the given ticker available:

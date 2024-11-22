@@ -35,7 +35,10 @@ func (p *PolyClient) HistoryToRedis(sym string, obs []utils.PolyHistory) {
 		wg.Add(1)
 		go func(sym string, t int64, val float64) {
 			defer wg.Done()
-			utils.RedisAddPriceObs(p.RedisClient, d8xUtils.PXTYPE_POLYMARKET, sym, val, t)
+			err := utils.RedisAddPriceObs(p.RedisClient, d8xUtils.PXTYPE_POLYMARKET, sym, val, t)
+			if err != nil {
+				slog.Error(err.Error())
+			}
 		}(sym, t, val)
 	}
 	// set the symbol as available

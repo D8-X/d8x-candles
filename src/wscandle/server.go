@@ -384,16 +384,17 @@ func (srv *Server) SubscribeCandles(conn *ClientConn, clientID string, topic str
 			// symbol not supported
 			return errorResponse("subscribe", topic, "symbol not supported")
 		}
+		// store the "source" of the symbol
+		srv.setTickerToPriceType(sym, pxtype)
 		if avail && !ready {
 			// symbol not available
 			redisSendTickerRequest(srv.RedisTSClient, sym)
 			return errorResponse("subscribe", topic, "symbol not available yet")
 		}
-		// store the "source" of the symbol
-		srv.setTickerToPriceType(sym, pxtype)
 	}
 
-	if pxtype, _ := srv.getTickerToPriceType(sym); pxtype == d8xUtils.PXTYPE_PYTH {
+	pxtype, _ := srv.getTickerToPriceType(sym)
+	if pxtype == d8xUtils.PXTYPE_PYTH || pxtype == d8xUtils.PXTYPE_POLYMARKET {
 		redisSendTickerRequest(srv.RedisTSClient, sym)
 	}
 	srv.subscribeTopic(conn, topic, clientID)
@@ -421,10 +422,20 @@ func (srv *Server) IsSymbolAvailable(sym string) (d8xUtils.PriceType, bool, bool
 	if utils.RedisIsSymbolAvailable(srv.RedisTSClient, d8xUtils.PXTYPE_PYTH, sym) {
 		return d8xUtils.PXTYPE_PYTH, true, true
 	}
+	if utils.RedisIsSymbolAvailable(srv.RedisTSClient, d8xUtils.PXTYPE_POLYMARKET, sym) {
+		return d8xUtils.PXTYPE_POLYMARKET, true, true
+	}
 	ccys := strings.Split(sym, "-")
 	avail, err := utils.RedisAreCcyAvailable(srv.RedisTSClient, d8xUtils.PXTYPE_PYTH, ccys)
 	if err == nil && avail[0] && avail[1] {
-		return d8xUtils.PXTYPE_PYTH, false, true
+		return d8xUtils.PXTYPE_PYTH, true, false
+	}
+	avail, err = utils.RedisAreCcyAvailable(srv.RedisTSClient, d8xUtils.PXTYPE_POLYMARKET, ccys)
+	if err == nil && avail[0] && avail[1] {
+		return d8xUtils.PXTYPE_POLYMARKET, true, false
+	}
+	if utils.RedisIsSymbolAvailable(srv.RedisTSClient, d8xUtils.PXTYPE_POLYMARKET, sym) {
+		return d8xUtils.PXTYPE_POLYMARKET, true, true
 	}
 	// V2 and V3 are not triangulated on demand, hence we directly query the symbol
 	if utils.RedisIsSymbolAvailable(srv.RedisTSClient, d8xUtils.PXTYPE_V2, sym) {
@@ -437,7 +448,7 @@ func (srv *Server) IsSymbolAvailable(sym string) (d8xUtils.PriceType, bool, bool
 }
 
 func isValidCandleTopic(topic string) bool {
-	pattern := "^[a-zA-Z0-9]+-[a-zA-Z0-9]+:[0-9]+[HMD]$" // Regular expression for candle topics
+	pattern := "^[a-zA-Z0-9.]+-[a-zA-Z0-9]+:[0-9]+[HMD]$" // Regular expression for candle topics
 	regex, _ := regexp.Compile(pattern)
 	return regex.MatchString(topic)
 }

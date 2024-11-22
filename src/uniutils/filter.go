@@ -22,10 +22,8 @@ import (
 )
 
 type BlockObs struct {
-	Ts      uint64 //timestamp
-	SymToPx map[string]float64
-	Abi     abi.ABI //???
-
+	Ts      uint64             // timestamp
+	SymToPx map[string]float64 // price observations
 }
 
 type Filter struct {
@@ -67,7 +65,7 @@ func NewFilter(
 func (fltr *Filter) Run(client *rueidis.Client, relPoolAddr []common.Address) error {
 	symToAdd := missingSymsInHist(fltr.Indices, fltr.UniType, client)
 	if len(symToAdd) == 0 {
-		slog.Info("no missing symbols in v3 history")
+		slog.Info("no missing symbols in history")
 		return nil
 	}
 	nowTs := time.Now().Unix()
@@ -225,6 +223,7 @@ func (fltr *Filter) fillTriangulatedHistory() {
 	for j := range fltr.Indices {
 		triang := fltr.Indices[j].Triang
 		sym2Triang := fltr.Indices[j].Symbol
+		contractSize := fltr.Indices[j].ContractSize
 		// store last price of underlying in map
 		lastPx := make(map[string]float64)
 		for k := 1; k < len(triang); k += 2 {
@@ -255,7 +254,7 @@ func (fltr *Filter) fillTriangulatedHistory() {
 				}
 			}
 			if px != -1 {
-				fltr.Prices[blockNum].SymToPx[sym2Triang] = px
+				fltr.Prices[blockNum].SymToPx[sym2Triang] = px * contractSize
 			}
 		}
 	}
