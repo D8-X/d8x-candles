@@ -448,7 +448,7 @@ func (srv *Server) IsSymbolAvailable(sym string) (d8xUtils.PriceType, bool, bool
 }
 
 func isValidCandleTopic(topic string) bool {
-	pattern := "^[a-zA-Z0-9]+-[a-zA-Z0-9]+:[0-9]+[HMD]$" // Regular expression for candle topics
+	pattern := "^[a-zA-Z0-9.]+-[a-zA-Z0-9]+:[0-9]+[HMD]$" // Regular expression for candle topics
 	regex, _ := regexp.Compile(pattern)
 	return regex.MatchString(topic)
 }
