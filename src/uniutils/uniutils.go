@@ -19,8 +19,9 @@ import (
 
 // Index represents each index in the "indices" array
 type ConfigIndex struct {
-	Symbol string   `json:"symbol"`
-	Triang []string `json:"triang"`
+	Symbol       string   `json:"symbol"`
+	Triang       []string `json:"triang"`
+	ContractSize float64  `json:"contractSize"`
 }
 
 const LOOKBACK_SEC = 86400 * 5 // now-LOOKBACK_SEC is when we start gathering history
