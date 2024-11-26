@@ -21,20 +21,20 @@ import (
 )
 
 type V3Client struct {
-	Config            *Config
-	Ruedi             *rueidis.Client
-	RpcHndl           *globalrpc.GlobalRpc
-	RelevantPoolAddrs []common.Address                     // contains all pool addresses that are used for indices
-	Triangulations    map[string]d8x_futures.Triangulation //map index symbol to its triangulation
-	PoolAddrToIndices map[string][]int                     // map pool address to price index location in Config.indices
-	PoolAddrToSymbol  map[string]string                    //map pool address to its symbol
-	SwapEventAbi      abi.ABI
+	Config             *Config
+	Ruedi              *rueidis.Client
+	RpcHndl            *globalrpc.GlobalRpc
+	RelevantPoolAddrs  []common.Address                     // contains all pool addresses that are used for indices
+	Triangulations     map[string]d8x_futures.Triangulation //map index symbol to its triangulation
+	PoolAddrToIndices  map[string][]int                     // map pool address to price index location in Config.indices
+	PoolAddrToPoolInfo map[string]ConfigPool                //map pool address to its symbol and dec
+	SwapEventAbi       abi.ABI
 }
 
-func NewV3Client(configRpc, redisAddr, redisPw string, chainId int) (*V3Client, error) {
+func NewV3Client(configRpc, redisAddr, redisPw string, chainId int, optV3Config string) (*V3Client, error) {
 	var v3 V3Client
 	var err error
-	v3.Config, err = loadV3PoolConfig(chainId)
+	v3.Config, err = loadV3PoolConfig(chainId, optV3Config)
 	if err != nil {
 		return nil, err
 	}
@@ -55,14 +55,14 @@ func NewV3Client(configRpc, redisAddr, redisPw string, chainId int) (*V3Client, 
 		return nil, err
 	}
 	v3.PoolAddrToIndices = make(map[string][]int)
-	v3.PoolAddrToSymbol = make(map[string]string)
+	v3.PoolAddrToPoolInfo = make(map[string]ConfigPool)
 	for j, idx := range v3.Config.Indices {
 		for k := 1; k < len(idx.Triang); k += 2 {
 			sym := idx.Triang[k]
 			for _, pool := range v3.Config.Pools {
 				if pool.Symbol == sym {
 					v3.PoolAddrToIndices[pool.Addr] = append(v3.PoolAddrToIndices[pool.Addr], j)
-					v3.PoolAddrToSymbol[pool.Addr] = pool.Symbol
+					v3.PoolAddrToPoolInfo[pool.Addr] = pool
 				}
 			}
 		}
@@ -161,20 +161,20 @@ func (v3 *V3Client) runWebsocket(client *ethclient.Client) error {
 func (v3 *V3Client) onSwap(poolAddr string, log types.Log) {
 	var event SwapEvent
 	poolAddr = common.HexToAddress(poolAddr).Hex()
-	sym, exists := v3.PoolAddrToSymbol[poolAddr]
+	info, exists := v3.PoolAddrToPoolInfo[poolAddr]
 	if !exists {
 		slog.Error("pool addr not in universe", "addr", poolAddr)
 		return
 	}
-	slog.Info("onSwap", "symbol", sym)
+	slog.Info("onSwap", "symbol", info.Symbol)
 	err := v3.SwapEventAbi.UnpackIntoInterface(&event, "Swap", log.Data)
 	if err != nil {
 		slog.Error("failed to unpack Swap event", "error", err)
 		return
 	}
-	price := SqrtPriceX96ToPrice(event.SqrtPriceX96)
+	price := SqrtPriceX96ToPrice(event.SqrtPriceX96, info.TokenDec)
 	nowTs := time.Now().UnixMilli()
-	err = utils.RedisAddPriceObs(v3.Ruedi, d8xUtils.PXTYPE_V3, sym, price, nowTs)
+	err = utils.RedisAddPriceObs(v3.Ruedi, d8xUtils.PXTYPE_V3, info.Symbol, price, nowTs)
 	if err != nil {
 		slog.Error("onSwap: failed to insert new obs", "error", err)
 		return

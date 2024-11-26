@@ -20,7 +20,8 @@ func loadEnv() *viper.Viper {
 func TestV3Client(t *testing.T) {
 	v := loadEnv()
 	cRpc := "../../config/rpc_conf.json"
-	v3, err := NewV3Client(cRpc, v.GetString(env.REDIS_ADDR), v.GetString(env.REDIS_PW), v.GetInt(env.CHAIN_ID))
+	conf := "../../config/v3_idx_conf.json"
+	v3, err := NewV3Client(cRpc, v.GetString(env.REDIS_ADDR), v.GetString(env.REDIS_PW), v.GetInt(env.CHAIN_ID), conf)
 	if err != nil {
 		fmt.Printf("error %v", err)
 		t.FailNow()

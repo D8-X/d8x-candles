@@ -36,8 +36,9 @@ type Config struct {
 
 // Pool represents each pool in the "pools" array
 type ConfigPool struct {
-	Symbol string `json:"symbol"`
-	Addr   string `json:"addr"`
+	Symbol   string  `json:"symbol"`
+	Addr     string  `json:"addr"`
+	TokenDec []uint8 `json:"tokenDec"`
 }
 
 type RpcConfig struct {
@@ -45,10 +46,31 @@ type RpcConfig struct {
 	Https []string `json:"https"`
 }
 
+func readFile(filename string) ([]byte, error) {
+	jsonFile, err := os.Open(filename)
+	if err != nil {
+		return nil, err
+	}
+	defer jsonFile.Close()
+
+	// Read the file's contents into a byte slice
+	byteValue, err := io.ReadAll(jsonFile)
+	if err != nil {
+		return nil, fmt.Errorf("Failed to read file: %v", err)
+	}
+	return byteValue, nil
+}
+
 // returns nil, nil if no config specified for given chain
-func loadV3PoolConfig(chainId int) (*Config, error) {
+func loadV3PoolConfig(chainId int, configFilePathOpt string) (*Config, error) {
+	var byteValue []byte
+	var err error
 	// Read the file contents
-	byteValue, err := config.FetchConfigFromRepo("v3_idx_conf.json")
+	if configFilePathOpt != "" {
+		byteValue, err = readFile(configFilePathOpt)
+	} else {
+		byteValue, err = config.FetchConfigFromRepo("v3_idx_conf.json")
+	}
 	if err != nil {
 		return nil, err
 	}
