@@ -102,6 +102,7 @@ func RunV2Client() {
 		viper.GetString(env.REDIS_ADDR),
 		viper.GetString(env.REDIS_PW),
 		viper.GetInt(env.CHAIN_ID),
+		"",
 	)
 	if err != nil {
 		fmt.Println("error:", err.Error())

@@ -4,7 +4,7 @@
     "descr": "base v3 indices on Arbitrum",
     "poolChainId": 8453,
     "indices" : [
-        {"symbol":"BRETT-USDC", "contractSize": 1,  "triang": ["/", "ETH-BRETT", "*", "ETH-USDC"]}
+        {"symbol":"BRETT-USD", "contractSize": 1,  "triang": ["/", "ETH-BRETT", "*", "ETH-USDC"]}
     ],
     "pools" : [
         {

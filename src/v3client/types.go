@@ -3,6 +3,7 @@ package v3client
 import (
 	"d8x-candles/config"
 	"d8x-candles/src/uniutils"
+	"d8x-candles/src/utils"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -46,28 +47,13 @@ type RpcConfig struct {
 	Https []string `json:"https"`
 }
 
-func readFile(filename string) ([]byte, error) {
-	jsonFile, err := os.Open(filename)
-	if err != nil {
-		return nil, err
-	}
-	defer jsonFile.Close()
-
-	// Read the file's contents into a byte slice
-	byteValue, err := io.ReadAll(jsonFile)
-	if err != nil {
-		return nil, fmt.Errorf("Failed to read file: %v", err)
-	}
-	return byteValue, nil
-}
-
 // returns nil, nil if no config specified for given chain
 func loadV3PoolConfig(chainId int, configFilePathOpt string) (*Config, error) {
 	var byteValue []byte
 	var err error
 	// Read the file contents
 	if configFilePathOpt != "" {
-		byteValue, err = readFile(configFilePathOpt)
+		byteValue, err = utils.ReadFile(configFilePathOpt)
 	} else {
 		byteValue, err = config.FetchConfigFromRepo("v3_idx_conf.json")
 	}

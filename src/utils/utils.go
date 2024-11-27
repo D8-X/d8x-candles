@@ -2,7 +2,9 @@ package utils
 
 import (
 	"fmt"
+	"io"
 	"math/big"
+	"os"
 	"strings"
 
 	d8xUtils "github.com/D8-X/d8x-futures-go-sdk/utils"
@@ -47,4 +49,19 @@ type MarketHours struct {
 type MarketInfo struct {
 	MarketHours MarketHours
 	AssetType   d8xUtils.AssetClass `json:"assetType"`
+}
+
+func ReadFile(filename string) ([]byte, error) {
+	jsonFile, err := os.Open(filename)
+	if err != nil {
+		return nil, err
+	}
+	defer jsonFile.Close()
+
+	// Read the file's contents into a byte slice
+	byteValue, err := io.ReadAll(jsonFile)
+	if err != nil {
+		return nil, fmt.Errorf("Failed to read file: %v", err)
+	}
+	return byteValue, nil
 }
