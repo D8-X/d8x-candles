@@ -40,7 +40,7 @@ func loadV2PoolConfig(chainId int, configFilePathOpt string) (*V2PoolConfig, err
 	if configFilePathOpt != "" {
 		byteValue, err = utils.ReadFile(configFilePathOpt)
 	} else {
-		byteValue, err = config.FetchConfigFromRepo("v3_idx_conf.json")
+		byteValue, err = config.FetchConfigFromRepo("v2_idx_conf.json")
 	}
 	if err != nil {
 		return nil, err
