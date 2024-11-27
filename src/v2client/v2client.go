@@ -68,6 +68,7 @@ func NewV2Client(configRpc, redisAddr, redisPw string, chainId int, optV2Config 
 		t0 := common.HexToAddress(pool.TokenAddr[0])
 		t1 := common.HexToAddress(pool.TokenAddr[1])
 		v2.Config.Pools[j].PoolAddr = calcV2PoolAddr(t0, t1, fct)
+		fmt.Printf("pool %s addr=%s\n", v2.Config.Pools[j].Symbol, v2.Config.Pools[j].PoolAddr.Hex())
 	}
 
 	v2.PoolAddrToIndices = make(map[string][]int)
