@@ -22,7 +22,7 @@ import (
 )
 
 type BlockObs struct {
-	Ts      uint64             // timestamp
+	Ts      uint64             // timestamp seconds
 	SymToPx map[string]float64 // price observations
 }
 
@@ -63,7 +63,9 @@ func NewFilter(
 }
 
 func (fltr *Filter) Run(client *rueidis.Client, relPoolAddr []common.Address) error {
-	symToAdd := missingSymsInHist(fltr.Indices, fltr.UniType, client)
+	// delete history up to the point where we start filtering
+	// and get all required symbols
+	symToAdd := cleanHist(fltr.Indices, fltr.UniType, client)
 	if len(symToAdd) == 0 {
 		slog.Info("no missing symbols in history")
 		return nil
@@ -74,6 +76,7 @@ func (fltr *Filter) Run(client *rueidis.Client, relPoolAddr []common.Address) er
 	if err != nil {
 		return err
 	}
+	slog.Info("starting filterer")
 	err = fltr.runFilterer(
 		int64(blk),
 		int64(blkNow),
@@ -84,7 +87,9 @@ func (fltr *Filter) Run(client *rueidis.Client, relPoolAddr []common.Address) er
 	}
 	fltr.findBlockTs()
 	// now triangulate available prices
+	slog.Info("starting triangulation of filtered history")
 	fltr.fillTriangulatedHistory()
+	slog.Info("adding prices to redis")
 	fltr.histPricesToRedis(symToAdd, client)
 
 	return nil
@@ -210,7 +215,8 @@ func (fltr *Filter) findBlockTs() {
 }
 
 // fillTriangulatedHistory amends the prices array by adding symbols
-// and prices of triangulated symbols
+// and prices of triangulated symbols. Returns the timestamp of the
+// first observation
 func (fltr *Filter) fillTriangulatedHistory() {
 	blocks := make([]uint64, len(fltr.Prices))
 	j := 0
@@ -219,7 +225,6 @@ func (fltr *Filter) fillTriangulatedHistory() {
 		j++
 	}
 	slices.Sort(blocks)
-
 	for j := range fltr.Indices {
 		triang := fltr.Indices[j].Triang
 		sym2Triang := fltr.Indices[j].Symbol
