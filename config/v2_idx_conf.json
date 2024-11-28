@@ -7,14 +7,14 @@
         "multicall": "0xcA11bde05977b3631167028862bE2a173976CA11",
         "v2Router02": "0x4752ba5dbc23f44d87826276bf6fd6b1c372ad24",
         "indices": [
-            {"symbol" : "BOOMER-USD", "contractSize": 1, "triang": ["/", "ETH-BOOMER", "*", "ETH-USDC"]}
+            {"symbol" : "BENJI-USD", "contractSize": 1, "triang": ["/", "ETH-BENJI", "*", "ETH-USDC"]}
         ],
         "pools": [
             {
-                "symbol": "ETH-BOOMER",
+                "symbol": "ETH-BENJI",
                 "tokenAddr": [
                     "0x4200000000000000000000000000000000000006",
-                    "0xcdE172dc5ffC46D228838446c57C1227e0B82049"
+                    "0xbc45647ea894030a4e9801ec03479739fa2485f0"
                 ],
                 "tokenDec": [18, 18]
             },
