@@ -7,7 +7,8 @@
         "multicall": "0xcA11bde05977b3631167028862bE2a173976CA11",
         "v2Router02": "0x4752ba5dbc23f44d87826276bf6fd6b1c372ad24",
         "indices": [
-            {"symbol" : "BENJI-USD", "contractSize": 1, "triang": ["/", "ETH-BENJI", "*", "ETH-USDC"]}
+            {"symbol" : "BENJI-USD", "contractSize": 1, "triang": ["/", "ETH-BENJI", "*", "ETH-USDC"]},
+            {"symbol" : "MIGGLES-USD", "contractSize": 1, "triang": ["/", "ETH-MIGGLES", "*", "ETH-USDC"]}
         ],
         "pools": [
             {
@@ -15,6 +16,14 @@
                 "tokenAddr": [
                     "0x4200000000000000000000000000000000000006",
                     "0xbc45647ea894030a4e9801ec03479739fa2485f0"
+                ],
+                "tokenDec": [18, 18]
+            },
+            {
+                "symbol": "ETH-MIGGLES",
+                "tokenAddr": [
+                    "0x4200000000000000000000000000000000000006",
+                    "0xB1a03EdA10342529bBF8EB700a06C60441fEf25d"
                 ],
                 "tokenDec": [18, 18]
             },
