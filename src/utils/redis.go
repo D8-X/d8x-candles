@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"strconv"
 	"sync"
 	"time"
@@ -68,6 +69,47 @@ func RedisAddPriceObs(client *rueidis.Client, pxtype d8xUtils.PriceType, sym str
 	return nil
 }
 
+// RedisDelPrefix deletes all keys with the given prefix, except the given keys
+func RedisDelPrefix(client *rueidis.Client, prfx string, exKeys []string) error {
+	ctx := context.Background()
+	c := *client
+	var cursor uint64
+	for {
+		resp := c.Do(ctx, c.B().Scan().Cursor(cursor).Match(prfx).Count(10).Build())
+		if resp.Error() != nil {
+			return fmt.Errorf("RedisDelPrefix SCAN: %v", resp.Error())
+		}
+		scanResult, err := resp.AsScanEntry()
+		if err != nil {
+			return fmt.Errorf("RedisDelPrefix SCAN response: %v", err)
+		}
+		cursor = scanResult.Cursor
+		keys := scanResult.Elements
+		todel := make([]string, 0, len(keys))
+		for _, ky := range keys {
+			if slices.Contains(exKeys, ky) {
+				continue
+			}
+			fmt.Printf("removing %s from redis\n", ky)
+			todel = append(todel, ky)
+		}
+		if len(todel) == 0 {
+			if cursor == 0 {
+				return nil
+			}
+			continue
+		}
+		err = c.Do(ctx, c.B().Del().Key(todel...).Build()).Error()
+		if err != nil {
+			return fmt.Errorf("RedisDelPrefix DEL response: %v", err)
+		}
+		// If the cursor is 0, the iteration is complete
+		if cursor == 0 {
+			return nil
+		}
+	}
+}
+
 // sym of the form ETH-USD
 func PricesToRedis(client *rueidis.Client, sym string, pxtype d8xUtils.PriceType, obs PriceObservations) error {
 	err := RedisReCreateTimeSeries(client, pxtype, sym)
@@ -91,6 +133,15 @@ func PricesToRedis(client *rueidis.Client, sym string, pxtype d8xUtils.PriceType
 	key := RDS_AVAIL_TICKER_SET + ":" + pxtype.String()
 	c.Do(context.Background(), c.B().Sadd().Key(key).Member(sym).Build())
 	return nil
+}
+
+func RedisCleanAfter(client *rueidis.Client, pxtype d8xUtils.PriceType, sym string, tsMs int64) error {
+	ctx := context.Background()
+	c := *client
+	key := pxtype.String() + ":" + sym
+	now := time.Now().UnixMilli()
+	cmd := c.B().TsDel().Key(key).FromTimestamp(tsMs).ToTimestamp(now).Build()
+	return c.Do(ctx, cmd).Error()
 }
 
 func RedisGetFirstTimestamp(client *rueidis.Client, pxtype d8xUtils.PriceType, sym string) int64 {

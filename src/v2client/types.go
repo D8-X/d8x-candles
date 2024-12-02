@@ -3,6 +3,7 @@ package v2client
 import (
 	"d8x-candles/config"
 	"d8x-candles/src/uniutils"
+	"d8x-candles/src/utils"
 	"encoding/json"
 	"fmt"
 	"log/slog"
@@ -31,10 +32,16 @@ type UniswapV2Pool struct {
 }
 
 // loadV2PoolConfig loads config/v2_pools.json.
-func loadV2PoolConfig(chainId int) (*V2PoolConfig, error) {
-
+func loadV2PoolConfig(chainId int, configFilePathOpt string) (*V2PoolConfig, error) {
+	var byteValue []byte
+	var err error
 	var allPools []V2PoolConfig
-	byteValue, err := config.FetchConfigFromRepo("v2_idx_conf.json")
+	// Read the file contents
+	if configFilePathOpt != "" {
+		byteValue, err = utils.ReadFile(configFilePathOpt)
+	} else {
+		byteValue, err = config.FetchConfigFromRepo("v2_idx_conf.json")
+	}
 	if err != nil {
 		return nil, err
 	}

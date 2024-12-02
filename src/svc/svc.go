@@ -68,6 +68,7 @@ func RunV3Client() {
 		viper.GetString(env.REDIS_ADDR),
 		viper.GetString(env.REDIS_PW),
 		viper.GetInt(env.CHAIN_ID),
+		"", //we load config from remote
 	)
 	if err != nil {
 		fmt.Println("error:", err.Error())
@@ -101,6 +102,7 @@ func RunV2Client() {
 		viper.GetString(env.REDIS_ADDR),
 		viper.GetString(env.REDIS_PW),
 		viper.GetInt(env.CHAIN_ID),
+		"",
 	)
 	if err != nil {
 		fmt.Println("error:", err.Error())

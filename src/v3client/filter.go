@@ -3,6 +3,7 @@ package v3client
 import (
 	"d8x-candles/src/uniutils"
 	"log"
+	"math"
 	"math/big"
 
 	d8xUtils "github.com/D8-X/d8x-futures-go-sdk/utils"
@@ -33,19 +34,19 @@ func (v3 *V3Client) handleSwapEvent(fltr *uniutils.Filter, vLog types.Log) {
 		log.Printf("\nfailed to unpack log data: %v\n", err)
 		return
 	}
-	sym := v3.PoolAddrToSymbol[vLog.Address.Hex()]
-	px := SqrtPriceX96ToPrice(event.SqrtPriceX96)
+	info := v3.PoolAddrToPoolInfo[vLog.Address.Hex()]
+	px := SqrtPriceX96ToPrice(event.SqrtPriceX96, info.TokenDec)
 	if _, exists := fltr.Prices[vLog.BlockNumber]; !exists {
 		fltr.Prices[vLog.BlockNumber] = &uniutils.BlockObs{
 			Ts:      0, // unknown at this point
 			SymToPx: make(map[string]float64),
 		}
 	}
-	fltr.Prices[vLog.BlockNumber].SymToPx[sym] = px
+	fltr.Prices[vLog.BlockNumber].SymToPx[info.Symbol] = px
 }
 
 // Function to convert sqrtPriceX96 to price
-func SqrtPriceX96ToPrice(sqrtPriceX96 *big.Int) float64 {
+func SqrtPriceX96ToPrice(sqrtPriceX96 *big.Int, decimals []uint8) float64 {
 	// Constants
 	sqrtPriceX96Shift := big.NewInt(1).Lsh(big.NewInt(1), 96)          // 2^96
 	sqrtPrice := new(big.Float).SetInt(sqrtPriceX96)                   // Convert sqrtPriceX96 to big.Float
@@ -53,6 +54,11 @@ func SqrtPriceX96ToPrice(sqrtPriceX96 *big.Int) float64 {
 
 	// Square the value to get the price
 	price := new(big.Float).Mul(sqrtPrice, sqrtPrice) // price = sqrtPrice^2
+	// Adjust for decimals difference
+	decimalAdjustment := new(big.Float).SetFloat64(
+		math.Pow10(int(decimals[1]) - int(decimals[0])),
+	) // 10^(decimals1 - decimals0)
+	price.Quo(price, decimalAdjustment) // price / 10^(decimals1 - decimals0)
 	px, _ := price.Float64()
 	return px
 }

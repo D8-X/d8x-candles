@@ -2,6 +2,7 @@ package uniutils
 
 import (
 	"d8x-candles/src/utils"
+	"log/slog"
 	"math/big"
 	"time"
 
@@ -27,20 +28,27 @@ type ConfigIndex struct {
 const LOOKBACK_SEC = 86400 * 5 // now-LOOKBACK_SEC is when we start gathering history
 
 func InitRedisIndices(indices []ConfigIndex, pxtype d8xUtils.PriceType, client *rueidis.Client) error {
+	newSyms := make(map[string]bool)
 	for j := range indices {
 		err := utils.RedisCreateIfNotExistsTs(client, pxtype, indices[j].Symbol)
 		if err != nil {
 			return err
 		}
+		newSyms[indices[j].Symbol] = true
 		for k := 1; k < len(indices[j].Triang); k += 2 {
 			err := utils.RedisCreateIfNotExistsTs(client, pxtype, indices[j].Triang[k])
 			if err != nil {
 				return err
 			}
+			newSyms[indices[j].Triang[k]] = true
 		}
-
 	}
-	return nil
+	exSym := make([]string, len(newSyms))
+	for sym := range newSyms {
+		exSym = append(exSym, sym)
+	}
+	// we delete all other symbols as they are not in the current configuration
+	return utils.RedisDelPrefix(client, pxtype.String(), exSym)
 }
 
 func TriangFromStringSlice(tr []string) d8x_futures.Triangulation {
@@ -54,9 +62,9 @@ func TriangFromStringSlice(tr []string) d8x_futures.Triangulation {
 	return triang
 }
 
-// missingSymsInHist determines symbols for which historical data
+// cleanHist determines symbols for which historical data
 // should be added to redis
-func missingSymsInHist(indices []ConfigIndex, unitype d8xUtils.PriceType, client *rueidis.Client) map[string]bool {
+func cleanHist(indices []ConfigIndex, unitype d8xUtils.PriceType, client *rueidis.Client) map[string]bool {
 	// identify all symbols
 	symRequired := make(map[string]bool)
 	for j := range indices {
@@ -67,14 +75,14 @@ func missingSymsInHist(indices []ConfigIndex, unitype d8xUtils.PriceType, client
 	}
 	// find which symbols are missing in history
 	maxAgeTs := time.Now().UnixMilli() - LOOKBACK_SEC
-	symToAdd := make(map[string]bool)
+	// we clean historical data from the look-back moment
 	for sym := range symRequired {
-		ts := utils.RedisGetFirstTimestamp(client, unitype, sym)
-		if ts == 0 || ts > maxAgeTs {
-			symToAdd[sym] = true
+		err := utils.RedisCleanAfter(client, unitype, sym, maxAgeTs)
+		if err != nil {
+			slog.Error("failed to clean redis", "error", err)
 		}
 	}
-	return symToAdd
+	return symRequired
 }
 
 // GetEventSignatureHash calculates the event signature hash

@@ -1,4 +1,4 @@
-package v3client
+package v2client
 
 import (
 	"d8x-candles/env"
@@ -17,11 +17,11 @@ func loadEnv() *viper.Viper {
 	return viper.GetViper()
 }
 
-func TestV3Client(t *testing.T) {
+func TestV2Client(t *testing.T) {
 	v := loadEnv()
 	cRpc := "../../config/rpc_conf.json"
-	conf := "../../config/v3_idx_conf.json"
-	v3, err := NewV3Client(cRpc, v.GetString(env.REDIS_ADDR), v.GetString(env.REDIS_PW), v.GetInt(env.CHAIN_ID), conf)
+	conf := "../../config/v2_idx_conf.json"
+	v3, err := NewV2Client(cRpc, v.GetString(env.REDIS_ADDR), v.GetString(env.REDIS_PW), v.GetInt(env.CHAIN_ID), conf)
 	if err != nil {
 		fmt.Printf("error %v", err)
 		t.FailNow()

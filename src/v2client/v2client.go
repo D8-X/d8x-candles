@@ -40,10 +40,10 @@ type V2Client struct {
 	SyncEventAbi      abi.ABI
 }
 
-func NewV2Client(configRpc, redisAddr, redisPw string, chainId int) (*V2Client, error) {
+func NewV2Client(configRpc, redisAddr, redisPw string, chainId int, optV2Config string) (*V2Client, error) {
 	var v2 V2Client
 	var err error
-	v2.Config, err = loadV2PoolConfig(chainId)
+	v2.Config, err = loadV2PoolConfig(chainId, optV2Config)
 	if err != nil {
 		return nil, err
 	}
@@ -55,7 +55,7 @@ func NewV2Client(configRpc, redisAddr, redisPw string, chainId int) (*V2Client, 
 	client, err := rueidis.NewClient(
 		rueidis.ClientOption{InitAddress: []string{redisAddr}, Password: redisPw})
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("unable to start redis client %v", err)
 	}
 	v2.Ruedi = &client
 	v2.RpcHndl, err = globalrpc.NewGlobalRpc(configRpc, v2.Config.PoolChainId, redisAddr, redisPw)
@@ -68,6 +68,7 @@ func NewV2Client(configRpc, redisAddr, redisPw string, chainId int) (*V2Client, 
 		t0 := common.HexToAddress(pool.TokenAddr[0])
 		t1 := common.HexToAddress(pool.TokenAddr[1])
 		v2.Config.Pools[j].PoolAddr = calcV2PoolAddr(t0, t1, fct)
+		fmt.Printf("pool %s addr=%s\n", v2.Config.Pools[j].Symbol, v2.Config.Pools[j].PoolAddr.Hex())
 	}
 
 	v2.PoolAddrToIndices = make(map[string][]int)
@@ -109,16 +110,19 @@ func NewV2Client(configRpc, redisAddr, redisPw string, chainId int) (*V2Client, 
 
 // Run is the main entrance to v2client service
 func (v2 *V2Client) Run() error {
-	slog.Info("start filtering historical v2 events")
+	slog.Info("start filtering events")
 	v2.Filter()
-	slog.Info("filtering historical v2 data complete")
+	slog.Info("filtering complete")
 	key := utils.RDS_AVAIL_TICKER_SET + ":" + d8xUtils.PXTYPE_V2.String()
+	// clear available tickers
+	c := *v2.Ruedi
+	c.Do(context.Background(), c.B().Del().Key(key).Build())
 	for j := range v2.Config.Indices {
 		// set market hours for index symbol
 		sym := v2.Config.Indices[j].Symbol
 		utils.RedisSetMarketHours(v2.Ruedi, sym, utils.MarketHours{IsOpen: true, NextOpen: 0, NextClose: 0}, d8xUtils.ACLASS_CRYPTO)
 		// set index symbol as available in redis
-		c := *v2.Ruedi
+		fmt.Printf("setting %s available\n", sym)
 		c.Do(context.Background(), c.B().Sadd().Key(key).Member(sym).Build())
 	}
 
@@ -208,6 +212,7 @@ func (v2 *V2Client) idxPriceUpdate(poolAddr string) error {
 		fmt.Printf("pool %s no indices\n", poolAddr)
 		return nil
 	}
+	symUpdated := ""
 	for j := range idx {
 		pxIdx := v2.Config.Indices[j]
 		var px float64 = 1
@@ -232,7 +237,10 @@ func (v2 *V2Client) idxPriceUpdate(poolAddr string) error {
 		if err != nil {
 			return err
 		}
+		symUpdated += d8xUtils.PXTYPE_V2.String() + ":" + pxIdx.Symbol + ";"
 	}
+	symUpdated = strings.TrimSuffix(symUpdated, ";")
+	utils.RedisPublishIdxPriceChange(v2.Ruedi, symUpdated)
 	return nil
 }
 
