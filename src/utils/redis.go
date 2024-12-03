@@ -2,6 +2,7 @@ package utils
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"slices"
@@ -370,92 +371,81 @@ func RedisTsGet(client *rueidis.Client, sym string, pxtype d8xUtils.PriceType) (
 func OhlcFromRedis(client *rueidis.Client, sym string, pxtype d8xUtils.PriceType, fromTs int64, toTs int64, resolSec uint32) ([]OhlcData, error) {
 
 	timeBucket := int64(resolSec) * 1000
-	//agg.Count = 100
-	// collect aggregations
-	aggregations := []Aggr{AGGR_FIRST, AGGR_MAX, AGGR_MIN, AGGR_LAST}
 
-	var redisData []*[]DataPoint
-	for _, a := range aggregations {
-		data, err := RangeAggr(client, sym, pxtype, fromTs, toTs, timeBucket, a)
-		if err != nil {
-			return []OhlcData{}, err
-		}
-		redisData = append(redisData, &data)
+	ohlc, err := RangeAggr(client, sym, pxtype, fromTs, toTs, timeBucket)
+	if err != nil {
+		return nil, err
 	}
-	// in case some arrays are longer
-	K := min(len(*redisData[0]), min(len(*redisData[1]), min(len(*redisData[2]), len(*redisData[3]))))
 
-	// store in candle format
-	var ohlc []OhlcData
-	var tOld int64 = 0
-	for k := 0; k < K; k++ {
-		var data OhlcData
-		data.TsMs = (*redisData[0])[k].Timestamp
-		data.Time = ConvertTimestampToISO8601(data.TsMs)
-		data.O = (*redisData[0])[k].Value
-		data.H = (*redisData[1])[k].Value
-		data.L = (*redisData[2])[k].Value
-		data.C = (*redisData[3])[k].Value
-
-		// insert artificial data for gaps before adding 'data'
-		numGaps := (data.TsMs - tOld) / timeBucket
-		for j := 0; j < int(numGaps)-1 && k > 0; j++ {
-			var dataGap OhlcData
-			dataGap.TsMs = tOld + int64(j+1)*timeBucket
-			dataGap.Time = ConvertTimestampToISO8601(dataGap.TsMs)
-			// set all data to close of previous OHLC observation
-			dataGap.O = (*redisData[3])[k].Value
-			dataGap.H = (*redisData[3])[k].Value
-			dataGap.L = (*redisData[3])[k].Value
-			dataGap.C = (*redisData[3])[k].Value
-			ohlc = append(ohlc, dataGap)
-		}
-		tOld = data.TsMs
-		ohlc = append(ohlc, data)
-	}
 	return ohlc, nil
 }
 
 // RangeAggr aggregates the redis prices for the given symbol/price type over the given horizon and bucketDuration according
 // to 'aggr'
-func RangeAggr(r *rueidis.Client, sym string, pxtype d8xUtils.PriceType, fromTs int64, toTs int64, bucketDur int64, aggr Aggr) ([]DataPoint, error) {
+func RangeAggr(
+	client *rueidis.Client,
+	sym string,
+	pxtype d8xUtils.PriceType,
+	fromTs int64,
+	toTs int64,
+	bucketDur int64,
+) ([]OhlcData, error) {
 	key := pxtype.String() + ":" + sym
-	var cmd rueidis.Completed
-	fromTs = int64(fromTs/bucketDur) * bucketDur
-	switch aggr {
-	case AGGR_MIN:
-		cmd = (*r).B().TsRange().Key(key).
-			Fromtimestamp(strconv.FormatInt(fromTs, 10)).Totimestamp(strconv.FormatInt(toTs, 10)).
-			Align("-").
-			AggregationMin().Bucketduration(bucketDur).Build()
-	case AGGR_MAX:
-		cmd = (*r).B().TsRange().Key(key).
-			Fromtimestamp(strconv.FormatInt(fromTs, 10)).Totimestamp(strconv.FormatInt(toTs, 10)).
-			Align("-").
-			AggregationMax().Bucketduration(bucketDur).Build()
-	case AGGR_FIRST:
-		cmd = (*r).B().TsRange().Key(key).
-			Fromtimestamp(strconv.FormatInt(fromTs, 10)).Totimestamp(strconv.FormatInt(toTs, 10)).
-			Align("-").
-			AggregationFirst().Bucketduration(bucketDur).Build()
-	case AGGR_LAST:
-		cmd = (*r).B().TsRange().Key(key).
-			Fromtimestamp(strconv.FormatInt(fromTs, 10)).Totimestamp(strconv.FormatInt(toTs, 10)).
-			Align("-").
-			AggregationLast().Bucketduration(bucketDur).Build()
-	case AGGR_NONE: //no aggregation
-		cmd = (*r).B().TsRange().Key(key).
-			Fromtimestamp(strconv.FormatInt(fromTs, 10)).Totimestamp(strconv.FormatInt(toTs, 10)).
-			Align("-").
-			Build()
-	default:
-		return []DataPoint{}, errors.New("invalid aggr type")
-	}
-	raw, err := (*r).Do(context.Background(), cmd).ToAny()
+	c := *client
+	vcmd := c.B().Eval().Script(LUA_OHLC).Numkeys(1).Key(key).Arg(
+		strconv.FormatInt(fromTs, 10),
+		strconv.FormatInt(toTs, 10),
+		strconv.FormatInt(bucketDur, 10)).Build()
+	res, err := c.Do(context.Background(), vcmd).ToString()
 	if err != nil {
-		return []DataPoint{}, err
+		return nil, fmt.Errorf("unable to aggr %s %v", sym, err)
 	}
-	data := ParseTsRange(raw)
+	type AggrMap map[string][]interface{}
 
-	return data, nil
+	// Parse the JSON response
+	var mp AggrMap
+	if err := json.Unmarshal([]byte(res), &mp); err != nil {
+		return nil, fmt.Errorf("failed to parse aggregation result: %v", err)
+	}
+	// store in candle format
+	var ohlc []OhlcData
+	for k := 0; k < len(mp["min"]); k++ {
+		var data OhlcData
+		mMin := mp["min"][k].([]interface{})
+		timestamp, _ := mMin[0].(float64)
+		data.TsMs = int64(timestamp)
+		data.Time = ConvertTimestampToISO8601(data.TsMs)
+		value, _ := mMin[1].(map[string]interface{})
+		valueStr, _ := value["ok"].(string)
+		data.L, _ = strconv.ParseFloat(valueStr, 64)
+
+		mMax := mp["max"][k].([]interface{})
+		ts, _ := mMax[0].(float64)
+		if ts != timestamp {
+			slog.Error("timestamp mismatch")
+		}
+		value, _ = mMax[1].(map[string]interface{})
+		valueStr, _ = value["ok"].(string)
+		data.H, _ = strconv.ParseFloat(valueStr, 64)
+
+		mFirst := mp["first"][k].([]interface{})
+		ts, _ = mFirst[0].(float64)
+		if ts != timestamp {
+			slog.Error("timestamp mismatch")
+		}
+		value, _ = mFirst[1].(map[string]interface{})
+		valueStr, _ = value["ok"].(string)
+		data.O, _ = strconv.ParseFloat(valueStr, 64)
+
+		mLast := mp["last"][k].([]interface{})
+		ts, _ = mLast[0].(float64)
+		if ts != timestamp {
+			slog.Error("timestamp mismatch")
+		}
+		value, _ = mLast[1].(map[string]interface{})
+		valueStr, _ = value["ok"].(string)
+		data.C, _ = strconv.ParseFloat(valueStr, 64)
+		ohlc = append(ohlc, data)
+	}
+	return ohlc, nil
 }
