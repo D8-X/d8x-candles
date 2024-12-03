@@ -382,11 +382,13 @@ func OhlcFromRedis(client *rueidis.Client, sym string, pxtype d8xUtils.PriceType
 		}
 		redisData = append(redisData, &data)
 	}
+	// in case some arrays are longer
+	K := min(len(*redisData[0]), min(len(*redisData[1]), min(len(*redisData[2]), len(*redisData[3]))))
 
 	// store in candle format
 	var ohlc []OhlcData
 	var tOld int64 = 0
-	for k := 0; k < len(*redisData[0]); k++ {
+	for k := 0; k < K; k++ {
 		var data OhlcData
 		data.TsMs = (*redisData[0])[k].Timestamp
 		data.Time = ConvertTimestampToISO8601(data.TsMs)
