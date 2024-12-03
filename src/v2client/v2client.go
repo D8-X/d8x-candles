@@ -166,7 +166,7 @@ func (v2 *V2Client) Run() error {
 }
 
 func (v2 *V2Client) connCheck(wsRestartCh chan struct{}) {
-	tick := time.NewTicker(time.Minute * 2)
+	tick := time.NewTicker(time.Minute * 1)
 	defer tick.Stop()
 	for {
 		<-tick.C

@@ -146,7 +146,7 @@ func (v3 *V3Client) Run() error {
 }
 
 func (v3 *V3Client) connCheck(wsRestartCh chan struct{}) {
-	tick := time.NewTicker(time.Minute * 2)
+	tick := time.NewTicker(time.Minute * 1)
 	defer tick.Stop()
 	for {
 		<-tick.C
