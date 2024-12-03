@@ -104,12 +104,7 @@ func TestRedisAggr(t *testing.T) {
 		return
 	}
 	fmt.Println(obs)
-	var bucket int64 = 10000
-	aF, err := RangeAggr(&client, sym, d8xUtils.PXTYPE_PYTH, 0, 50000, bucket)
-	if err != nil {
-		panic(err)
-	}
-	fmt.Println(aF)
+
 	// 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, ...
 	// bucket size 10 will take 10 elements and each of it counts for
 	// the aggregation, next bucket is non-overlapping
