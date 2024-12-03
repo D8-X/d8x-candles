@@ -10,6 +10,7 @@ import (
 	"log/slog"
 	"math/big"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/D8-X/d8x-futures-go-sdk/pkg/d8x_futures"
@@ -38,6 +39,20 @@ type V2Client struct {
 	PoolAddrToIndices map[string][]int                     // map pool address to price index location in Config.indices
 	PoolAddrToInfo    map[string]UniswapV2Pool
 	SyncEventAbi      abi.ABI
+	LastUpdateTs      int64 //timestamp seconds
+	MuLastUpdate      sync.RWMutex
+}
+
+func (v2 *V2Client) SetLastUpdateTs(tsSec int64) {
+	v2.MuLastUpdate.Lock()
+	defer v2.MuLastUpdate.Unlock()
+	v2.LastUpdateTs = tsSec
+}
+
+func (v2 *V2Client) GetLastUpdateTs() int64 {
+	v2.MuLastUpdate.RLock()
+	defer v2.MuLastUpdate.RUnlock()
+	return v2.LastUpdateTs
 }
 
 func NewV2Client(configRpc, redisAddr, redisPw string, chainId int, optV2Config string) (*V2Client, error) {
@@ -138,14 +153,34 @@ func (v2 *V2Client) Run() error {
 			slog.Error("v2 failed to connect to the Ethereum client: " + err.Error())
 			continue
 		}
-		err = v2.runWebsocket(client)
+		wsRestartCh := make(chan struct{})
+		go v2.connCheck(wsRestartCh)
+		err = v2.runWebsocket(client, wsRestartCh)
 		if err != nil {
 			slog.Error(err.Error())
+			time.Sleep(2 * time.Second)
 		}
 		v2.RpcHndl.ReturnLock(rec)
+		time.Sleep(2 * time.Second)
 	}
 }
-func (v2 *V2Client) runWebsocket(client *ethclient.Client) error {
+
+func (v2 *V2Client) connCheck(wsRestartCh chan struct{}) {
+	tick := time.NewTicker(time.Minute * 2)
+	defer tick.Stop()
+	for {
+		<-tick.C
+		dT := time.Now().Unix() - v2.GetLastUpdateTs()
+		if dT > 2*60 {
+			// restart
+			slog.Info("triggering websocket restart")
+			close(wsRestartCh)
+			return
+		}
+	}
+}
+
+func (v2 *V2Client) runWebsocket(client *ethclient.Client, wsRestartCh chan struct{}) error {
 	//Emitted each time reserves are updated via mint, burn, swap, or sync.
 	syncSig := uniutils.GetEventSignatureHash(SYNC_EVENT_SIGNATURE)
 
@@ -156,18 +191,24 @@ func (v2 *V2Client) runWebsocket(client *ethclient.Client) error {
 	// Subscribe to the events
 
 	logs := make(chan types.Log)
-	sub, err := client.SubscribeFilterLogs(context.Background(), query, logs)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	sub, err := client.SubscribeFilterLogs(ctx, query, logs)
 	if err != nil {
 		return fmt.Errorf("subscribing to event logs: %v", err)
 	}
 
-	fmt.Println("Listening for Uniswap V2 sync events...")
-
+	slog.Info("Listening for Uniswap V2 sync events...")
 	for {
 		select {
+		case <-wsRestartCh:
+			cancel()
+			slog.Info("stopping websocket listener...")
+			return nil
 		case err := <-sub.Err():
 			return fmt.Errorf("subscription: %v", err)
 		case vLog := <-logs:
+			v2.SetLastUpdateTs(time.Now().Unix())
 			// Check which event the log corresponds to
 			switch vLog.Topics[0] {
 			case syncSig:
