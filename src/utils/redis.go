@@ -117,6 +117,7 @@ func PricesToRedis(client *rueidis.Client, sym string, pxtype d8xUtils.PriceType
 	if err != nil {
 		return err
 	}
+	errCh := make(chan error, len(obs.P))
 	var wg sync.WaitGroup
 	for k := 0; k < len(obs.P); k++ {
 		// store prices in ms
@@ -125,15 +126,26 @@ func PricesToRedis(client *rueidis.Client, sym string, pxtype d8xUtils.PriceType
 		wg.Add(1)
 		go func(sym string, t int64, val float64) {
 			defer wg.Done()
-			RedisAddPriceObs(client, pxtype, sym, val, t)
+			err := RedisAddPriceObs(client, pxtype, sym, val, t)
+			if err != nil {
+				errCh <- err
+			}
 		}(sym, t, val)
 	}
 	wg.Wait()
-	// set the symbol as available
+	close(errCh)
+	for err := range errCh {
+		if err != nil {
+			return err // Handle or aggregate errors
+		}
+	}
+	return nil
+}
+
+func SetSymbolAvailable(client *rueidis.Client, sym string, pxtype d8xUtils.PriceType) {
 	c := *client
 	key := RDS_AVAIL_TICKER_SET + ":" + pxtype.String()
 	c.Do(context.Background(), c.B().Sadd().Key(key).Member(sym).Build())
-	return nil
 }
 
 func RedisCleanAfter(client *rueidis.Client, pxtype d8xUtils.PriceType, sym string, tsMs int64) error {

@@ -46,10 +46,19 @@ func CompactPriceObs(client *rueidis.Client, sym string, pxtype d8xUtils.PriceTy
 	if err != nil {
 		return err
 	}
+
+	// add compacted data to a temporary series
+	err = PricesToRedis(client, sym+"tmp", pxtype, priceObs)
+	if err != nil {
+		return err
+	}
 	// clear data
 	(*client).Do(context.Background(), (*client).B().TsDel().Key(key).FromTimestamp(first).ToTimestamp(last).Build())
-	// add compacted data
-	return PricesToRedis(client, sym, pxtype, priceObs)
+	// rename compacted data
+	// Rename the temporary key to the original key
+	keyTmp := key + "tmp"
+	(*client).Do(context.Background(), (*client).B().Rename().Key(keyTmp).Newkey(key).Build())
+	return nil
 }
 
 // Construct price observations from OHLC data sourced from REDIS,

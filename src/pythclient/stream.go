@@ -121,6 +121,7 @@ func (p *PythClientApp) EnableTriangulation(symT string) bool {
 		slog.Error("triangulation " + symT + ":" + err.Error())
 		return false
 	}
+	utils.SetSymbolAvailable(p.RedisClient, symT, d8xUtils.PXTYPE_PYTH)
 	return true
 }
 
