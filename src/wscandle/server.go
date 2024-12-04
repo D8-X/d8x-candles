@@ -330,18 +330,17 @@ func (srv *Server) updtMarketForSym(sym string, anchorTime24hMs int64) error {
 		anchorTime24hMs,
 		anchorTime24hMs+d,
 		60000,
-		utils.AGGR_FIRST,
 	)
 	var ret float64
-	if err != nil || len(px24) == 0 || px24[0].Value == 0 {
+	if err != nil || len(px24) == 0 || px24[0].O == 0 {
 		px24 = nil
 	} else {
 		if m.AssetType == d8xUtils.ACLASS_POLYMKT {
 			// absolute change for betting markets
-			ret = px.Value - px24[0].Value
+			ret = px.Value - px24[0].O
 		} else {
-			ret = px.Value/px24[0].Value - 1
-			scale := float64(px.Timestamp-px24[0].Timestamp) / float64(d)
+			ret = px.Value/px24[0].O - 1
+			scale := float64(px.Timestamp-px24[0].TsMs) / float64(d)
 			ret = ret * scale
 		}
 	}

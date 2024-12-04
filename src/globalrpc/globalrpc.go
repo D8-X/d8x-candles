@@ -59,9 +59,16 @@ func urlToRedis(chain int, urlType RPCType, urls []string, client *rueidis.Clien
 	c := *client
 	// check whether anyone has set the urls recently
 	key := REDIS_SET_URL_LOCK + strconv.Itoa(chain) + urlType.String()
-	cmd := c.B().Set().Key(key).Value("locked").Nx().
-		Ex(time.Minute * 10).Build()
+	// delete first
+	cmd := c.B().Del().Key(key).Build()
 	err := c.Do(context.Background(), cmd).Error()
+	if err != nil {
+		slog.Info("unable to delete existing urls", "chain", chain, "type", urlType.String())
+	}
+	// now add
+	cmd = c.B().Set().Key(key).Value("locked").Nx().
+		Ex(time.Minute * 10).Build()
+	err = c.Do(context.Background(), cmd).Error()
 	if err != nil {
 		slog.Info("urls already set", "chain", chain, "type", urlType.String())
 		return nil

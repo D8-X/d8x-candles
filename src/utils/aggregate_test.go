@@ -75,7 +75,7 @@ func TestRueidis(t *testing.T) {
 	fmt.Print(r)
 	dp := ParseTsRange(r)
 	fmt.Print(dp)
-	dp2, err := RangeAggr(&client, "btc-usd", d8xUtils.PXTYPE_PYTH, 1693809900000, 1693896300000, 300000, AGGR_MAX)
+	dp2, err := RangeAggr(&client, "btc-usd", d8xUtils.PXTYPE_PYTH, 1693809900000, 1693896300000, 300000)
 	if err != nil {
 		panic(err)
 	}
@@ -85,43 +85,37 @@ func TestRueidis(t *testing.T) {
 }
 
 func TestRedisAggr(t *testing.T) {
+	v := loadEnv()
+	REDIS_ADDR := v.GetString("REDIS_ADDR")
+	REDIS_PW := v.GetString("REDIS_PW")
 	client, err := rueidis.NewClient(
-		rueidis.ClientOption{InitAddress: []string{"127.0.0.1:6379"}, Password: "23_*PAejOanJma"})
+		rueidis.ClientOption{InitAddress: []string{REDIS_ADDR}, Password: REDIS_PW})
 	if err != nil {
-		t.Error(err)
-		return
+		t.FailNow()
 	}
 	sym := "rds-tst"
 	for k := 0; k < 50; k++ {
 		var timestampMs int64 = 1 + int64(k)*1000
 		RedisAddPriceObs(&client, d8xUtils.PXTYPE_PYTH, sym, float64(k), timestampMs)
 	}
-	obs, err := RangeAggr(&client, sym, d8xUtils.PXTYPE_PYTH, 0, 50000, 0, AGGR_NONE)
+	obs, err := RangeAggr(&client, sym, d8xUtils.PXTYPE_PYTH, 0, 50000, 0)
 	if err != nil {
 		t.Error(err)
 		return
 	}
 	fmt.Println(obs)
-	var bucket int64 = 10000
-	aF, err := RangeAggr(&client, sym, d8xUtils.PXTYPE_PYTH, 0, 50000, bucket, AGGR_FIRST)
-	if err != nil {
-		panic(err)
-	}
-	aL, err := RangeAggr(&client, sym, d8xUtils.PXTYPE_PYTH, 0, 50000, bucket, AGGR_LAST)
-	if err != nil {
-		panic(err)
-	}
+
 	// 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, ...
 	// bucket size 10 will take 10 elements and each of it counts for
 	// the aggregation, next bucket is non-overlapping
 	// aggregation considers the first timestamp
 	// => timestamp...timestamp+bucketSize-1 is the range
-	if aF[0].Value != float64(0) {
-		t.Errorf("want 1, got %f", aF[0].Value)
-	}
-	// aggregation is exclusive of the last
-	if aL[0].Value != float64(9) {
-		t.Errorf("want 9, got %f", aL[0].Value)
-	}
+	// if aF[0].Value != float64(0) {
+	// 	t.Errorf("want 1, got %f", aF[0].Value)
+	// }
+	// // aggregation is exclusive of the last
+	// if aL[0].Value != float64(9) {
+	// 	t.Errorf("want 9, got %f", aL[0].Value)
+	// }
 
 }

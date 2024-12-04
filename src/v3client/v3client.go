@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"log/slog"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/D8-X/d8x-futures-go-sdk/pkg/d8x_futures"
@@ -29,6 +30,20 @@ type V3Client struct {
 	PoolAddrToIndices  map[string][]int                     // map pool address to price index location in Config.indices
 	PoolAddrToPoolInfo map[string]ConfigPool                //map pool address to its symbol and dec
 	SwapEventAbi       abi.ABI
+	LastUpdateTs       int64 //timestamp seconds
+	MuLastUpdate       sync.RWMutex
+}
+
+func (v3 *V3Client) SetLastUpdateTs(tsSec int64) {
+	v3.MuLastUpdate.Lock()
+	defer v3.MuLastUpdate.Unlock()
+	v3.LastUpdateTs = tsSec
+}
+
+func (v3 *V3Client) GetLastUpdateTs() int64 {
+	v3.MuLastUpdate.RLock()
+	defer v3.MuLastUpdate.RUnlock()
+	return v3.LastUpdateTs
 }
 
 func NewV3Client(configRpc, redisAddr, redisPw string, chainId int, optV3Config string) (*V3Client, error) {
@@ -120,7 +135,9 @@ func (v3 *V3Client) Run() error {
 			slog.Error("v3 failed to connect to the Ethereum client: " + err.Error())
 			continue
 		}
-		err = v3.runWebsocket(client)
+		wsRestartCh := make(chan struct{})
+		go v3.connCheck(wsRestartCh)
+		err = v3.runWebsocket(client, wsRestartCh)
 		if err != nil {
 			slog.Error(err.Error())
 		}
@@ -128,20 +145,41 @@ func (v3 *V3Client) Run() error {
 	}
 }
 
-func (v3 *V3Client) runWebsocket(client *ethclient.Client) error {
+func (v3 *V3Client) connCheck(wsRestartCh chan struct{}) {
+	tick := time.NewTicker(time.Minute * 1)
+	defer tick.Stop()
+	for {
+		<-tick.C
+		dT := time.Now().Unix() - v3.GetLastUpdateTs()
+		if dT > 2*60 {
+			// restart
+			slog.Info("triggering websocket restart")
+			close(wsRestartCh)
+			return
+		}
+	}
+}
+
+func (v3 *V3Client) runWebsocket(client *ethclient.Client, wsRestartCh chan struct{}) error {
 	swapSig := uniutils.GetEventSignatureHash(SWAP_EVENT_SIGNATURE)
 	query := ethereum.FilterQuery{
 		Addresses: v3.RelevantPoolAddrs,
 		Topics:    [][]common.Hash{{swapSig}},
 	}
 	logs := make(chan types.Log)
-	sub, err := client.SubscribeFilterLogs(context.Background(), query, logs)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	sub, err := client.SubscribeFilterLogs(ctx, query, logs)
 	if err != nil {
 		return fmt.Errorf("subscribing to event logs: %v", err)
 	}
-	fmt.Println("Listening for Uniswap V3 swap events...")
+	slog.Info("Listening for Uniswap V3 swap events...")
 	for {
 		select {
+		case <-wsRestartCh:
+			cancel()
+			slog.Info("stopping websocket listener...")
+			return nil
 		case err := <-sub.Err():
 			return fmt.Errorf("subscription: %v", err)
 		case vLog := <-logs:
