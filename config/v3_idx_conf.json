@@ -1,64 +1,85 @@
 [
-{
-    "chainId": 42161,
-    "descr": "base v3 indices on Arbitrum",
-    "poolChainId": 8453,
-    "indices" : [
-        {"symbol":"BRETT-USD", "contractSize": 1,  "triang": ["/", "ETH-BRETT", "*", "ETH-USDC"]}
-    ],
-    "pools" : [
-        {
-            "symbol": "ETH-BRETT",
-            "addr": "0x76Bf0abD20f1e0155Ce40A62615a90A709a6C3D8",
-            "tokenDec": [18, 18]
-        },
-        {
-            "symbol": "ETH-USDC",
-            "addr": "0xd0b53D9277642d899DF5C87A3966A349A798F224",
-            "tokenDec": [18, 6]
-        }
-    ]
-},    
-{
-    "chainId": 80084,
-    "poolChainId": 80084,
-    "indices" : [
-        {"symbol":"DIRAC-HONEY", "contractSize": 1,  "triang": ["/", "HONEY-DIRAC"]},
-        {"symbol":"BUDS-HONEY", "contractSize": 1, "triang": ["/", "WBERA-BUDS", "/", "HONEY-WBERA"]},
-        {"symbol":"IBGT-HONEY", "contractSize": 1, "triang": ["*", "IBGT-WBERA", "/", "HONEY-WBERA"]},
-        {"symbol":"BDEG-HONEY", "contractSize": 1, "triang": ["/", "HONEY-BDEG"]},
-        {"symbol":"BEARTIC-HONEY", "contractSize": 1, "triang": ["/", "HONEY-BEARTIC"]}
-    ],
-    "pools" : [
-        {
-            "symbol": "HONEY-WBERA",
-            "addr": "0x8a960a6e5f224d0a88bad10463bdad161b68c144",
-            "tokenDec": [18, 18]
-        },
-        {
-            "symbol": "HONEY-BEARTIC",
-            "addr": "0xab8b3bf6c1f09f8b8955c1bd2c35d83e25d6bb13",
-            "tokenDec": [18, 18]
-        },
-        {
-            "symbol": "WBERA-BUDS",
-            "addr": "0x7912705080a8aa819e97eda946d5cdf2702faa47",
-            "tokenDec": [18, 18]
-        },
-        {
-            "symbol": "IBGT-WBERA",
-            "addr": "0x4302b57ba521cf2137e8af85990ab1ca2e241126",
-            "tokenDec": [18, 18]
-        },
-        {
-            "symbol": "HONEY-BDEG",
-            "addr": "0x0E4E67fb43F3467077619410A34d21cdB52eB992",
-            "tokenDec": [18, 18]
-        },
-        {
-            "symbol": "HONEY-DIRAC",
-            "addr": "0xea2e981f185e6a4b53eb1b72792cf02e2ebcbdcb",
-            "tokenDec": [18, 18]
-        }
-    ]
-}]
+    {
+        "chainId": 8453,
+        "descr": "base v3 indices on Base",
+        "poolChainId": 8453,
+        "indices" : [
+            {"symbol":"BRETT-USDC", "contractSize": 1,  "triang": ["/", "ETH-BRETT", "*", "ETH-USDC"]}
+        ],
+        "pools" : [
+            {
+                "symbol": "ETH-BRETT",
+                "addr": "0x76Bf0abD20f1e0155Ce40A62615a90A709a6C3D8",
+                "tokenDec": [18, 18]
+            },
+            {
+                "symbol": "ETH-USDC",
+                "addr": "0xd0b53D9277642d899DF5C87A3966A349A798F224",
+                "tokenDec": [18, 6]
+            }
+        ]
+    },   
+    {
+        "chainId": 42161,
+        "descr": "base v3 indices on Arbitrum",
+        "poolChainId": 8453,
+        "indices" : [
+            {"symbol":"BRETT-USD", "contractSize": 1,  "triang": ["/", "ETH-BRETT", "*", "ETH-USDC"]}
+        ],
+        "pools" : [
+            {
+                "symbol": "ETH-BRETT",
+                "addr": "0x76Bf0abD20f1e0155Ce40A62615a90A709a6C3D8",
+                "tokenDec": [18, 18]
+            },
+            {
+                "symbol": "ETH-USDC",
+                "addr": "0xd0b53D9277642d899DF5C87A3966A349A798F224",
+                "tokenDec": [18, 6]
+            }
+        ]
+    },    
+    {
+        "chainId": 80084,
+        "poolChainId": 80084,
+        "indices" : [
+            {"symbol":"DIRAC-HONEY", "contractSize": 1,  "triang": ["/", "HONEY-DIRAC"]},
+            {"symbol":"BUDS-HONEY", "contractSize": 1, "triang": ["/", "WBERA-BUDS", "/", "HONEY-WBERA"]},
+            {"symbol":"IBGT-HONEY", "contractSize": 1, "triang": ["*", "IBGT-WBERA", "/", "HONEY-WBERA"]},
+            {"symbol":"BDEG-HONEY", "contractSize": 1, "triang": ["/", "HONEY-BDEG"]},
+            {"symbol":"BEARTIC-HONEY", "contractSize": 1, "triang": ["/", "HONEY-BEARTIC"]}
+        ],
+        "pools" : [
+            {
+                "symbol": "HONEY-WBERA",
+                "addr": "0x8a960a6e5f224d0a88bad10463bdad161b68c144",
+                "tokenDec": [18, 18]
+            },
+            {
+                "symbol": "HONEY-BEARTIC",
+                "addr": "0xab8b3bf6c1f09f8b8955c1bd2c35d83e25d6bb13",
+                "tokenDec": [18, 18]
+            },
+            {
+                "symbol": "WBERA-BUDS",
+                "addr": "0x7912705080a8aa819e97eda946d5cdf2702faa47",
+                "tokenDec": [18, 18]
+            },
+            {
+                "symbol": "IBGT-WBERA",
+                "addr": "0x4302b57ba521cf2137e8af85990ab1ca2e241126",
+                "tokenDec": [18, 18]
+            },
+            {
+                "symbol": "HONEY-BDEG",
+                "addr": "0x0E4E67fb43F3467077619410A34d21cdB52eB992",
+                "tokenDec": [18, 18]
+            },
+            {
+                "symbol": "HONEY-DIRAC",
+                "addr": "0xea2e981f185e6a4b53eb1b72792cf02e2ebcbdcb",
+                "tokenDec": [18, 18]
+            }
+        ]
+    }
+]
