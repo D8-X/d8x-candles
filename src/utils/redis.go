@@ -248,7 +248,7 @@ func RedisReCreateTimeSeries(client *rueidis.Client, pxtype d8xUtils.PriceType, 
 	}
 	// key does not exist, create series
 	cmd := c.B().TsCreate().Key(key).
-		Retention(86400000 / 2 * 365). // Keep data for 6 months (in milliseconds)
+		Retention(86400000 * 365). // Keep data for 12 months (in milliseconds)
 		DuplicatePolicyLast().
 		Build()
 	err = c.Do(ctx, cmd).Error()
