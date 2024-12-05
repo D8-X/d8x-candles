@@ -90,7 +90,7 @@ func Run(symMngr *utils.SymbolManager, REDIS_ADDR string, REDIS_PW string) error
 		return err
 	}
 	go ph.ScheduleMktInfoUpdate(15 * time.Minute)
-	go ph.ScheduleCompaction(20 * time.Minute)
+	go ph.ScheduleCompaction(15 * time.Minute)
 
 	errChan := make(chan error)
 	go ph.SubscribeTickerRequest(errChan)

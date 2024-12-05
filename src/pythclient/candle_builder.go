@@ -128,6 +128,7 @@ func (p *PythClientApp) PythDataToRedisPriceObs(symbols []utils.SymbolPyth) {
 				slog.Error("pyth PricesToRedis failed for " + sym.ToString() + ":" + err.Error())
 				return
 			}
+			utils.SetSymbolAvailable(p.RedisClient, sym.Symbol, d8xUtils.PXTYPE_PYTH)
 			slog.Info("Processed history for " + sym.ToString())
 		}(sym)
 	}
@@ -163,6 +164,7 @@ func (p *PythClientApp) CandlesToTriangulatedCandles(client *rueidis.Client, con
 				slog.Error("triangulation " + sym + ":" + err.Error())
 				return
 			}
+			utils.SetSymbolAvailable(client, sym, d8xUtils.PXTYPE_PYTH)
 			slog.Info("Processed history for " + sym)
 		}(sym, pathCp)
 	}
