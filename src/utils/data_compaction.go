@@ -58,6 +58,8 @@ func CompactPriceObs(client *rueidis.Client, sym string, pxtype d8xUtils.PriceTy
 	// Rename the temporary key to the original key
 	keyTmp := key + "tmp"
 	(*client).Do(context.Background(), (*client).B().Rename().Key(keyTmp).Newkey(key).Build())
+	// delete temporary series
+	(*client).Do(context.Background(), (*client).B().Del().Key(keyTmp).Build())
 	return nil
 }
 
