@@ -183,6 +183,7 @@ func (v3 *V3Client) runWebsocket(client *ethclient.Client, wsRestartCh chan stru
 		case err := <-sub.Err():
 			return fmt.Errorf("subscription: %v", err)
 		case vLog := <-logs:
+			v3.SetLastUpdateTs(time.Now().Unix())
 			// Check which event the log corresponds to
 			addr := vLog.Address.Hex()
 			switch vLog.Topics[0] {
