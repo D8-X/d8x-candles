@@ -47,7 +47,8 @@
             {"symbol":"BUDS-HONEY", "contractSize": 1, "triang": ["/", "WBERA-BUDS", "/", "HONEY-WBERA"]},
             {"symbol":"IBGT-HONEY", "contractSize": 1, "triang": ["*", "IBGT-WBERA", "/", "HONEY-WBERA"]},
             {"symbol":"BDEG-HONEY", "contractSize": 1, "triang": ["/", "HONEY-BDEG"]},
-            {"symbol":"BEARTIC-HONEY", "contractSize": 1, "triang": ["/", "HONEY-BEARTIC"]}
+            {"symbol":"BEARTIC-HONEY", "contractSize": 1, "triang": ["/", "HONEY-BEARTIC"]},
+            {"symbol":"POLLEN-HONEY", "contractSize": 1, "triang": ["/", "HONEY-POLLEN"]}
         ],
         "pools" : [
             {
@@ -78,6 +79,11 @@
             {
                 "symbol": "HONEY-DIRAC",
                 "addr": "0xea2e981f185e6a4b53eb1b72792cf02e2ebcbdcb",
+                "tokenDec": [18, 18]
+            },
+            {
+                "symbol": "HONEY-POLLEN",
+                "addr": "0xfe9baa75f1f26ced654bbd665b6e154a1f82f309",
                 "tokenDec": [18, 18]
             }
         ]
