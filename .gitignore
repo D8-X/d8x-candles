@@ -23,3 +23,5 @@ go.work
 .env
 
 __debug*
+
+pyanalysis/data*.json
