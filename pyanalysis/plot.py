@@ -5,8 +5,33 @@ from mplfinance.original_flavor import candlestick_ohlc
 import matplotlib.dates as mdates
 from matplotlib.ticker import MaxNLocator
 
+
+def plot_candles(timestamps, opens, highs, lows, closes):
+    fig, ax = plt.subplots(figsize=(10, 6))
+    # Width of the candlesticks
+    width = 0.02
+
+    for i, time in enumerate(timestamps):
+        color = 'g' if closes[i] > opens[i] else 'r'  # Green for bullish, red for bearish
+        # Draw the body (rectangle)
+        ax.add_patch(plt.Rectangle((time - width / 2, min(opens[i], closes[i])),
+                                    width, abs(opens[i] - closes[i]),
+                                    edgecolor=color, facecolor=color))
+        # Draw the wicks (lines)
+        ax.plot([time, time], [lows[i], highs[i]], color=color)
+
+    # Format the x-axis
+    ax.xaxis_date()
+    #ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d %H:%M'))
+    ax.set_xlabel('Time')
+    ax.set_ylabel('Price')
+    plt.title('Candlestick Chart')
+    plt.grid()
+
+    plt.show()
+
 if __name__=="__main__":
-    with open("./pyanalysis/data1.json") as f:
+    with open("./pyanalysis/data.json") as f:
         data = json.load(f)
     
     #ohlc = []
@@ -39,27 +64,4 @@ if __name__=="__main__":
 
 
     # Plot the candlestick chart
-    fig, ax = plt.subplots(figsize=(10, 6))
-
-
-    # Width of the candlesticks
-    width = 0.02
-
-    for i, time in enumerate(timestamps):
-        color = 'g' if closes[i] > opens[i] else 'r'  # Green for bullish, red for bearish
-        # Draw the body (rectangle)
-        ax.add_patch(plt.Rectangle((time - width / 2, min(opens[i], closes[i])),
-                                    width, abs(opens[i] - closes[i]),
-                                    edgecolor=color, facecolor=color))
-        # Draw the wicks (lines)
-        ax.plot([time, time], [lows[i], highs[i]], color=color)
-
-    # Format the x-axis
-    ax.xaxis_date()
-    #ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d %H:%M'))
-    ax.set_xlabel('Time')
-    ax.set_ylabel('Price')
-    plt.title('Candlestick Chart')
-    plt.grid()
-
-    plt.show()
+    plot_candles(timestamps, opens, highs, lows, closes)
