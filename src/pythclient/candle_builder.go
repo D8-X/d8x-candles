@@ -250,9 +250,10 @@ func (p *PythClientApp) ConstructPriceObsForTriang(client *rueidis.Client, symT 
 	if err != nil {
 		slog.Error("1day resolution triangulation error " + err.Error())
 	}
-	var candles = [][]utils.OhlcData{oneDayResolutionMinute, twoDayResolution5Minute, oneMonthResolution1h, allTimeResolution1D}
+	candles := [][]utils.OhlcData{oneDayResolutionMinute, twoDayResolution5Minute, oneMonthResolution1h, allTimeResolution1D}
+	buckets := []int64{60, 5 * 60, 60 * 60, 86400}
 	var obs utils.PriceObservations
-	obs, err = utils.OhlcCandlesToPriceObs(candles, symT)
+	obs, err = utils.OhlcCandlesToPriceObs(candles, buckets, symT)
 	if err != nil {
 		return utils.PriceObservations{}, err
 	}

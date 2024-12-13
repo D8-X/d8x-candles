@@ -13,10 +13,10 @@ const LUA_OHLC = `
 	local bucketDur = ARGV[3]
 	
 	local results = {
-		min = redis.call("TS.RANGE", key, fromTs, toTs, "AGGREGATION", "min", bucketDur),
-		max = redis.call("TS.RANGE", key, fromTs, toTs, "AGGREGATION", "max", bucketDur),
-		first = redis.call("TS.RANGE", key, fromTs, toTs, "AGGREGATION", "first", bucketDur),
-		last = redis.call("TS.RANGE", key, fromTs, toTs, "AGGREGATION", "last", bucketDur),
+		min = redis.call("TS.RANGE", key, fromTs, toTs, "ALIGN", "start", "AGGREGATION", "min", bucketDur),
+		max = redis.call("TS.RANGE", key, fromTs, toTs,  "ALIGN", "start", "AGGREGATION", "max", bucketDur),
+		first = redis.call("TS.RANGE", key, fromTs, toTs,  "ALIGN", "start", "AGGREGATION", "first", bucketDur),
+		last = redis.call("TS.RANGE", key, fromTs, toTs,  "ALIGN", "start", "AGGREGATION", "last", bucketDur),
 	}
 	return cjson.encode(results)
 `
