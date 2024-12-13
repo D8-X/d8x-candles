@@ -1,14 +1,13 @@
 import websocket
 import json
 from plot import plot_candles 
-import random
 from datetime import datetime
 
-def connect_and_send():
+def connect_and_send(range):
     uri = "ws://127.0.0.1:8081/ws"
     message = {
         "type": "subscribe",
-        "topic": "EUR-USD:1h"
+        "topic": "BTC-USD:"+range
     }
 
     try:
@@ -22,7 +21,7 @@ def connect_and_send():
 
         # Receive a response
         response = ws.recv()
-        print(f"Received: {response}")
+        print(f"Received")
 
         # Process the response
         data = json.loads(response)
@@ -39,13 +38,18 @@ def to_date(ts):
     return datetime.fromtimestamp(ts).strftime('%Y-%m-%d %H:%M:%S')
 
 if __name__=="__main__":
+    range_choice =["1m","5m","15m","1h","1d"]
+    val=1
     for k in range(1,100):
-        data = connect_and_send()
+        ch = range_choice[int(val)-1]
+        data = connect_and_send(ch)
         timestamps = [item["start"]/1000 for item in data]
         opens = [item["open"] for item in data]
         highs = [item["high"] for item in data]
         lows = [item["low"] for item in data]
         closes = [item["close"] for item in data]
-        if random.randrange(0,1)<0.1:
-            print(f"{k}: {to_date(int(timestamps[0]))}-{to_date(int(timestamps[len(timestamps)-1]))}, #obs = ${len(timestamps)}")
-            plot_candles(timestamps, opens, highs, lows, closes)
+        print(f"{k}: {to_date(int(timestamps[0]))}-{to_date(int(timestamps[len(timestamps)-1]))}, #obs = ${len(timestamps)}")
+        plot_candles(timestamps, opens, highs, lows, closes)
+        print('\nspecify next range 1:"1m", 2:"5m", 3:"15m", 4:"1h", 5:"1d"')
+        val = input()
+        
