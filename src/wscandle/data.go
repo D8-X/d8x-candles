@@ -19,8 +19,7 @@ func GetInitialCandles(
 ) []utils.OhlcData {
 
 	t := time.Now().UTC()
-	tMs := t.UnixNano() / int64(time.Millisecond)
-	tMs = (tMs / int64(p.TimeMs)) * int64(p.TimeMs) //floor
+	tMs := t.UnixMilli()
 	var fromTsMs int64
 	key := pxtype.String() + ":" + sym
 	if p.DisplayRangeMs == 0 {
