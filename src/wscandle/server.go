@@ -106,10 +106,13 @@ func (srv *Server) RemoveClient(clientID string) {
 	// loop all topics
 	srv.SubMu.Lock()
 	defer srv.SubMu.Unlock()
+	num := 0
 	for _, clients := range srv.Subscriptions {
 		// delete the client from all the topic's client map
 		delete(clients, clientID)
+		num = max(num, len(clients))
 	}
+	slog.Info("removed client", "clientId", clientID, "max-num-subscr", num)
 }
 
 // Process incoming websocket message
