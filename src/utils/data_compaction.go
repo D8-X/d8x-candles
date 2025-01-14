@@ -78,9 +78,10 @@ func ExtractCompactedPriceObs(rueidi *rueidis.Client, sym string, pxtype d8xUtil
 	ohlc1h, _ = OhlcFromRedis(&client, sym, pxtype, first1H, last1H, 60*60)
 	first1m := ohlc1h[len(ohlc1h)-1].TsMs
 	ohlc1m, _ = OhlcFromRedis(&client, sym, pxtype, first1m, last, 60)
-	var candles = [][]OhlcData{ohlc1m, ohlc1h, ohlc1d}
+	candles := [][]OhlcData{ohlc1m, ohlc1h, ohlc1d}
+	buckets := []int64{60, 60 * 60, 86400}
 	var obs PriceObservations
-	obs, err := OhlcCandlesToPriceObs(candles, sym)
+	obs, err := OhlcCandlesToPriceObs(candles, buckets, sym)
 	if err != nil {
 		return PriceObservations{}, err
 	}

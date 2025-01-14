@@ -404,6 +404,7 @@ func RangeAggr(
 ) ([]OhlcData, error) {
 	key := pxtype.String() + ":" + sym
 	c := *client
+	fromTs = fromTs - fromTs%bucketDur
 	vcmd := c.B().Eval().Script(LUA_OHLC).Numkeys(1).Key(key).Arg(
 		strconv.FormatInt(fromTs, 10),
 		strconv.FormatInt(toTs, 10),
