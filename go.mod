@@ -5,7 +5,7 @@ go 1.21
 require (
 	github.com/D8-X/d8x-futures-go-sdk v1.0.20
 	github.com/ethereum/go-ethereum v1.14.3
-	github.com/google/uuid v1.4.0
+	github.com/google/uuid v1.6.0
 	github.com/gorilla/websocket v1.5.3
 	github.com/redis/rueidis v1.0.41
 	github.com/spf13/viper v1.18.2
