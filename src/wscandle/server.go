@@ -90,14 +90,15 @@ func (srv *Server) Send(conn *ClientConn, message []byte) {
 }
 
 // SendWithWait sends message to the websocket client using wait group, allowing usage with goroutines
-func (srv *Server) SendWithWait(conn *ClientConn, message []byte, wg *sync.WaitGroup) {
-	// send simple message
+func (srv *Server) SendWithWait(conn *ClientConn, clientId string, message []byte, wg *sync.WaitGroup) {
+	defer wg.Done()
 	conn.Mu.Lock()
-	defer conn.Mu.Unlock()
-	conn.Conn.WriteMessage(websocket.TextMessage, message)
-
-	// set the task as done
-	wg.Done()
+	err := conn.Conn.WriteMessage(websocket.TextMessage, message)
+	conn.Mu.Unlock()
+	if err != nil {
+		slog.Error("error sending message to client, removing client", "error", err.Error())
+		srv.RemoveClient(clientId)
+	}
 }
 
 // RemoveClient removes the clients from the server subscription map
@@ -253,9 +254,9 @@ func (srv *Server) SendMarketResponses() {
 		return
 	}
 	var wg sync.WaitGroup
-	for _, conn := range clients {
+	for clientId, conn := range clients {
 		wg.Add(1)
-		go srv.SendWithWait(conn, jsonData, &wg)
+		go srv.SendWithWait(conn, clientId, jsonData, &wg)
 	}
 	wg.Wait()
 }
@@ -530,9 +531,9 @@ func (srv *Server) candleUpdates(symbols []string, candlePeriodsMs map[string]ut
 			if err != nil {
 				slog.Error("forming lastCandle update:" + err.Error())
 			}
-			for _, conn := range clients {
+			for clientId, conn := range clients {
 				wg.Add(1)
-				go srv.SendWithWait(conn, jsonData, &wg)
+				go srv.SendWithWait(conn, clientId, jsonData, &wg)
 			}
 		}
 	}
