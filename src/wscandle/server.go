@@ -41,6 +41,19 @@ type Server struct {
 	TickerMu          sync.RWMutex                  // Mutex to protect the ticker mapping
 	RedisTSClient     *rueidis.Client
 	MsgCount          int
+	LastPxUpdtTs      int64
+	LastPxUpdtTsMu    sync.RWMutex
+}
+
+func (srv *Server) SetLastPxUpdtTs() {
+	srv.LastPxUpdtTsMu.Lock()
+	defer srv.LastPxUpdtTsMu.Unlock()
+	srv.LastPxUpdtTs = time.Now().Unix()
+}
+func (srv *Server) GetLastPxUpdtTs() int64 {
+	srv.LastPxUpdtTsMu.Lock()
+	defer srv.LastPxUpdtTsMu.Unlock()
+	return srv.LastPxUpdtTs
 }
 
 type ClientMessage struct {
@@ -487,10 +500,15 @@ func errorResponse(reqType string, reqTopic string, msg string) []byte {
 	return jsonData
 }
 
+func (srv *Server) IsPxSubscriptionExpired() bool {
+	return time.Now().Unix()-srv.GetLastPxUpdtTs() > 5*60
+}
+
 // subscribe the server to rueidis pub/sub
 func (srv *Server) HandlePxUpdateFromRedis(msg rueidis.PubSubMessage, candlePeriodsMs map[string]utils.CandlePeriod) {
 	srv.MsgCount++
 	if srv.MsgCount%500 == 0 {
+		srv.SetLastPxUpdtTs()
 		slog.Info(fmt.Sprintf("REDIS received %d messages since last report (now: %s)", srv.MsgCount, msg.Message))
 		srv.MsgCount = 0
 	}

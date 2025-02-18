@@ -53,11 +53,37 @@ func (ws *WsCandle) StartWSServer() error {
 	errChan := make(chan error, 2)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel() // Cancel all goroutines when an error occurs
-	go ws.subscribePriceUpdate(ctx, errChan)
+
+	go ws.monitorPxUpdates(ctx, errChan)
 	go ws.Server.ScheduleUpdateMarketAndBroadcast(ctx, 1*time.Minute)
 	go ws.listen(ctx, errChan)
 	err := <-errChan
 	return err
+}
+
+func (ws *WsCandle) monitorPxUpdates(ctx context.Context, errChan chan error) {
+	ctxSub, cancelSub := context.WithCancel(context.Background())
+	go ws.subscribePriceUpdate(ctxSub, errChan)
+	ticker := time.NewTicker(1 * time.Minute)
+	for {
+		select {
+		case <-ctx.Done():
+			cancelSub()
+			return
+		case <-ticker.C:
+			if ws.Server.IsPxSubscriptionExpired() {
+				slog.Warn("Last update too old, restarting subscription")
+				cancelSub()
+				// Start a new subscription
+				ctxSub, cancelSub = context.WithCancel(context.Background())
+				go ws.subscribePriceUpdate(ctxSub, errChan)
+			}
+		case err := <-errChan:
+			slog.Error("terminating monitorPxUpdates", "error", err)
+			cancelSub() // Clean up the subscription
+			return
+		}
+	}
 }
 
 func (ws *WsCandle) listen(ctx context.Context, errChan chan error) {
@@ -96,6 +122,7 @@ func (ws *WsCandle) subscribePriceUpdate(ctx context.Context, errChan chan error
 			ws.Server.HandlePxUpdateFromRedis(msg, ws.CandlePeriodsMs)
 		})
 	if err != nil {
+		slog.Warn("subscribePriceUpdate", "error", err)
 		errChan <- err
 	}
 }
