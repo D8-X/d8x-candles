@@ -27,12 +27,16 @@ func init() {
 func RunCandleCharts() {
 	err := loadEnv([]string{
 		env.CONFIG_PATH,
+		env.WS_ADDR,
+		env.REDIS_ADDR,
+		env.REDIS_PW,
+		env.REDIS_DB_NUM,
 	})
 	if err != nil {
 		fmt.Println("Error:", err.Error())
 		return
 	}
-	c, err := loadConfig()
+	c, err := createSymbolMngr(viper.GetString(env.CONFIG_PATH))
 
 	if err != nil {
 		fmt.Println("Error:", err.Error())
@@ -62,6 +66,7 @@ func RunV3Client() {
 		fmt.Println("Error:", err.Error())
 		panic(err)
 	}
+
 	fmt.Printf("starting V3 client for chain %d\n", viper.GetInt(env.CHAIN_ID))
 	v3, err := v3client.NewV3Client(
 		viper.GetString(env.CONFIG_RPC),
@@ -96,13 +101,14 @@ func RunV2Client() {
 		fmt.Println("Error:", err.Error())
 		panic(err)
 	}
+
 	fmt.Printf("starting V2 client for chain %d\n", viper.GetInt(env.CHAIN_ID))
 	v2, err := v2client.NewV2Client(
 		viper.GetString(env.CONFIG_RPC),
 		viper.GetString(env.REDIS_ADDR),
 		viper.GetString(env.REDIS_PW),
 		viper.GetInt(env.CHAIN_ID),
-		"",
+		"", //we load config from remote
 	)
 	if err != nil {
 		fmt.Println("error:", err.Error())
@@ -144,7 +150,8 @@ func StreamPolyMarkets() {
 		fmt.Println("no polymarket found in configuration, quitting")
 		return
 	}
-	c, err := loadConfig()
+
+	c, err := createSymbolMngr(viper.GetString(env.CONFIG_PATH))
 	if err != nil {
 		fmt.Println("Error:", err.Error())
 		return
@@ -171,25 +178,30 @@ func StreamPolyMarkets() {
 func StreamPyth() {
 	err := loadEnv([]string{
 		env.CONFIG_PATH,
+		env.REDIS_ADDR,
+		env.REDIS_PW,
 	})
 	if err != nil {
 		fmt.Println("Error:", err.Error())
 		return
 	}
-	c, err := loadConfig()
+	c, err := createSymbolMngr(viper.GetString(env.CONFIG_PATH))
 	if err != nil {
 		fmt.Println("Error:", err.Error())
 		return
 	}
 
-	err = pythclient.Run(c, viper.GetString(env.REDIS_ADDR), viper.GetString(env.REDIS_PW))
+	err = pythclient.Run(
+		c,
+		viper.GetString(env.REDIS_ADDR),
+		viper.GetString(env.REDIS_PW),
+	)
 	if err != nil {
 		slog.Error(err.Error())
 	}
 }
 
-func loadConfig() (*utils.SymbolManager, error) {
-	fileName := viper.GetString(env.CONFIG_PATH)
+func createSymbolMngr(fileName string) (*utils.SymbolManager, error) {
 	mngr, err := utils.NewSymbolManager(fileName)
 	if err != nil {
 		return nil, err

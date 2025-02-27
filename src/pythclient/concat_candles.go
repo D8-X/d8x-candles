@@ -17,7 +17,7 @@ Process
 // (For example 2 months of 1 day candles and 2 weeks of 1h candles)
 // The function requires that the candles are sorted according to
 // decreasing resolution (e.g., 1 minute first, 5 minute next, 1h next, 1 day next)
-func PythCandlesToPriceObs(candles []PythHistoryAPIResponse) (utils.PriceObservations, error) {
+func PythCandlesToPriceObs(candles []utils.PythHistoryAPIResponse) (utils.PriceObservations, error) {
 	var px utils.PriceObservations
 	var stopAtTs = uint32(0)
 	var nextLow = float64(0)
@@ -37,7 +37,7 @@ func PythCandlesToPriceObs(candles []PythHistoryAPIResponse) (utils.PriceObserva
 // Process the candle data so that the last candle is the first to end after stopAtTs
 // nextLow and nextHigh are the LH values of the first candle that has a higher resolution and starts
 // at stopAtTs (seconds)
-func candleToPriceObs(px *utils.PriceObservations, candles PythHistoryAPIResponse, stopAtTs uint32, nextLow float64, nextHigh float64) {
+func candleToPriceObs(px *utils.PriceObservations, candles utils.PythHistoryAPIResponse, stopAtTs uint32, nextLow float64, nextHigh float64) {
 	if len(candles.T) < 2 {
 		return
 	}

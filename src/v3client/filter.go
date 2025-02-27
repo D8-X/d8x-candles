@@ -15,6 +15,7 @@ func (v3 *V3Client) Filter() error {
 	fltr, err := uniutils.NewFilter(
 		d8xUtils.PXTYPE_V3,
 		v3.Config.Indices,
+		v3.ConfigPyth,
 		v3.RpcHndl,
 		SWAP_EVENT_ABI,
 		eventSigHash,

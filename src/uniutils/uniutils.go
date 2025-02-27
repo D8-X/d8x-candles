@@ -4,7 +4,6 @@ import (
 	"d8x-candles/src/utils"
 	"log/slog"
 	"math/big"
-	"time"
 
 	"github.com/D8-X/d8x-futures-go-sdk/pkg/d8x_futures"
 	d8xUtils "github.com/D8-X/d8x-futures-go-sdk/utils"
@@ -22,6 +21,8 @@ import (
 type ConfigIndex struct {
 	Symbol       string   `json:"symbol"`
 	Triang       []string `json:"triang"`
+	FromPools    string   `json:"fromPools"` // we get the symbol 'fromPools' via triangulation
+	FromPyth     string   `json:"fromPyth"`  // and multiply by a pyth price (e.g., HONEY-USD, USDC-USD)
 	ContractSize float64  `json:"contractSize"`
 }
 
@@ -30,11 +31,21 @@ const LOOKBACK_SEC = 86400 * 5 // now-LOOKBACK_SEC is when we start gathering hi
 func InitRedisIndices(indices []ConfigIndex, pxtype d8xUtils.PriceType, client *rueidis.Client) error {
 	newSyms := make(map[string]bool)
 	for j := range indices {
+		// final price index symbol
 		err := utils.RedisCreateIfNotExistsTs(client, pxtype, indices[j].Symbol)
 		if err != nil {
 			return err
 		}
 		newSyms[indices[j].Symbol] = true
+		// triangulated index
+		if indices[j].Symbol != indices[j].FromPools {
+			err = utils.RedisCreateIfNotExistsTs(client, pxtype, indices[j].FromPools)
+			if err != nil {
+				return err
+			}
+			newSyms[indices[j].FromPools] = true
+		}
+		// triangulation components
 		for k := 1; k < len(indices[j].Triang); k += 2 {
 			err := utils.RedisCreateIfNotExistsTs(client, pxtype, indices[j].Triang[k])
 			if err != nil {
@@ -51,6 +62,8 @@ func InitRedisIndices(indices []ConfigIndex, pxtype d8xUtils.PriceType, client *
 	return utils.RedisDelPrefix(client, pxtype.String(), exSym)
 }
 
+// TriangFromStringSlice creates a triangulation-type variable from
+// a string-slice specifying a a triangulation
 func TriangFromStringSlice(tr []string) d8x_futures.Triangulation {
 	var triang d8x_futures.Triangulation
 	triang.IsInverse = make([]bool, len(tr)/2)
@@ -63,21 +76,28 @@ func TriangFromStringSlice(tr []string) d8x_futures.Triangulation {
 }
 
 // cleanHist determines symbols for which historical data
-// should be added to redis
-func cleanHist(indices []ConfigIndex, unitype d8xUtils.PriceType, client *rueidis.Client) map[string]bool {
+// should be added to redis and cleans history. Symbols are indices
+// and triangulation. 'FromPyth' is not part of theses symbols.
+func cleanHist(
+	indices []ConfigIndex,
+	unitype d8xUtils.PriceType,
+	maxAgeTsMs int64,
+	client *rueidis.Client,
+) map[string]bool {
 	// identify all symbols
 	symRequired := make(map[string]bool)
 	for j := range indices {
-		symRequired[indices[j].Symbol] = true
+		// FromPools contains the target symbol that
+		// we get via triangulation
+		symRequired[indices[j].FromPools] = true
 		for k := 1; k < len(indices[j].Triang); k += 2 {
 			symRequired[indices[j].Triang[k]] = true
 		}
 	}
 	// find which symbols are missing in history
-	maxAgeTs := time.Now().UnixMilli() - LOOKBACK_SEC
 	// we clean historical data from the look-back moment
 	for sym := range symRequired {
-		err := utils.RedisCleanAfter(client, unitype, sym, maxAgeTs)
+		err := utils.RedisCleanAfter(client, unitype, sym, maxAgeTsMs)
 		if err != nil {
 			slog.Error("failed to clean redis", "error", err)
 		}

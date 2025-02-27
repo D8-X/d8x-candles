@@ -65,9 +65,54 @@ func RedisAddPriceObs(client *rueidis.Client, pxtype d8xUtils.PriceType, sym str
 	resp := c.Do(ctx,
 		c.B().TsAdd().Key(key).Timestamp(ts).Value(price).Build())
 	if resp.Error() != nil {
-		return fmt.Errorf("RedisAddPriceObs " + sym + ": " + resp.Error().Error())
+		return fmt.Errorf("RedisAddPriceObs %s: %s", sym, resp.Error().Error())
 	}
 	return nil
+}
+
+// RedisGetPriceObsBefore gets the closest price obs before (or at) the given timestamp
+// for the symbol provided
+func RedisGetPriceObsBefore(client *rueidis.Client, pxtype d8xUtils.PriceType, sym string, timestampMs int64) (int64, float64, error) {
+	ctx := context.Background()
+	c := *client
+	key := pxtype.String() + ":" + sym
+	cmd := c.B().TsRevrange().Key(key).Fromtimestamp("-").Totimestamp(fmt.Sprintf("%d", timestampMs)).Count(1).Build()
+	resp, err := c.Do(ctx, cmd).ToArray()
+	if err != nil {
+		return 0, 0, err
+	}
+	if len(resp) == 0 {
+		return 0, 0, fmt.Errorf("no data found")
+	}
+	ts, _ := resp[0].AsInt64()
+	val, _ := resp[1].AsFloat64()
+	return ts, val, nil
+}
+
+func RedisGetRangeFrom(client *rueidis.Client, pxtype d8xUtils.PriceType, sym string, timestampMs int64) ([]PxObs, error) {
+	ctx := context.Background()
+	c := *client
+	key := pxtype.String() + ":" + sym
+	ts := fmt.Sprintf("%d", timestampMs)
+	cmd := c.B().TsRevrange().Key(key).Fromtimestamp(ts).Totimestamp("+").Build()
+	resp, err := c.Do(ctx, cmd).ToArray()
+	if err != nil {
+		return nil, err
+	}
+	if len(resp) == 0 {
+		return nil, fmt.Errorf("no data found")
+	}
+	obs := make([]PxObs, 0, len(resp))
+	for j := 0; j < len(resp); j++ {
+		o, err := resp[j].ToArray()
+		if err != nil {
+			return nil, err
+		}
+		ts, _ := o[0].AsInt64()
+		px, _ := o[1].AsFloat64()
+		obs = append(obs, PxObs{TsMs: ts, Px: px})
+	}
+	return obs, nil
 }
 
 // RedisDelPrefix deletes all keys with the given prefix, except the given keys

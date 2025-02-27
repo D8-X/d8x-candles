@@ -60,7 +60,7 @@ services:
         max-file: "10"
     configs:
       - rpc_conf
-      
+
   v3-client:
     build:
       context: .
@@ -81,7 +81,7 @@ services:
         max-file: "10"
     configs:
       - rpc_conf
-
+  
   ws-server:
     build:
       context: .

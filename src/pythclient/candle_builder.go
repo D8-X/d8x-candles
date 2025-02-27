@@ -3,14 +3,10 @@ package pythclient
 import (
 	"context"
 	"d8x-candles/src/utils"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
 	"math/rand"
-	"net/http"
-	"strconv"
-	"strings"
 	"sync"
 	"time"
 
@@ -56,44 +52,8 @@ Process
 1h -> 1 month OK
 1 day -> all history
 */
-func (p *PythClientApp) RetrieveCandlesFromPyth(sym utils.SymbolPyth, candleRes utils.PythCandleResolution, fromTSSec uint32, toTsSec uint32) (PythHistoryAPIResponse, error) {
-	const endpoint = "/v1/shims/tradingview/history"
-	query := "?symbol=" + sym.ToString() + "&resolution=" + candleRes.ToPythString() + "&from=" + strconv.Itoa(int(fromTSSec)) + "&to=" + strconv.Itoa(int(toTsSec))
-
-	url := strings.TrimSuffix(p.BaseUrl, "/") + endpoint + query
-	// Send a GET request
-	var response *http.Response
-	var err error
-	for {
-		if p.TokenBucket.Take() {
-			response, err = http.Get(url)
-			if err != nil {
-				return PythHistoryAPIResponse{}, fmt.Errorf("error making GET request: %v", err)
-			}
-			break
-		}
-		slog.Info("too many requests, slowing down for " + sym.Symbol)
-		time.Sleep(time.Duration(50+rand.Intn(250)) * time.Millisecond)
-	}
-
-	defer response.Body.Close()
-
-	// Check response status code
-	if response.StatusCode != http.StatusOK {
-		return PythHistoryAPIResponse{}, fmt.Errorf("unexpected status code: %d", response.StatusCode)
-	}
-
-	// Read the response body
-	var apiResponse PythHistoryAPIResponse
-	err = json.NewDecoder(response.Body).Decode(&apiResponse)
-	if err != nil {
-		return PythHistoryAPIResponse{}, fmt.Errorf("error parsing GET request: %v", err)
-	}
-	if apiResponse.S == "error" {
-		return PythHistoryAPIResponse{}, fmt.Errorf("error in benchmarks GET request: %s", apiResponse.ErrMsg)
-	}
-
-	return apiResponse, nil
+func (p *PythClientApp) RetrieveCandlesFromPyth(sym utils.SymbolPyth, candleRes utils.PythCandleResolution, fromTSSec uint32, toTsSec uint32) (utils.PythHistoryAPIResponse, error) {
+	return utils.GetPythHistory(p.BaseUrl, p.TokenBucket, sym.PythSymbol, candleRes, fromTSSec, toTsSec)
 }
 
 // Query Pyth Candle API and construct artificial price data which
@@ -196,7 +156,7 @@ func (p *PythClientApp) ConstructPriceObsFromPythCandles(sym utils.SymbolPyth) (
 	if err != nil {
 		return utils.PriceObservations{}, err
 	}
-	var candles = []PythHistoryAPIResponse{twoDayResolutionMinute, oneMonthResolution1h, allTimeResolution1D}
+	var candles = []utils.PythHistoryAPIResponse{twoDayResolutionMinute, oneMonthResolution1h, allTimeResolution1D}
 	// concatenate candles into price observations
 	var obs utils.PriceObservations
 	obs, err = PythCandlesToPriceObs(candles)

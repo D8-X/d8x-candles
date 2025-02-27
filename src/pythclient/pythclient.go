@@ -5,6 +5,7 @@ import (
 	"d8x-candles/src/utils"
 	"fmt"
 	"log/slog"
+	"strings"
 	"sync"
 	"time"
 
@@ -43,6 +44,7 @@ func NewPythClientApp(symMngr *utils.SymbolManager, REDIS_ADDR string, REDIS_PW 
 		return nil, fmt.Errorf("redis connection %s", err.Error())
 	}
 	redisTSClient := &client
+
 	//https://docs.pyth.network/benchmarks/rate-limits
 	capacity := 30
 	refillRate := 9.0
@@ -82,9 +84,13 @@ func setCCYAvailable(symMngr *utils.SymbolManager, ruedi *rueidis.Client) error 
 }
 
 // symMap maps pyth ids to internal symbol (btc-usd)
-func Run(symMngr *utils.SymbolManager, REDIS_ADDR string, REDIS_PW string) error {
+func Run(symMngr *utils.SymbolManager, REDIS_ADDR, REDIS_PW string) error {
 	fmt.Print("REDIS ADDR = ", REDIS_ADDR)
 	fmt.Print("REDIS_PW=", REDIS_PW)
+	uniTkrs, err := utils.LoadUniPythConfig("") //from remote sync-hub
+	if err != nil {
+		return err
+	}
 	ph, err := NewPythClientApp(symMngr, REDIS_ADDR, REDIS_PW)
 	if err != nil {
 		return err
@@ -94,6 +100,15 @@ func Run(symMngr *utils.SymbolManager, REDIS_ADDR string, REDIS_PW string) error
 
 	errChan := make(chan error)
 	go ph.SubscribeTickerRequest(errChan)
+
+	// 	enable uni tickers
+	for _, tkr := range uniTkrs.Indices {
+		// convert pyth type to regular symbol: Crypto.HONEY/USDC -> HONEY-USDC
+		sym := strings.ToUpper(strings.Replace(strings.Split(tkr, ".")[1], "/", "-", 1))
+		if !ph.EnableTriangulation(sym) {
+			return fmt.Errorf("unable to subscribe to uni ticker %s (%s)", tkr, sym)
+		}
+	}
 	err = <-errChan
 	return err
 }
