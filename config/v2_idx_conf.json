@@ -76,6 +76,26 @@
        ]
    },
    {
+        "chainId": 80094,
+        "poolChainId": 80094,
+        "factory": "0x5e705e184d233ff2a7cb1553793464a9d0c3028f",
+        "multicall": "0xcA11bde05977b3631167028862bE2a173976CA11",
+        "v2Router02": "0xd91dd58387Ccd9B66B390ae2d7c66dBD46BC6022",
+        "indices": [
+            {"symbol": "RAMEN-USD", "contractSize": 1, "fromPools": "RAMEN-WBERA", "triang": ["/", "WBERA-RAMEN"], "fromPyth": "BERA-USD"}
+        ],
+        "pools": [
+            {
+                "symbol": "WBERA-RAMEN",
+                "tokenAddr": [
+                    "0x6969696969696969696969696969696969696969",
+                    "0xb8b1af593dc37b33a2c87c8db1c9051fc32858b7"
+                ],
+                "tokenDec": [18, 18]
+            }
+        ]
+   },
+   {
    "chainId": 80084,
    "poolChainId": 8453,
    "factory": "0x8909Dc15e40173Ff4699343b6eB8132c65e18eC6",

@@ -22,7 +22,7 @@ type ConfigIndex struct {
 	Symbol       string   `json:"symbol"`
 	Triang       []string `json:"triang"`
 	FromPools    string   `json:"fromPools"` // we get the symbol 'fromPools' via triangulation
-	FromPyth     string   // and multiply by a pyth price (e.g., HONEY-USD, USDC-USD)
+	FromPyth     string   `json:"fromPyth"`  // and multiply by a pyth price (e.g., HONEY-USD, USDC-USD)
 	ContractSize float64  `json:"contractSize"`
 }
 

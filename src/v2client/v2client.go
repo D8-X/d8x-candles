@@ -5,7 +5,6 @@ import (
 	"d8x-candles/src/globalrpc"
 	"d8x-candles/src/uniutils"
 	"d8x-candles/src/utils"
-	"encoding/hex"
 	"fmt"
 	"log/slog"
 	"math/big"
@@ -22,7 +21,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/redis/rueidis"
-	"golang.org/x/crypto/sha3"
 )
 
 type SyncEvent struct {
@@ -33,6 +31,7 @@ type SyncEvent struct {
 
 type V2Client struct {
 	Config            *V2PoolConfig
+	ConfigPyth        utils.UniPythConfig
 	Ruedi             *rueidis.Client
 	RpcHndl           *globalrpc.GlobalRpc
 	RelevantPoolAddrs []common.Address
@@ -56,7 +55,15 @@ func (v2 *V2Client) GetLastUpdateTs() int64 {
 	return v2.LastUpdateTs
 }
 
-func NewV2Client(configRpc, configUniPyth, redisAddr, redisPw string, chainId int, optV2Config string) (*V2Client, error) {
+func NewV2Client(
+	configRpc string,
+	configUniPyth string,
+	redisAddr string,
+	redisPw string,
+	chainId int,
+	optV2Config string,
+) (*V2Client, error) {
+
 	var v2 V2Client
 	var err error
 	v2.Config, err = loadV2PoolConfig(chainId, optV2Config)
@@ -80,18 +87,22 @@ func NewV2Client(configRpc, configUniPyth, redisAddr, redisPw string, chainId in
 	for j, pool := range v2.Config.Pools {
 		t0 := common.HexToAddress(pool.TokenAddr[0])
 		t1 := common.HexToAddress(pool.TokenAddr[1])
-		v2.Config.Pools[j].PoolAddr = calcV2PoolAddr(t0, t1, fct)
+		v2.Config.Pools[j].PoolAddr, err = getV2PairAddress(v2.RpcHndl, fct, t0, t1)
+		if err != nil {
+			return nil, fmt.Errorf("unable to getV2PairAddress: %v", err)
+		}
 		fmt.Printf("pool %s addr=%s\n", v2.Config.Pools[j].Symbol, v2.Config.Pools[j].PoolAddr.Hex())
 	}
 
 	v2.PoolAddrToIndices = make(map[string][]int)
 	v2.PoolAddrToInfo = make(map[string]UniswapV2Pool)
-	unipyth, err := utils.LoadUniPythConfig(configUniPyth)
+	v2.ConfigPyth, err = utils.LoadUniPythConfig(configUniPyth)
 	if err != nil {
 		return nil, err
 	}
 	for j, idx := range v2.Config.Indices {
-		if idx.FromPyth != "" && !slices.Contains(unipyth.Indices, idx.FromPyth) {
+		symP := "Crypto." + strings.Replace(idx.FromPyth, "-", "/", 1)
+		if idx.FromPyth != "" && !slices.Contains(v2.ConfigPyth.Indices, symP) {
 			return nil, fmt.Errorf("index %s not defined in uni_pyth config", idx.FromPyth)
 		}
 		for k := 1; k < len(idx.Triang); k += 2 {
@@ -131,7 +142,10 @@ func NewV2Client(configRpc, configUniPyth, redisAddr, redisPw string, chainId in
 // Run is the main entrance to v2client service
 func (v2 *V2Client) Run() error {
 	slog.Info("start filtering events")
-	v2.Filter()
+	err := v2.Filter()
+	if err != nil {
+		return fmt.Errorf("unable to run filterer: %v", err)
+	}
 	slog.Info("filtering complete")
 	key := utils.RDS_AVAIL_TICKER_SET + ":" + d8xUtils.PXTYPE_V2.String()
 	// clear available tickers
@@ -158,9 +172,7 @@ func (v2 *V2Client) Run() error {
 			slog.Error("v2 failed to connect to the Ethereum client: " + err.Error())
 			continue
 		}
-		wsRestartCh := make(chan struct{})
-		go v2.connCheck(wsRestartCh)
-		err = v2.runWebsocket(client, wsRestartCh)
+		err = v2.runWebsocket(client)
 		if err != nil {
 			slog.Error(err.Error())
 			time.Sleep(2 * time.Second)
@@ -170,22 +182,8 @@ func (v2 *V2Client) Run() error {
 	}
 }
 
-func (v2 *V2Client) connCheck(wsRestartCh chan struct{}) {
-	tick := time.NewTicker(time.Minute * 1)
-	defer tick.Stop()
-	for {
-		<-tick.C
-		dT := time.Now().Unix() - v2.GetLastUpdateTs()
-		if dT > 2*60 {
-			// restart
-			slog.Info("triggering websocket restart")
-			close(wsRestartCh)
-			return
-		}
-	}
-}
-
-func (v2 *V2Client) runWebsocket(client *ethclient.Client, wsRestartCh chan struct{}) error {
+func (v2 *V2Client) runWebsocket(client *ethclient.Client) error {
+	slog.Info("starting new websocket connection")
 	//Emitted each time reserves are updated via mint, burn, swap, or sync.
 	syncSig := uniutils.GetEventSignatureHash(SYNC_EVENT_SIGNATURE)
 
@@ -197,21 +195,36 @@ func (v2 *V2Client) runWebsocket(client *ethclient.Client, wsRestartCh chan stru
 
 	logs := make(chan types.Log)
 	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+
 	sub, err := client.SubscribeFilterLogs(ctx, query, logs)
 	if err != nil {
+		cancel()
+		close(logs)
 		return fmt.Errorf("subscribing to event logs: %v", err)
 	}
 
 	slog.Info("Listening for Uniswap V2 sync events...")
+	//closing connection
+	defer func() {
+		slog.Info("Closing websocket subscription")
+		sub.Unsubscribe()
+		cancel()
+		close(logs)
+	}()
+
+	inactvTick := time.NewTicker(time.Minute * 1)
+	defer inactvTick.Stop()
 	for {
 		select {
-		case <-wsRestartCh:
-			cancel()
-			slog.Info("stopping websocket listener...")
-			return nil
 		case err := <-sub.Err():
 			return fmt.Errorf("subscription: %v", err)
+		case <-inactvTick.C:
+			dT := time.Now().Unix() - v2.GetLastUpdateTs()
+			if dT > 2*60 {
+				// restart
+				slog.Info("no updates received triggering websocket restart")
+				return nil
+			}
 		case vLog := <-logs:
 			v2.SetLastUpdateTs(time.Now().Unix())
 			// Check which event the log corresponds to
@@ -270,9 +283,22 @@ func (v2 *V2Client) idxPriceUpdate(poolAddr string) error {
 		if err != nil {
 			return err
 		}
+		// if fromPyth is defined we multiply the triangulation by
+		// that symbol price
+		pxPth := float64(1)
+		fromPyth := v2.Config.Indices[j].FromPyth
+		if fromPyth != "" {
+			p, err := utils.RedisTsGet(v2.Ruedi, fromPyth, d8xUtils.PXTYPE_PYTH)
+			if err != nil {
+				slog.Error("unable to get price", "fromPyth", fromPyth, "error", err)
+				continue
+			}
+			pxPth = p.Value
+			oldestTs = min(oldestTs, p.Timestamp)
+		}
 		symbol := pxIdx.Symbol
 		// scale price
-		px = px * pxIdx.ContractSize
+		px = px * pxPth * pxIdx.ContractSize
 		err = utils.RedisAddPriceObs(
 			v2.Ruedi,
 			d8xUtils.PXTYPE_V2,
@@ -290,31 +316,55 @@ func (v2 *V2Client) idxPriceUpdate(poolAddr string) error {
 	return nil
 }
 
-// calcV2PoolAddr calculates the pool address (called 'Pair' in uniswap docs), from
-// the two tokens and the factory. No rpc call.
-func calcV2PoolAddr(token0, token1, factory common.Address) common.Address {
-	t0 := token0.Hex()
-	t1 := token1.Hex()
-	fct := factory.Hex()
-	initCodeHash := "96e8ac4277198ff8b6f785478aa9a39f403cb768dd02cbee326c3e7da348845f"
-	// Decode factory, token0, token1, and initCodeHash to bytes
-	factoryBytes, _ := hex.DecodeString(fct[2:])
-	token0Bytes, _ := hex.DecodeString(t0[2:])
-	token1Bytes, _ := hex.DecodeString(t1[2:])
-	initCodeHashBytes, _ := hex.DecodeString(initCodeHash)
+// getV2PairAddress queries the Uniswap V2 factory for the pair address
+// This could be computed too, however Bera mainnet seems to function differently
+func getV2PairAddress(rpcH *globalrpc.GlobalRpc, factoryAddress common.Address, tokenA common.Address, tokenB common.Address) (common.Address, error) {
+	// Uniswap V2 Factory ABI (only getPair function)
+	const factoryABI = `[{"constant":true,"inputs":[{"name":"tokenA","type":"address"},{"name":"tokenB","type":"address"}],"name":"getPair","outputs":[{"name":"","type":"address"}],"payable":false,"stateMutability":"view","type":"function"}]`
+	r, err := rpcH.GetAndLockRpc(globalrpc.TypeHTTPS, 5)
+	if err != nil {
+		return common.Address{}, fmt.Errorf("failed get rpc handler: %w", err)
+	}
+	defer rpcH.ReturnLock(r)
+	client, err := ethclient.Dial(r.Url)
+	if err != nil {
+		return common.Address{}, fmt.Errorf("failed to connect to Ethereum client: %w", err)
+	}
 
-	// Compute keccak256(abi.encodePacked(token0, token1))
-	tokenHash := sha3.NewLegacyKeccak256()
-	tokenHash.Write(append(token0Bytes, token1Bytes...))
-	tokenHashBytes := tokenHash.Sum(nil)
+	// Ensure tokenA < tokenB for correct ordering
+	if tokenA.Big().Cmp(tokenB.Big()) > 0 {
+		tokenA, tokenB = tokenB, tokenA
+	}
 
-	// Compute keccak256(abi.encodePacked(hex'ff', factory, tokenHash, initCodeHash))
-	data := append([]byte{0xff}, append(factoryBytes, append(tokenHashBytes, initCodeHashBytes...)...)...)
-	finalHash := sha3.NewLegacyKeccak256()
-	finalHash.Write(data)
-	finalHashBytes := finalHash.Sum(nil)
+	// Parse ABI
+	parsedABI, err := abi.JSON(strings.NewReader(factoryABI))
+	if err != nil {
+		return common.Address{}, fmt.Errorf("failed to parse ABI: %w", err)
+	}
 
-	// Convert to an Ethereum address (last 20 bytes of the hash)
-	pairAddress := finalHashBytes[12:]
-	return common.BytesToAddress(pairAddress)
+	// Pack function call data
+	data, err := parsedABI.Pack("getPair", tokenA, tokenB)
+	if err != nil {
+		return common.Address{}, fmt.Errorf("failed to encode getPair call: %w", err)
+	}
+
+	// Create call message
+	msg := ethereum.CallMsg{
+		To:   &factoryAddress,
+		Data: data,
+	}
+
+	// Perform eth_call
+	result, err := client.CallContract(context.Background(), msg, nil)
+	if err != nil {
+		return common.Address{}, fmt.Errorf("eth_call failed: %w", err)
+	}
+
+	// Decode returned address
+	pairAddress := common.BytesToAddress(result)
+	if pairAddress == (common.Address{}) {
+		return common.Address{}, fmt.Errorf("no pair found for tokens %s and %s", tokenA.Hex(), tokenB.Hex())
+	}
+
+	return pairAddress, nil
 }

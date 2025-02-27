@@ -1,4 +1,4 @@
 {
     "description": "pyth indices that are used by v2/v3. Ids are retrieved via SDK",
-    "indices": ["USDC-USD"]
+    "indices": ["Crypto.USDC/USD", "Crypto.BERA/USD"]
 }

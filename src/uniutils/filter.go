@@ -27,18 +27,20 @@ type BlockObs struct {
 }
 
 type Filter struct {
-	Indices    []ConfigIndex
-	UniType    d8xUtils.PriceType
-	Prices     map[uint64]*BlockObs
-	RpcHndl    *globalrpc.GlobalRpc
-	Abi        abi.ABI
-	EvtSigHash common.Hash
-	handleFunc func(*Filter, types.Log) // function that handles events
+	Indices     []ConfigIndex
+	PythIndices utils.UniPythConfig
+	UniType     d8xUtils.PriceType
+	Prices      map[uint64]*BlockObs
+	RpcHndl     *globalrpc.GlobalRpc
+	Abi         abi.ABI
+	EvtSigHash  common.Hash
+	handleFunc  func(*Filter, types.Log) // function that handles events
 }
 
 func NewFilter(
 	unitype d8xUtils.PriceType,
 	indices []ConfigIndex,
+	pythIndices utils.UniPythConfig,
 	rpcHndl *globalrpc.GlobalRpc,
 	eventAbi string,
 	eventSigHash common.Hash,
@@ -46,12 +48,13 @@ func NewFilter(
 ) (*Filter, error) {
 
 	var f = Filter{
-		Indices:    indices,
-		UniType:    unitype,
-		Prices:     make(map[uint64]*BlockObs),
-		RpcHndl:    rpcHndl,
-		EvtSigHash: eventSigHash,
-		handleFunc: handleFunc,
+		Indices:     indices,
+		PythIndices: pythIndices,
+		UniType:     unitype,
+		Prices:      make(map[uint64]*BlockObs),
+		RpcHndl:     rpcHndl,
+		EvtSigHash:  eventSigHash,
+		handleFunc:  handleFunc,
 	}
 	var err error
 	f.Abi, err = abi.JSON(strings.NewReader(eventAbi))
@@ -65,15 +68,19 @@ func NewFilter(
 func (fltr *Filter) Run(client *rueidis.Client, relPoolAddr []common.Address) error {
 	// delete history up to the point where we start filtering
 	// and get all required symbols
-	maxAgeMs := time.Now().UnixMilli() - int64(LOOKBACK_SEC*1000)
-	symToAdd := cleanHist(fltr.Indices, fltr.UniType, maxAgeMs, client)
+	nowMs := time.Now().UnixMilli()
+	startMs := nowMs - int64(LOOKBACK_SEC*1000)
+	symToAdd := cleanHist(fltr.Indices, fltr.UniType, startMs, client)
 	if len(symToAdd) == 0 {
 		slog.Info("no missing symbols in history")
 		return nil
 	}
-	nowTs := time.Now().Unix()
-	start := nowTs - LOOKBACK_SEC
-	blk, blkNow, err := fltr.findStartingBlock(uint64(start))
+	// get pyth indices
+	pythHist, err := pythHistory(fltr.PythIndices.Indices, startMs, nowMs)
+	if err != nil {
+		return err
+	}
+	blk, blkNow, err := fltr.findStartingBlock(uint64(startMs / 1000))
 	if err != nil {
 		return err
 	}
@@ -92,7 +99,7 @@ func (fltr *Filter) Run(client *rueidis.Client, relPoolAddr []common.Address) er
 	fltr.fillTriangulatedHistory()
 	slog.Info("adding prices to redis")
 	fltr.histPricesToRedis(symToAdd, client)
-	fltr.combineWithPyth(maxAgeMs, client)
+	fltr.combineWithPyth(pythHist, client, startMs)
 	return nil
 }
 
@@ -157,7 +164,7 @@ func (fltr *Filter) runFilterer(
 		}
 		var err error
 		var logs []types.Log
-		for trial := 0; trial < 3; trial++ {
+		for trial := 0; trial < 10; trial++ {
 			logs, err = getLogs(query, fltr.RpcHndl)
 			if err != nil {
 				fmt.Printf("\nerror %s, retry...\n", err.Error())
@@ -171,7 +178,7 @@ func (fltr *Filter) runFilterer(
 		}
 		// Process logs
 		progress := 1 - float64(blockNow-fromBlock.Int64())/float64(blockNow-startBlk)
-		fmt.Printf("\rprocessing %d swap events: %.2f", len(logs), progress)
+		fmt.Printf("\rprocessing %d swap events: %.2f\n", len(logs), progress)
 		for _, vLog := range logs {
 			fltr.handleFunc(fltr, vLog)
 		}
@@ -229,7 +236,6 @@ func (fltr *Filter) fillTriangulatedHistory() {
 	for j := range fltr.Indices {
 		triang := fltr.Indices[j].Triang
 		sym2Triang := fltr.Indices[j].FromPools
-		contractSize := fltr.Indices[j].ContractSize
 		// store last price of underlying in map
 		lastPx := make(map[string]float64)
 		for k := 1; k < len(triang); k += 2 {
@@ -260,7 +266,7 @@ func (fltr *Filter) fillTriangulatedHistory() {
 				}
 			}
 			if px != -1 {
-				fltr.Prices[blockNum].SymToPx[sym2Triang] = px * contractSize
+				fltr.Prices[blockNum].SymToPx[sym2Triang] = px
 			}
 		}
 	}

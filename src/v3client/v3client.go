@@ -24,6 +24,7 @@ import (
 
 type V3Client struct {
 	Config             *Config
+	ConfigPyth         utils.UniPythConfig
 	Ruedi              *rueidis.Client
 	RpcHndl            *globalrpc.GlobalRpc
 	RelevantPoolAddrs  []common.Address                     // contains all pool addresses that are used for indices
@@ -47,7 +48,7 @@ func (v3 *V3Client) GetLastUpdateTs() int64 {
 	return v3.LastUpdateTs
 }
 
-func NewV3Client(configRpc, configUniPyth, redisAddr, redisPw string, chainId int, optV3Config string) (*V3Client, error) {
+func NewV3Client(configRpc, configUniPyth string, redisAddr, redisPw string, chainId int, optV3Config string) (*V3Client, error) {
 	var v3 V3Client
 	var err error
 	v3.Config, err = loadV3PoolConfig(chainId, optV3Config)
@@ -72,13 +73,14 @@ func NewV3Client(configRpc, configUniPyth, redisAddr, redisPw string, chainId in
 	}
 	v3.PoolAddrToIndices = make(map[string][]int)
 	v3.PoolAddrToPoolInfo = make(map[string]ConfigPool)
-	unipyth, err := utils.LoadUniPythConfig(configUniPyth)
+	v3.ConfigPyth, err = utils.LoadUniPythConfig(configUniPyth)
 	if err != nil {
 		return nil, err
 	}
 
 	for j, idx := range v3.Config.Indices {
-		if idx.FromPyth != "" && !slices.Contains(unipyth.Indices, idx.FromPyth) {
+		symP := "Crypto." + strings.Replace(idx.FromPyth, "-", "/", 1)
+		if idx.FromPyth != "" && !slices.Contains(v3.ConfigPyth.Indices, symP) {
 			return nil, fmt.Errorf("index %s not defined in uni_pyth config", idx.FromPyth)
 		}
 		for k := 1; k < len(idx.Triang); k += 2 {
@@ -115,7 +117,10 @@ func NewV3Client(configRpc, configUniPyth, redisAddr, redisPw string, chainId in
 }
 
 func (v3 *V3Client) Run() error {
-	v3.Filter()
+	err := v3.Filter()
+	if err != nil {
+		return fmt.Errorf("unable to run filterer: %v", err)
+	}
 	slog.Info("filtering historical v3 data complete")
 	key := utils.RDS_AVAIL_TICKER_SET + ":" + d8xUtils.PXTYPE_V3.String()
 	for j := range v3.Config.Indices {
@@ -144,9 +149,7 @@ func (v3 *V3Client) Run() error {
 			slog.Error("v3 failed to connect to the Ethereum client: " + err.Error())
 			continue
 		}
-		wsRestartCh := make(chan struct{})
-		go v3.connCheck(wsRestartCh)
-		err = v3.runWebsocket(client, wsRestartCh)
+		err = v3.runWebsocket(client)
 		if err != nil {
 			slog.Error(err.Error())
 		}
@@ -154,22 +157,7 @@ func (v3 *V3Client) Run() error {
 	}
 }
 
-func (v3 *V3Client) connCheck(wsRestartCh chan struct{}) {
-	tick := time.NewTicker(time.Minute * 1)
-	defer tick.Stop()
-	for {
-		<-tick.C
-		dT := time.Now().Unix() - v3.GetLastUpdateTs()
-		if dT > 2*60 {
-			// restart
-			slog.Info("triggering websocket restart")
-			close(wsRestartCh)
-			return
-		}
-	}
-}
-
-func (v3 *V3Client) runWebsocket(client *ethclient.Client, wsRestartCh chan struct{}) error {
+func (v3 *V3Client) runWebsocket(client *ethclient.Client) error {
 	swapSig := uniutils.GetEventSignatureHash(SWAP_EVENT_SIGNATURE)
 	query := ethereum.FilterQuery{
 		Addresses: v3.RelevantPoolAddrs,
@@ -183,14 +171,27 @@ func (v3 *V3Client) runWebsocket(client *ethclient.Client, wsRestartCh chan stru
 		return fmt.Errorf("subscribing to event logs: %v", err)
 	}
 	slog.Info("Listening for Uniswap V3 swap events...")
+	//closing connection
+	defer func() {
+		slog.Info("Closing websocket subscription")
+		sub.Unsubscribe()
+		cancel()
+		close(logs)
+	}()
+
+	inactvTick := time.NewTicker(time.Minute * 1)
+	defer inactvTick.Stop()
 	for {
 		select {
-		case <-wsRestartCh:
-			cancel()
-			slog.Info("stopping websocket listener...")
-			return nil
 		case err := <-sub.Err():
 			return fmt.Errorf("subscription: %v", err)
+		case <-inactvTick.C:
+			dT := time.Now().Unix() - v3.GetLastUpdateTs()
+			if dT > 2*60 {
+				// restart
+				slog.Info("no updates received triggering websocket restart")
+				return nil
+			}
 		case vLog := <-logs:
 			v3.SetLastUpdateTs(time.Now().Unix())
 			// Check which event the log corresponds to
@@ -237,7 +238,7 @@ func (v3 *V3Client) onSwap(poolAddr string, log types.Log) {
 	for _, j := range idx {
 		pxIdx := v3.Config.Indices[j]
 		var px float64 = 1
-		px, _, err := utils.RedisCalcTriangPrice(
+		px, oldestTs, err := utils.RedisCalcTriangPrice(
 			v3.Ruedi,
 			d8xUtils.PXTYPE_V3,
 			v3.Triangulations[pxIdx.Symbol],
@@ -246,9 +247,28 @@ func (v3 *V3Client) onSwap(poolAddr string, log types.Log) {
 			fmt.Printf("onSwap: RedisCalcTriangPrice failed %v\n", err)
 			return
 		}
-		// write the updated price
-		px = px * pxIdx.ContractSize
-		err = utils.RedisAddPriceObs(v3.Ruedi, d8xUtils.PXTYPE_V3, pxIdx.Symbol, px, nowTs)
+		// if fromPyth is defined we multiply the triangulation by
+		// that symbol price
+		pxPth := float64(1)
+		fromPyth := pxIdx.FromPyth
+		if fromPyth != "" {
+			p, err := utils.RedisTsGet(v3.Ruedi, fromPyth, d8xUtils.PXTYPE_PYTH)
+			if err != nil {
+				slog.Error("unable to get price", "fromPyth", fromPyth, "error", err)
+				continue
+			}
+			pxPth = p.Value
+			oldestTs = min(oldestTs, p.Timestamp)
+		}
+		// scale price
+		px = px * pxPth * pxIdx.ContractSize
+		err = utils.RedisAddPriceObs(
+			v3.Ruedi,
+			d8xUtils.PXTYPE_V3,
+			pxIdx.Symbol,
+			px,
+			oldestTs,
+		)
 		if err != nil {
 			slog.Error("onSwap: failed to RedisAddPriceObs", "error", err)
 			return
