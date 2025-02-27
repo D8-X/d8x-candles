@@ -21,7 +21,8 @@ func TestV2Client(t *testing.T) {
 	v := loadEnv()
 	cRpc := "../../config/rpc_conf.json"
 	conf := "../../config/v2_idx_conf.json"
-	v3, err := NewV2Client(cRpc, v.GetString(env.REDIS_ADDR), v.GetString(env.REDIS_PW), v.GetInt(env.CHAIN_ID), conf)
+	conf2 := "../../config/uni_pyth.json"
+	v3, err := NewV2Client(cRpc, conf2, v.GetString(env.REDIS_ADDR), v.GetString(env.REDIS_PW), v.GetInt(env.CHAIN_ID), conf)
 	if err != nil {
 		fmt.Printf("error %v", err)
 		t.FailNow()

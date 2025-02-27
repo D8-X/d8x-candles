@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"math/big"
@@ -17,6 +18,11 @@ type OhlcData struct {
 	H    float64 `json:"high"`
 	L    float64 `json:"low"`
 	C    float64 `json:"close"`
+}
+
+type PxObs struct {
+	TsMs int64   //timestamp in milliseconds
+	Px   float64 //price
 }
 
 func Dec2Hex(num string) (string, error) {
@@ -64,4 +70,21 @@ func ReadFile(filename string) ([]byte, error) {
 		return nil, fmt.Errorf("Failed to read file: %v", err)
 	}
 	return byteValue, nil
+}
+
+type UniPythConfig struct {
+	Indices []string `json:"indices"`
+}
+
+func LoadUniPythConfig(filename string) (UniPythConfig, error) {
+	f, err := ReadFile(filename)
+	if err != nil {
+		return UniPythConfig{}, err
+	}
+	var conf UniPythConfig
+	err = json.Unmarshal(f, &conf)
+	if err != nil {
+		return UniPythConfig{}, err
+	}
+	return conf, nil
 }

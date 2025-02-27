@@ -28,6 +28,7 @@ services:
       - REDIS_PW=${REDIS_PW}
       - REDIS_ADDR=${REDIS_ADDR}
       - CONFIG_PATH=/prices_conf
+      - CONFIG_UNI_PYTH=/uni_pyth
     depends_on:
       - redis-timeseries
     networks:
@@ -39,6 +40,7 @@ services:
         max-file: "10"
     configs:
       - prices_conf
+      - uni_pyth
 
   v2-client:
     build:
@@ -49,6 +51,7 @@ services:
       - REDIS_ADDR=${REDIS_ADDR}
       - CONFIG_RPC=/rpc_conf
       - CHAIN_ID=${CHAIN_ID}
+      - CONFIG_UNI_PYTH=/uni_pyth
     depends_on:
       - redis-timeseries
     networks:
@@ -60,7 +63,8 @@ services:
         max-file: "10"
     configs:
       - rpc_conf
-      
+      - uni_pyth
+
   v3-client:
     build:
       context: .
@@ -70,6 +74,7 @@ services:
       - REDIS_ADDR=${REDIS_ADDR}
       - CONFIG_RPC=/rpc_conf
       - CHAIN_ID=${CHAIN_ID}
+      - CONFIG_UNI_PYTH=/uni_pyth
     depends_on:
       - redis-timeseries
     networks:
@@ -81,7 +86,8 @@ services:
         max-file: "10"
     configs:
       - rpc_conf
-
+      - uni_pyth
+  
   ws-server:
     build:
       context: .
@@ -119,6 +125,8 @@ services:
         max-size: "10m"
         max-file: "10"
 configs:
+  uni_pyth_conf:
+    file: ./config/uni_pyth.json
   prices_conf:
     file: ./config/prices.config.json
   rpc_conf:

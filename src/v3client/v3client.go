@@ -7,6 +7,7 @@ import (
 	"d8x-candles/src/utils"
 	"fmt"
 	"log/slog"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -46,7 +47,7 @@ func (v3 *V3Client) GetLastUpdateTs() int64 {
 	return v3.LastUpdateTs
 }
 
-func NewV3Client(configRpc, redisAddr, redisPw string, chainId int, optV3Config string) (*V3Client, error) {
+func NewV3Client(configRpc, configUniPyth, redisAddr, redisPw string, chainId int, optV3Config string) (*V3Client, error) {
 	var v3 V3Client
 	var err error
 	v3.Config, err = loadV3PoolConfig(chainId, optV3Config)
@@ -71,7 +72,15 @@ func NewV3Client(configRpc, redisAddr, redisPw string, chainId int, optV3Config 
 	}
 	v3.PoolAddrToIndices = make(map[string][]int)
 	v3.PoolAddrToPoolInfo = make(map[string]ConfigPool)
+	unipyth, err := utils.LoadUniPythConfig(configUniPyth)
+	if err != nil {
+		return nil, err
+	}
+
 	for j, idx := range v3.Config.Indices {
+		if idx.FromPyth != "" && !slices.Contains(unipyth.Indices, idx.FromPyth) {
+			return nil, fmt.Errorf("index %s not defined in uni_pyth config", idx.FromPyth)
+		}
 		for k := 1; k < len(idx.Triang); k += 2 {
 			sym := idx.Triang[k]
 			for _, pool := range v3.Config.Pools {

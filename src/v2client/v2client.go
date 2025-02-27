@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"log/slog"
 	"math/big"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -55,17 +56,14 @@ func (v2 *V2Client) GetLastUpdateTs() int64 {
 	return v2.LastUpdateTs
 }
 
-func NewV2Client(configRpc, redisAddr, redisPw string, chainId int, optV2Config string) (*V2Client, error) {
+func NewV2Client(configRpc, configUniPyth, redisAddr, redisPw string, chainId int, optV2Config string) (*V2Client, error) {
 	var v2 V2Client
 	var err error
 	v2.Config, err = loadV2PoolConfig(chainId, optV2Config)
 	if err != nil {
 		return nil, err
 	}
-	if v2.Config == nil {
-		// no pool config for given chain
-		return nil, nil
-	}
+
 	// ruedis client
 	client, err := rueidis.NewClient(
 		rueidis.ClientOption{InitAddress: []string{redisAddr}, Password: redisPw})
@@ -88,7 +86,14 @@ func NewV2Client(configRpc, redisAddr, redisPw string, chainId int, optV2Config 
 
 	v2.PoolAddrToIndices = make(map[string][]int)
 	v2.PoolAddrToInfo = make(map[string]UniswapV2Pool)
+	unipyth, err := utils.LoadUniPythConfig(configUniPyth)
+	if err != nil {
+		return nil, err
+	}
 	for j, idx := range v2.Config.Indices {
+		if idx.FromPyth != "" && !slices.Contains(unipyth.Indices, idx.FromPyth) {
+			return nil, fmt.Errorf("index %s not defined in uni_pyth config", idx.FromPyth)
+		}
 		for k := 1; k < len(idx.Triang); k += 2 {
 			sym := idx.Triang[k]
 			for _, pool := range v2.Config.Pools {

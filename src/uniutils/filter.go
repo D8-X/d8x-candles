@@ -65,7 +65,8 @@ func NewFilter(
 func (fltr *Filter) Run(client *rueidis.Client, relPoolAddr []common.Address) error {
 	// delete history up to the point where we start filtering
 	// and get all required symbols
-	symToAdd := cleanHist(fltr.Indices, fltr.UniType, client)
+	maxAgeMs := time.Now().UnixMilli() - int64(LOOKBACK_SEC*1000)
+	symToAdd := cleanHist(fltr.Indices, fltr.UniType, maxAgeMs, client)
 	if len(symToAdd) == 0 {
 		slog.Info("no missing symbols in history")
 		return nil
@@ -91,7 +92,7 @@ func (fltr *Filter) Run(client *rueidis.Client, relPoolAddr []common.Address) er
 	fltr.fillTriangulatedHistory()
 	slog.Info("adding prices to redis")
 	fltr.histPricesToRedis(symToAdd, client)
-
+	fltr.combineWithPyth(maxAgeMs, client)
 	return nil
 }
 
@@ -227,7 +228,7 @@ func (fltr *Filter) fillTriangulatedHistory() {
 	slices.Sort(blocks)
 	for j := range fltr.Indices {
 		triang := fltr.Indices[j].Triang
-		sym2Triang := fltr.Indices[j].Symbol
+		sym2Triang := fltr.Indices[j].FromPools
 		contractSize := fltr.Indices[j].ContractSize
 		// store last price of underlying in map
 		lastPx := make(map[string]float64)
@@ -342,7 +343,7 @@ func interpolateTs(prices map[uint64]*BlockObs) {
 }
 
 // histPricesToRedis adds prices (symbol, price per timestamp) available in `prices`
-// if the symbol is to be addded
+// if the symbol is to be added
 func (fltr *Filter) histPricesToRedis(symToAdd map[string]bool, client *rueidis.Client) error {
 	for block, obs := range fltr.Prices {
 		for sym, val := range obs.SymToPx {
