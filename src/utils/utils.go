@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"d8x-candles/config"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -77,7 +78,14 @@ type UniPythConfig struct {
 }
 
 func LoadUniPythConfig(filename string) (UniPythConfig, error) {
-	f, err := ReadFile(filename)
+	// Read the file contents
+	var f []byte
+	var err error
+	if filename != "" {
+		f, err = ReadFile(filename)
+	} else {
+		f, err = config.FetchConfigFromRepo("uni_pyth.json")
+	}
 	if err != nil {
 		return UniPythConfig{}, err
 	}

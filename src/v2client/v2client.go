@@ -57,7 +57,6 @@ func (v2 *V2Client) GetLastUpdateTs() int64 {
 
 func NewV2Client(
 	configRpc string,
-	configUniPyth string,
 	redisAddr string,
 	redisPw string,
 	chainId int,
@@ -96,7 +95,7 @@ func NewV2Client(
 
 	v2.PoolAddrToIndices = make(map[string][]int)
 	v2.PoolAddrToInfo = make(map[string]UniswapV2Pool)
-	v2.ConfigPyth, err = utils.LoadUniPythConfig(configUniPyth)
+	v2.ConfigPyth, err = utils.LoadUniPythConfig("") //load from remote
 	if err != nil {
 		return nil, err
 	}

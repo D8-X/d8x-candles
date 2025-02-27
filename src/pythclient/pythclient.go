@@ -84,10 +84,10 @@ func setCCYAvailable(symMngr *utils.SymbolManager, ruedi *rueidis.Client) error 
 }
 
 // symMap maps pyth ids to internal symbol (btc-usd)
-func Run(symMngr *utils.SymbolManager, confUniPyth, REDIS_ADDR, REDIS_PW string) error {
+func Run(symMngr *utils.SymbolManager, REDIS_ADDR, REDIS_PW string) error {
 	fmt.Print("REDIS ADDR = ", REDIS_ADDR)
 	fmt.Print("REDIS_PW=", REDIS_PW)
-	uniTkrs, err := utils.LoadUniPythConfig(confUniPyth)
+	uniTkrs, err := utils.LoadUniPythConfig("") //from remote sync-hub
 	if err != nil {
 		return err
 	}

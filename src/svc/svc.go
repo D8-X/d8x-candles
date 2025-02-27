@@ -61,7 +61,6 @@ func RunV3Client() {
 		env.CONFIG_RPC,
 		env.REDIS_ADDR,
 		env.REDIS_PW,
-		env.CONFIG_UNI_PYTH,
 	})
 	if err != nil {
 		fmt.Println("Error:", err.Error())
@@ -71,11 +70,10 @@ func RunV3Client() {
 	fmt.Printf("starting V3 client for chain %d\n", viper.GetInt(env.CHAIN_ID))
 	v3, err := v3client.NewV3Client(
 		viper.GetString(env.CONFIG_RPC),
-		viper.GetString(env.CONFIG_UNI_PYTH),
 		viper.GetString(env.REDIS_ADDR),
 		viper.GetString(env.REDIS_PW),
 		viper.GetInt(env.CHAIN_ID),
-		"config/v3_idx_conf.json", //we load config from remote
+		"", //we load config from remote
 	)
 	if err != nil {
 		fmt.Println("error:", err.Error())
@@ -98,7 +96,6 @@ func RunV2Client() {
 		env.CONFIG_RPC,
 		env.REDIS_ADDR,
 		env.REDIS_PW,
-		env.CONFIG_UNI_PYTH,
 	})
 	if err != nil {
 		fmt.Println("Error:", err.Error())
@@ -108,11 +105,10 @@ func RunV2Client() {
 	fmt.Printf("starting V2 client for chain %d\n", viper.GetInt(env.CHAIN_ID))
 	v2, err := v2client.NewV2Client(
 		viper.GetString(env.CONFIG_RPC),
-		viper.GetString(env.CONFIG_UNI_PYTH),
 		viper.GetString(env.REDIS_ADDR),
 		viper.GetString(env.REDIS_PW),
 		viper.GetInt(env.CHAIN_ID),
-		"config/v2_idx_conf.json", //we load config from remote
+		"", //we load config from remote
 	)
 	if err != nil {
 		fmt.Println("error:", err.Error())
@@ -184,7 +180,6 @@ func StreamPyth() {
 		env.CONFIG_PATH,
 		env.REDIS_ADDR,
 		env.REDIS_PW,
-		env.CONFIG_UNI_PYTH,
 	})
 	if err != nil {
 		fmt.Println("Error:", err.Error())
@@ -196,7 +191,11 @@ func StreamPyth() {
 		return
 	}
 
-	err = pythclient.Run(c, viper.GetString(env.CONFIG_UNI_PYTH), viper.GetString(env.REDIS_ADDR), viper.GetString(env.REDIS_PW))
+	err = pythclient.Run(
+		c,
+		viper.GetString(env.REDIS_ADDR),
+		viper.GetString(env.REDIS_PW),
+	)
 	if err != nil {
 		slog.Error(err.Error())
 	}

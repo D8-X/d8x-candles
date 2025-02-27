@@ -48,7 +48,7 @@ func (v3 *V3Client) GetLastUpdateTs() int64 {
 	return v3.LastUpdateTs
 }
 
-func NewV3Client(configRpc, configUniPyth string, redisAddr, redisPw string, chainId int, optV3Config string) (*V3Client, error) {
+func NewV3Client(configRpc string, redisAddr, redisPw string, chainId int, optV3Config string) (*V3Client, error) {
 	var v3 V3Client
 	var err error
 	v3.Config, err = loadV3PoolConfig(chainId, optV3Config)
@@ -73,7 +73,7 @@ func NewV3Client(configRpc, configUniPyth string, redisAddr, redisPw string, cha
 	}
 	v3.PoolAddrToIndices = make(map[string][]int)
 	v3.PoolAddrToPoolInfo = make(map[string]ConfigPool)
-	v3.ConfigPyth, err = utils.LoadUniPythConfig(configUniPyth)
+	v3.ConfigPyth, err = utils.LoadUniPythConfig("") //load from remote
 	if err != nil {
 		return nil, err
 	}
