@@ -60,7 +60,7 @@ func (fltr *Filter) combineWithPyth(pyth map[string]*utils.PythHistoryAPIRespons
 func findOpen(tsMs int64, candles *utils.PythHistoryAPIResponse) (float64, error) {
 	tsSec := uint32(tsMs / 1000)
 	if candles.T[0] > tsSec {
-		return 1, fmt.Errorf("ts %d not find in data (ts start at %d)", tsSec, candles.T[0])
+		return 1, fmt.Errorf("ts %d not found in data (ts start at %d)", tsSec, candles.T[0])
 	}
 	j := 0
 	for ; j < len(candles.T); j++ {
@@ -69,7 +69,7 @@ func findOpen(tsMs int64, candles *utils.PythHistoryAPIResponse) (float64, error
 		}
 	}
 	if j == len(candles.T) {
-		return 1, fmt.Errorf("ts %d not find in data (last ts at %d)", tsSec, candles.T[len(candles.T)-1])
+		return 1, fmt.Errorf("ts %d not found in data (last ts at %d)", tsSec, candles.T[len(candles.T)-1])
 	}
 	return candles.O[j], nil
 }
