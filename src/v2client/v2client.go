@@ -228,6 +228,7 @@ func (v2 *V2Client) runWebsocket(client *ethclient.Client) error {
 		case <-inactvTick.C:
 			dT := time.Now().Unix() - v2.GetLastUpdateTs()
 			if dT > 2*60 {
+				v2.SetLastUpdateTs(time.Now().Unix())
 				// restart
 				slog.Info("no updates received triggering websocket restart")
 				return nil
