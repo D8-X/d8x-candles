@@ -179,13 +179,19 @@ func (v3 *V3Client) runWebsocket(client *ethclient.Client) error {
 		close(logs)
 		client.Close()
 	}()
-
+	// timer to refresh pyth triangulation x pool prices
+	refreshTick := time.NewTimer(time.Second * 10)
+	defer refreshTick.Stop()
+	// timer for inactivity of pool
 	inactvTick := time.NewTicker(time.Minute * 1)
 	defer inactvTick.Stop()
 	for {
 		select {
 		case err := <-sub.Err():
 			return fmt.Errorf("subscription: %v", err)
+		case <-refreshTick.C:
+			slog.Info("refreshing triangulations with Pyth prices")
+			v3.refreshIdxWithPyth()
 		case <-inactvTick.C:
 			dT := time.Now().Unix() - v3.GetLastUpdateTs()
 			if dT > 2*60 {
@@ -204,6 +210,35 @@ func (v3 *V3Client) runWebsocket(client *ethclient.Client) error {
 			}
 		}
 	}
+}
+
+// refreshIdxWithPyth updates the triangulations that involve pyth prices
+func (v3 *V3Client) refreshIdxWithPyth() {
+	symUpdated := ""
+	for _, index := range v3.Config.Indices {
+		if index.FromPyth == "" {
+			continue
+		}
+		px, ts, err := v3.triangulateIndex(index)
+		if err != nil {
+			slog.Info("re-triangulation failed for symbol", "symbol", index.Symbol, "error", err)
+			continue
+		}
+		err = utils.RedisAddPriceObs(
+			v3.Ruedi,
+			d8xUtils.PXTYPE_V2,
+			index.Symbol,
+			px,
+			ts,
+		)
+		if err != nil {
+			slog.Info("re-triangulation failed for symbol", "symbol", index.Symbol, "error", err)
+			continue
+		}
+		symUpdated += d8xUtils.PXTYPE_V3.String() + ":" + index.Symbol + ";"
+	}
+	symUpdated = strings.TrimSuffix(symUpdated, ";")
+	utils.RedisPublishIdxPriceChange(v3.Ruedi, symUpdated)
 }
 
 // onSwap handles a swap event in v3 client which leads
@@ -238,31 +273,11 @@ func (v3 *V3Client) onSwap(poolAddr string, log types.Log) {
 	symUpdated := ""
 	for _, j := range idx {
 		pxIdx := v3.Config.Indices[j]
-		var px float64 = 1
-		px, oldestTs, err := utils.RedisCalcTriangPrice(
-			v3.Ruedi,
-			d8xUtils.PXTYPE_V3,
-			v3.Triangulations[pxIdx.Symbol],
-		)
+		px, oldestTs, err := v3.triangulateIndex(pxIdx)
 		if err != nil {
-			fmt.Printf("onSwap: RedisCalcTriangPrice failed %v\n", err)
-			return
+			slog.Error("triangulating index failed", "error", err)
+			continue
 		}
-		// if fromPyth is defined we multiply the triangulation by
-		// that symbol price
-		pxPth := float64(1)
-		fromPyth := pxIdx.FromPyth
-		if fromPyth != "" {
-			p, err := utils.RedisTsGet(v3.Ruedi, fromPyth, d8xUtils.PXTYPE_PYTH)
-			if err != nil {
-				slog.Error("unable to get price", "fromPyth", fromPyth, "error", err)
-				continue
-			}
-			pxPth = p.Value
-			oldestTs = min(oldestTs, p.Timestamp)
-		}
-		// scale price
-		px = px * pxPth * pxIdx.ContractSize
 		err = utils.RedisAddPriceObs(
 			v3.Ruedi,
 			d8xUtils.PXTYPE_V3,
@@ -272,10 +287,37 @@ func (v3 *V3Client) onSwap(poolAddr string, log types.Log) {
 		)
 		if err != nil {
 			slog.Error("onSwap: failed to RedisAddPriceObs", "error", err)
-			return
+			continue
 		}
 		symUpdated += d8xUtils.PXTYPE_V3.String() + ":" + pxIdx.Symbol + ";"
 	}
 	symUpdated = strings.TrimSuffix(symUpdated, ";")
 	utils.RedisPublishIdxPriceChange(v3.Ruedi, symUpdated)
+}
+
+func (v3 *V3Client) triangulateIndex(index uniutils.ConfigIndex) (float64, int64, error) {
+	var px float64 = 1
+	px, oldestTs, err := utils.RedisCalcTriangPrice(
+		v3.Ruedi,
+		d8xUtils.PXTYPE_V3,
+		v3.Triangulations[index.Symbol],
+	)
+	if err != nil {
+		return 0, 0, fmt.Errorf("onSwap: RedisCalcTriangPrice failed %v", err)
+	}
+	// if fromPyth is defined we multiply the triangulation by
+	// that symbol price
+	pxPth := float64(1)
+	fromPyth := index.FromPyth
+	if fromPyth != "" {
+		p, err := utils.RedisTsGet(v3.Ruedi, fromPyth, d8xUtils.PXTYPE_PYTH)
+		if err != nil {
+			return 0, 0, fmt.Errorf("unable to get price fromPyth: %s %v", fromPyth, err)
+		}
+		pxPth = p.Value
+		oldestTs = min(oldestTs, p.Timestamp)
+	}
+	// scale price
+	px = px * pxPth * index.ContractSize
+	return px, oldestTs, nil
 }
