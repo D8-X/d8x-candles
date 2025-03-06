@@ -209,6 +209,7 @@ func (v2 *V2Client) runWebsocket(client *ethclient.Client) error {
 		sub.Unsubscribe()
 		cancel()
 		close(logs)
+		client.Close()
 	}()
 
 	inactvTick := time.NewTicker(time.Minute * 1)
