@@ -213,7 +213,7 @@ func (v2 *V2Client) runWebsocket(client *ethclient.Client) error {
 	}()
 
 	// timer to refresh pyth triangulation x pool prices
-	refreshTick := time.NewTimer(time.Second * 10)
+	refreshTick := time.NewTicker(time.Second * 10)
 	defer refreshTick.Stop()
 	// timer for inactivity of pool
 	inactvTick := time.NewTicker(time.Minute * 1)
