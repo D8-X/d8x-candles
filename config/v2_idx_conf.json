@@ -83,7 +83,8 @@
         "v2Router02": "0xd91dd58387Ccd9B66B390ae2d7c66dBD46BC6022",
         "indices": [
             {"symbol": "RAMEN-USD", "contractSize": 1, "fromPools": "RAMEN-WBERA", "triang": ["/", "WBERA-RAMEN"], "fromPyth": "BERA-USD"},
-            {"symbol": "HENLO.1000-USD", "contractSize": 1000, "fromPools": "HENLO-WBERA", "triang": ["/", "WBERA-HENLO"], "fromPyth": "BERA-USD"}
+            {"symbol": "HENLO.1000-USD", "contractSize": 1000, "fromPools": "HENLO-WBERA", "triang": ["/", "WBERA-HENLO"], "fromPyth": "BERA-USD"},
+            {"symbol": "BM.1000-USD", "contractSize": 1000, "fromPools": "BM-WBERA", "triang": ["/", "WBERA-BM"], "fromPyth": "BERA-USD"}
         ],
         "pools": [
             {
@@ -99,6 +100,14 @@
                 "tokenAddr": [
                     "0x6969696969696969696969696969696969696969",
                     "0xb2f776e9c1c926c4b2e54182fac058da9af0b6a5"
+                ],
+                "tokenDec": [18, 18]
+            },
+            {
+                "symbol": "WBERA-BM",
+                "tokenAddr": [
+                    "0x6969696969696969696969696969696969696969",
+                    "0xb749584F9fC418Cf905d54f462fdbFdC7462011b"
                 ],
                 "tokenDec": [18, 18]
             }
