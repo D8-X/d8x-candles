@@ -237,6 +237,9 @@ func (v3 *V3Client) refreshIdxWithPyth() {
 		}
 		symUpdated += d8xUtils.PXTYPE_V3.String() + ":" + index.Symbol + ";"
 	}
+	if symUpdated == "" {
+		return
+	}
 	symUpdated = strings.TrimSuffix(symUpdated, ";")
 	utils.RedisPublishIdxPriceChange(v3.Ruedi, symUpdated)
 }
@@ -290,6 +293,9 @@ func (v3 *V3Client) onSwap(poolAddr string, log types.Log) {
 			continue
 		}
 		symUpdated += d8xUtils.PXTYPE_V3.String() + ":" + pxIdx.Symbol + ";"
+	}
+	if symUpdated == "" {
+		return
 	}
 	symUpdated = strings.TrimSuffix(symUpdated, ";")
 	utils.RedisPublishIdxPriceChange(v3.Ruedi, symUpdated)

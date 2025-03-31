@@ -296,6 +296,9 @@ func (v2 *V2Client) refreshIdxWithPyth() {
 		}
 		symUpdated += d8xUtils.PXTYPE_V2.String() + ":" + index.Symbol + ";"
 	}
+	if symUpdated == "" {
+		return
+	}
 	symUpdated = strings.TrimSuffix(symUpdated, ";")
 	utils.RedisPublishIdxPriceChange(v2.Ruedi, symUpdated)
 }
@@ -328,6 +331,9 @@ func (v2 *V2Client) idxPriceUpdate(poolAddr string) error {
 			return err
 		}
 		symUpdated += d8xUtils.PXTYPE_V2.String() + ":" + sym + ";"
+	}
+	if symUpdated == "" {
+		return nil
 	}
 	symUpdated = strings.TrimSuffix(symUpdated, ";")
 	utils.RedisPublishIdxPriceChange(v2.Ruedi, symUpdated)
