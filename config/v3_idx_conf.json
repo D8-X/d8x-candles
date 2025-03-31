@@ -38,7 +38,23 @@
                 "tokenDec": [18, 6]
             }
         ]
-    },    
+    },
+    {
+        "chainId": 80094,
+        "poolChainId": 80094,
+        "indices" : [
+            {"symbol":"YEET.100-USD", "contractSize": 1, "fromPools": "YEET-WBERA", "triang": ["*", "YEET-WBERA"], "fromPyth": "BERA-USD"}
+        ],
+        "pools": [
+            {
+                "symbol": "YEET-WBERA",
+                "addr": "0xf065f7cCf54Ef8596FE77A4836d963d5aF84EB5d",
+                "tokenAddr": ["0x08A38Caa631DE329FF2DAD1656CE789F31AF3142",
+                        "0x6969696969696969696969696969696969696969"],
+                "tokenDec": [18, 18]
+            }
+        ]
+    },
     {
         "chainId": 80084,
         "poolChainId": 80084,
