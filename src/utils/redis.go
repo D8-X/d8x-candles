@@ -63,7 +63,7 @@ func RedisAddPriceObs(client *rueidis.Client, pxtype d8xUtils.PriceType, sym str
 	ts := strconv.FormatInt(timestampMs, 10)
 	key := pxtype.String() + ":" + sym
 	resp := c.Do(ctx,
-		c.B().TsAdd().Key(key).Timestamp(ts).Value(price).Build())
+		c.B().TsAdd().Key(key).Timestamp(ts).Value(price).OnDuplicateLast().Build())
 	if resp.Error() != nil {
 		return fmt.Errorf("RedisAddPriceObs %s: %s", sym, resp.Error().Error())
 	}
