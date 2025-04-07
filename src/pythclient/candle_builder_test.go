@@ -122,7 +122,7 @@ func timestampFromTimeString(timestr string) (uint32, error) {
 
 func TestQueryPriceFeedInfo(t *testing.T) {
 	api := createHistApi(t)
-	api.QueryPriceFeedInfo("ETH-USD", "0xff61491a931112ddf1bd8147cd1b641375f79f5825126d665480874634fd0ace")
+	api.QueryPriceFeedInfo("ETH-USD", "", "0xff61491a931112ddf1bd8147cd1b641375f79f5825126d665480874634fd0ace")
 	r, err := api.GetMarketInfo("ETH-USD")
 	if err != nil {
 		t.Errorf("Error parsing date:%v", err)
