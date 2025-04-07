@@ -163,7 +163,7 @@ func (p *PythClientApp) ConstructPriceObsFromPythCandles(sym utils.SymbolPyth) (
 	var candles = []utils.PythHistoryAPIResponse{twoDayResolutionMinute, oneMonthResolution1h, allTimeResolution1D}
 	// concatenate candles into price observations
 	var obs utils.PriceObservations
-	obs, err = PythCandlesToPriceObs(candles)
+	obs, err = PythCandlesToPriceObs(candles, []int{60, 3600, 86400})
 	if err != nil {
 		return utils.PriceObservations{}, err
 	}
