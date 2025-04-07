@@ -99,7 +99,7 @@ func (s *SymbolPyth) PairString() string {
 // and the id
 func (s *SymbolPyth) New(symbol, id, ourSymbol string) error {
 	parts := strings.Split(symbol, ".")
-	if len(parts) != 2 {
+	if len(parts) < 2 {
 		return fmt.Errorf("symbol must contain '.'. E.g. Crypto.ETH/USD")
 	}
 	parts[0] = strings.ToLower(parts[0])
@@ -110,7 +110,7 @@ func (s *SymbolPyth) New(symbol, id, ourSymbol string) error {
 	}
 
 	s.AssetType = strings.ToLower(parts[0])
-	parts2 := strings.Split(parts[1], "/")
+	parts2 := strings.Split(symbol, "/")
 	if len(parts2) != 2 {
 		return fmt.Errorf("symbol must contain '/'. E.g. Crypto.ETH/USD")
 	}

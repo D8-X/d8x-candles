@@ -32,7 +32,11 @@ func (p *PythClientApp) BuildHistory(symbols []string) error {
 		}
 		var symP utils.SymbolPyth
 		origin := config.SymToPythOrigin[sym]
-		symP.New(origin, id, sym)
+		err := symP.New(origin, id, sym)
+		if err != nil {
+			slog.Error("unable to create symbol", "symbol", sym, "error", err)
+			continue
+		}
 		pythSyms = append(pythSyms, symP)
 	}
 	slog.Info("-- building history from Pyth candles...")
