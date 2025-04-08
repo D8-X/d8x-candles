@@ -147,7 +147,8 @@ func (p *PythClientApp) ConstructPriceObsFromPythCandles(sym utils.SymbolPyth) (
 	if err != nil {
 		return utils.PriceObservations{}, err
 	}
-
+	// 30min required for 1h candle because for equities, pyth starts at x:30 not x:00 -> this screws up high and low
+	// because those are placed artificially within the candle. This will be wrong if the start time shifts
 	candleRes.New(30, utils.MinuteCandle)
 	oneMonthResolution1h, err := p.RetrieveCandlesFromPyth(sym, candleRes, currentTimeSec-86400*30, currentTimeSec)
 	if err != nil {
