@@ -43,7 +43,8 @@
         "chainId": 80094,
         "poolChainId": 80094,
         "indices" : [
-            {"symbol":"YEET.100-USD", "contractSize": 1, "fromPools": "YEET-WBERA", "triang": ["*", "YEET-WBERA"], "fromPyth": "BERA-USD"}
+            {"symbol":"YEET.100-USD", "contractSize": 100, "fromPools": "YEET-WBERA", "triang": ["*", "YEET-WBERA"], "fromPyth": "BERA-USD"},
+            {"symbol":"OHM-HONEY", "contractSize": 1, "fromPools": "OHM-HONEY", "triang": ["*", "OHM-HONEY"], "fromPyth": ""}
         ],
         "pools": [
             {
@@ -52,73 +53,14 @@
                 "tokenAddr": ["0x08A38Caa631DE329FF2DAD1656CE789F31AF3142",
                         "0x6969696969696969696969696969696969696969"],
                 "tokenDec": [18, 18]
+            },
+            {     
+                "symbol": "OHM-HONEY",
+                "addr": "0x75159c541bd49b1b6c51f5f3e796579e7cccb071",
+                "tokenAddr": ["0x18878Df23e2a36f81e820e4b47b4A40576D3159C",
+                        "0xFCBD14DC51f0A4d49d5E53C2E0950e0bC26d0Dce"],
+                "tokenDec": [9, 18]
             }
         ]
-    },
-    {
-        "chainId": 80084,
-        "poolChainId": 80084,
-        "indices" : [
-            {"symbol":"DIRAC-HONEY", "contractSize": 1, "fromPools": "DIRAC-HONEY", "triang": ["/", "HONEY-DIRAC"], "fromPyth": ""},
-            {"symbol":"BUDS-HONEY", "contractSize": 1, "fromPools": "BUDS-HONEY","triang": ["/", "WBERA-BUDS", "/", "HONEY-WBERA"], "fromPyth": ""},
-            {"symbol":"IBGT-HONEY", "contractSize": 1, "fromPools": "IBGT-HONEY","triang": ["*", "IBGT-WBERA", "/", "HONEY-WBERA"], "fromPyth": ""},
-            {"symbol":"BDEG-HONEY", "contractSize": 1, "fromPools": "BDEG-HONEY","triang": ["/", "HONEY-BDEG"], "fromPyth": ""},
-            {"symbol":"BEARTIC-HONEY", "contractSize": 1, "fromPools": "BEARTIC-HONEY","triang": ["/", "HONEY-BEARTIC"], "fromPyth": ""},
-            {"symbol":"KEVIN-HONEY", "contractSize": 1, "fromPools": "KEVIN-HONEY","triang": ["/","WBERA-KEVIN","/", "HONEY-WBERA"], "fromPyth": ""},
-            {"symbol":"YEET-HONEY", "contractSize": 1, "fromPools": "YEET-HONEY","triang": ["*","YEET-WBERA","/", "HONEY-WBERA"], "fromPyth": ""},
-            {"symbol":"ARBERA-HONEY", "contractSize": 1, "fromPools": "ARBERA-HONEY","triang": ["/", "HONEY-ARBERA"], "fromPyth": ""}
-        ],
-        "pools" : [
-            {
-                "symbol": "HONEY-WBERA",
-                "addr": "0x8a960a6e5f224d0a88bad10463bdad161b68c144",
-                "tokenDec": [18, 18]
-            },
-            {
-                "symbol": "HONEY-BEARTIC",
-                "addr": "0xab8b3bf6c1f09f8b8955c1bd2c35d83e25d6bb13",
-                "tokenDec": [18, 18]
-            },
-            {
-                "symbol": "WBERA-BUDS",
-                "addr": "0x7912705080a8aa819e97eda946d5cdf2702faa47",
-                "tokenDec": [18, 18]
-            },
-            {
-                "symbol": "IBGT-WBERA",
-                "addr": "0x4302b57ba521cf2137e8af85990ab1ca2e241126",
-                "tokenDec": [18, 18]
-            },
-            {
-                "symbol": "HONEY-BDEG",
-                "addr": "0x0E4E67fb43F3467077619410A34d21cdB52eB992",
-                "tokenDec": [18, 18]
-            },
-            {
-                "symbol": "HONEY-DIRAC",
-                "addr": "0xea2e981f185e6a4b53eb1b72792cf02e2ebcbdcb",
-                "tokenDec": [18, 18]
-            },
-            {
-                "symbol": "HONEY-POLLEN",
-                "addr": "0xfe9baa75f1f26ced654bbd665b6e154a1f82f309",
-                "tokenDec": [18, 18]
-            },
-            {
-                "symbol": "WBERA-KEVIN",
-                "addr": "0x702567A48db434d0E31a0572da774f2548c1a6E8",
-                "tokenDec": [18, 18]
-            },
-            {
-                "symbol": "YEET-WBERA",
-                "addr": "0xb6a43bc17680fb67fd8371977d264e047f47c675",
-                "tokenDec": [18, 18]
-            },
-            {
-                "symbol": "HONEY-ARBERA",
-                "addr": "0x2c5cd76A57eBcCF0307A2ffed1FA666057A875A7",
-                "tokenDec": [18, 18]
-            }
-        ]
-    }
+    } 
 ]
