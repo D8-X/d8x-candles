@@ -104,9 +104,9 @@ func (s *SymbolPyth) New(symbol, id, ourSymbol string) error {
 	}
 	parts[0] = strings.ToLower(parts[0])
 	switch parts[0] {
-	case `crypto`, `equity`, `fx`, `metal`, `rates`:
+	case `crypto`, `equity`, `fx`, `metal`, `rates`, `commodities`:
 	default:
-		return fmt.Errorf("invalid asset type. Possible values are `crypto`, `equity`, `fx`, `metal`, `rates`")
+		return fmt.Errorf("invalid asset type. Possible values are `crypto`, `equity`, `fx`, `metal`, `rates`, `commodities`")
 	}
 
 	s.AssetType = strings.ToLower(parts[0])
