@@ -90,9 +90,9 @@ outerLoop:
 				slog.Error("Error triangulated feeds info " + symT + " at " + path.Symbol[k])
 				continue outerLoop
 			}
-			if m.AssetType != d8xUtils.ACLASS_CRYPTO {
-				// dominant asset type for triangulations is
-				// the non-crypto asset
+			if k == 0 {
+				// asset type is determined by base asset which must be the first in
+				// triangulation path
 				assetType = m.AssetType
 			}
 
