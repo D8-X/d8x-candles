@@ -111,8 +111,8 @@ func (s *SymbolPyth) New(symbol, id, ourSymbol string) error {
 
 	s.AssetType = strings.ToLower(parts[0])
 	parts2 := strings.Split(symbol, "/")
-	if len(parts2) != 2 {
-		return fmt.Errorf("symbol must contain '/'. E.g. Crypto.ETH/USD")
+	if len(parts2) != 2 && parts[0] != "commodities" {
+		return fmt.Errorf("symbol must contain '/'. E.g. Crypto.ETH/USD unless commodity")
 	}
 	s.Symbol = ourSymbol
 	s.id = id
