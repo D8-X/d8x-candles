@@ -162,6 +162,7 @@ func (p *PythClientApp) QueryPriceFeedInfo(sym, origin string, id string) error 
 }
 
 func (p *PythClientApp) setMarketHours(ticker string, mh utils.MarketHours, assetType d8xUtils.AssetClass) error {
+	slog.Info("setMarketHours", "ticker", ticker, "isOpen", mh.IsOpen)
 	return utils.RedisSetMarketHours(p.RedisClient, ticker, mh, assetType)
 }
 
