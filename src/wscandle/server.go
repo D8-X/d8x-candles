@@ -507,8 +507,10 @@ func (srv *Server) IsPxSubscriptionExpired() bool {
 // subscribe the server to rueidis pub/sub
 func (srv *Server) HandlePxUpdateFromRedis(msg rueidis.PubSubMessage, candlePeriodsMs map[string]utils.CandlePeriod) {
 	srv.MsgCount++
-	if srv.MsgCount%500 == 0 {
+	if srv.MsgCount%100 == 0 {
 		srv.SetLastPxUpdtTs()
+	}
+	if srv.MsgCount%500 == 0 {
 		slog.Info(fmt.Sprintf("REDIS received %d messages since last report (now: %s)", srv.MsgCount, msg.Message))
 		srv.MsgCount = 0
 	}
