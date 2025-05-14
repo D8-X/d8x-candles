@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"slices"
 	"strconv"
-	"sync"
 	"time"
 
 	"github.com/D8-X/d8x-futures-go-sdk/pkg/d8x_futures"
@@ -63,7 +62,7 @@ func RedisAddPriceObs(client *rueidis.Client, pxtype d8xUtils.PriceType, sym str
 	ts := strconv.FormatInt(timestampMs, 10)
 	key := pxtype.String() + ":" + sym
 	resp := c.Do(ctx,
-		c.B().TsAdd().Key(key).Timestamp(ts).Value(price).Build())
+		c.B().TsAdd().Key(key).Timestamp(ts).Value(price).OnDuplicateLast().Build())
 	if resp.Error() != nil {
 		return fmt.Errorf("RedisAddPriceObs %s: %s", sym, resp.Error().Error())
 	}
@@ -162,26 +161,13 @@ func PricesToRedis(client *rueidis.Client, sym string, pxtype d8xUtils.PriceType
 	if err != nil {
 		return err
 	}
-	errCh := make(chan error, len(obs.P))
-	var wg sync.WaitGroup
 	for k := 0; k < len(obs.P); k++ {
 		// store prices in ms
 		val := obs.P[k]
 		t := int64(obs.T[k]) * 1000
-		wg.Add(1)
-		go func(sym string, t int64, val float64) {
-			defer wg.Done()
-			err := RedisAddPriceObs(client, pxtype, sym, val, t)
-			if err != nil {
-				errCh <- err
-			}
-		}(sym, t, val)
-	}
-	wg.Wait()
-	close(errCh)
-	for err := range errCh {
+		err := RedisAddPriceObs(client, pxtype, sym, val, t)
 		if err != nil {
-			return err // Handle or aggregate errors
+			return fmt.Errorf("PricesToRedis failed at %d: %v", k, err)
 		}
 	}
 	return nil

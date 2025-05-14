@@ -3,8 +3,10 @@ package pythclient
 import (
 	"context"
 	"d8x-candles/src/utils"
+	"encoding/json"
 	"fmt"
 	"log/slog"
+	"os"
 	"testing"
 	"time"
 
@@ -41,34 +43,72 @@ func TestRetrieveCandle(t *testing.T) {
 	}
 	fmt.Print(res)
 }
-
+func formatTimestamp(ts int64) string {
+	t := time.Unix(ts, 0).UTC()
+	return t.Format("2006-01-02 15:04:05 MST")
+}
 func TestConcatCandles(t *testing.T) {
-	fromTs, _ := timestampFromTimeString("2023-05-14 08:20")
-	toTs, _ := timestampFromTimeString("2023-08-14 08:35")
+	fromTs, _ := timestampFromTimeString("2025-03-25 08:00")
+	toTs, _ := timestampFromTimeString("2025-04-07 17:00")
 	api := PythClientApp{BaseUrl: "https://benchmarks.pyth.network/"}
+	api.TokenBucket = utils.NewTokenBucket(10, 5)
 	var sym utils.SymbolPyth
 	//sym.New("Crypto.ETH/USD")
-	sym.New("Fx.USD/CHF", "", "ETH/USD")
+	sym.New("Equity.US.NDAQ/USD", "", "NDAQ/USD")
 	var resol utils.PythCandleResolution
 	_ = resol.New(1, utils.MinuteCandle)
-	candles1min, err := api.RetrieveCandlesFromPyth(sym, resol, fromTs, toTs)
+	candles1min, err := api.RetrieveCandlesFromPyth(sym, resol, toTs-86400, toTs)
 	if err != nil {
 		t.Errorf("Error retrieving candles:%v", err)
 		return
 	}
 	_ = resol.New(60, utils.MinuteCandle)
-	candles1h, err := api.RetrieveCandlesFromPyth(sym, resol, fromTs, toTs)
+	candles1h, err := api.RetrieveCandlesFromPyth(sym, resol, toTs-86400*5, toTs)
 	if err != nil {
 		t.Errorf("Error retrieving candles:%v", err)
 		return
 	}
-	var candles = []utils.PythHistoryAPIResponse{candles1min, candles1h}
-	p, err := PythCandlesToPriceObs(candles)
+
+	for j := 1; j < len(candles1h.T); j++ {
+		t0 := candles1h.T[j-1]
+		t1 := candles1h.T[j]
+		if t0 > t1 {
+			fmt.Printf("candles not sorted: %d %d -> diff %d", t0, t1, t1-t0)
+		}
+	}
+	_ = resol.New(1, utils.DayCandle)
+	candles24h, err := api.RetrieveCandlesFromPyth(sym, resol, fromTs, toTs)
+	if err != nil {
+		t.Errorf("Error retrieving candles:%v", err)
+		return
+	}
+
+	var candles = []utils.PythHistoryAPIResponse{candles1min, candles1h, candles24h}
+	for j := range candles {
+		fmt.Printf("dur = %d\n", candles[j].T[1]-candles[j].T[0])
+		fmt.Printf("from %s\n", formatTimestamp(int64(candles[j].T[0])))
+		fmt.Printf("to   %s\n", formatTimestamp(int64(candles[j].T[len(candles[j].T)-1])))
+	}
+
+	p, err := PythCandlesToPriceObs(candles, []int{60, 3600, 86400})
 	if err != nil {
 		t.Errorf("Error parsing date:%v", err)
 		return
 	}
-	fmt.Print(p)
+
+	for j := 1; j < len(p.T); j++ {
+		if p.T[j] < p.T[j-1] {
+			fmt.Printf("j=%d: %s > %s candles not sorted: %d %d -> diff %d\n",
+				j, formatTimestamp(int64(p.T[j-1])), formatTimestamp(int64(p.T[j])), p.T[j-1], p.T[j], p.T[j]-p.T[j-1])
+		}
+	}
+
+	J, err := json.MarshalIndent(p, "", " ")
+	if err != nil {
+		t.Errorf("%v", err)
+		return
+	}
+	os.WriteFile("./test2.json", J, 0644)
 }
 
 func TestPythDataToRedisPriceObs(t *testing.T) {
@@ -122,7 +162,7 @@ func timestampFromTimeString(timestr string) (uint32, error) {
 
 func TestQueryPriceFeedInfo(t *testing.T) {
 	api := createHistApi(t)
-	api.QueryPriceFeedInfo("ETH-USD", "0xff61491a931112ddf1bd8147cd1b641375f79f5825126d665480874634fd0ace")
+	api.QueryPriceFeedInfo("ETH-USD", "", "0xff61491a931112ddf1bd8147cd1b641375f79f5825126d665480874634fd0ace")
 	r, err := api.GetMarketInfo("ETH-USD")
 	if err != nil {
 		t.Errorf("Error parsing date:%v", err)

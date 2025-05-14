@@ -68,7 +68,7 @@ func ReadFile(filename string) ([]byte, error) {
 	// Read the file's contents into a byte slice
 	byteValue, err := io.ReadAll(jsonFile)
 	if err != nil {
-		return nil, fmt.Errorf("Failed to read file: %v", err)
+		return nil, fmt.Errorf("failed to read file: %v", err)
 	}
 	return byteValue, nil
 }

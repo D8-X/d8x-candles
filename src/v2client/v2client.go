@@ -209,17 +209,26 @@ func (v2 *V2Client) runWebsocket(client *ethclient.Client) error {
 		sub.Unsubscribe()
 		cancel()
 		close(logs)
+		client.Close()
 	}()
 
+	// timer to refresh pyth triangulation x pool prices
+	refreshTick := time.NewTicker(time.Second * 10)
+	defer refreshTick.Stop()
+	// timer for inactivity of pool
 	inactvTick := time.NewTicker(time.Minute * 1)
 	defer inactvTick.Stop()
 	for {
 		select {
 		case err := <-sub.Err():
 			return fmt.Errorf("subscription: %v", err)
+		case <-refreshTick.C:
+			slog.Info("refreshing triangulations with Pyth prices")
+			v2.refreshIdxWithPyth()
 		case <-inactvTick.C:
 			dT := time.Now().Unix() - v2.GetLastUpdateTs()
 			if dT > 2*60 {
+				v2.SetLastUpdateTs(time.Now().Unix())
 				// restart
 				slog.Info("no updates received triggering websocket restart")
 				return nil
@@ -262,6 +271,38 @@ func (v2 *V2Client) onSync(log types.Log) {
 	v2.idxPriceUpdate(addr)
 }
 
+// refreshIdxWithPyth updates the triangulations that involve pyth prices
+func (v2 *V2Client) refreshIdxWithPyth() {
+	symUpdated := ""
+	for _, index := range v2.Config.Indices {
+		if index.FromPyth == "" {
+			continue
+		}
+		px, ts, err := v2.triangulateIndex(index)
+		if err != nil {
+			slog.Info("re-triangulation failed for symbol", "symbol", index.Symbol, "error", err)
+			continue
+		}
+		err = utils.RedisAddPriceObs(
+			v2.Ruedi,
+			d8xUtils.PXTYPE_V2,
+			index.Symbol,
+			px,
+			ts,
+		)
+		if err != nil {
+			slog.Info("re-triangulation failed for symbol", "symbol", index.Symbol, "error", err)
+			continue
+		}
+		symUpdated += d8xUtils.PXTYPE_V2.String() + ":" + index.Symbol + ";"
+	}
+	if symUpdated == "" {
+		return
+	}
+	symUpdated = strings.TrimSuffix(symUpdated, ";")
+	utils.RedisPublishIdxPriceChange(v2.Ruedi, symUpdated)
+}
+
 // idxPriceUpdate updates all index prices that depend on the given
 // pool
 func (v2 *V2Client) idxPriceUpdate(poolAddr string) error {
@@ -272,47 +313,58 @@ func (v2 *V2Client) idxPriceUpdate(poolAddr string) error {
 	}
 	symUpdated := ""
 	for j := range idx {
-		pxIdx := v2.Config.Indices[j]
-		var px float64 = 1
-		px, oldestTs, err := utils.RedisCalcTriangPrice(
-			v2.Ruedi,
-			d8xUtils.PXTYPE_V2,
-			v2.Triangulations[pxIdx.Symbol],
-		)
-		if err != nil {
-			return err
-		}
-		// if fromPyth is defined we multiply the triangulation by
-		// that symbol price
-		pxPth := float64(1)
-		fromPyth := v2.Config.Indices[j].FromPyth
-		if fromPyth != "" {
-			p, err := utils.RedisTsGet(v2.Ruedi, fromPyth, d8xUtils.PXTYPE_PYTH)
-			if err != nil {
-				slog.Error("unable to get price", "fromPyth", fromPyth, "error", err)
-				continue
-			}
-			pxPth = p.Value
-			oldestTs = min(oldestTs, p.Timestamp)
-		}
-		symbol := pxIdx.Symbol
 		// scale price
-		px = px * pxPth * pxIdx.ContractSize
+		px, oldestTs, err := v2.triangulateIndex(v2.Config.Indices[j])
+		if err != nil {
+			slog.Error("triangulateIndex", "error", err)
+			continue
+		}
+		sym := v2.Config.Indices[j].Symbol
 		err = utils.RedisAddPriceObs(
 			v2.Ruedi,
 			d8xUtils.PXTYPE_V2,
-			symbol,
+			sym,
 			px,
 			oldestTs,
 		)
 		if err != nil {
 			return err
 		}
-		symUpdated += d8xUtils.PXTYPE_V2.String() + ":" + pxIdx.Symbol + ";"
+		symUpdated += d8xUtils.PXTYPE_V2.String() + ":" + sym + ";"
+	}
+	if symUpdated == "" {
+		return nil
 	}
 	symUpdated = strings.TrimSuffix(symUpdated, ";")
 	utils.RedisPublishIdxPriceChange(v2.Ruedi, symUpdated)
 	return nil
+}
+
+func (v2 *V2Client) triangulateIndex(index uniutils.ConfigIndex) (float64, int64, error) {
+	var px float64 = 1
+	px, oldestTs, err := utils.RedisCalcTriangPrice(
+		v2.Ruedi,
+		d8xUtils.PXTYPE_V2,
+		v2.Triangulations[index.Symbol],
+	)
+	if err != nil {
+		return 0, 0, err
+	}
+	// if fromPyth is defined we multiply the triangulation by
+	// that symbol price
+	pxPth := float64(1)
+	fromPyth := index.FromPyth
+	if fromPyth != "" {
+		p, err := utils.RedisTsGet(v2.Ruedi, fromPyth, d8xUtils.PXTYPE_PYTH)
+		if err != nil {
+			return 0, 0, fmt.Errorf("unable to get price fromPyth=%s %v", fromPyth, err)
+		}
+		pxPth = p.Value
+		oldestTs = min(oldestTs, p.Timestamp)
+	}
+	// scale price
+	px = px * pxPth * index.ContractSize
+	return px, oldestTs, nil
 }
 
 // getV2PairAddress queries the Uniswap V2 factory for the pair address

@@ -65,7 +65,10 @@ func (p *PythClientApp) FetchMktInfo(symbols []string) {
 			continue
 		}
 		slog.Info("Fetching market info for " + sym)
-		p.QueryPriceFeedInfo(sym, id)
+		err := p.QueryPriceFeedInfo(sym, origin, id)
+		if err != nil {
+			slog.Error("QueryPriceFeedInfo", "error", err)
+		}
 	}
 	// construct info for all triangulated price feeds, e.g. chf-usdc
 	p.fetchTriangulatedMktInfo()
@@ -87,9 +90,9 @@ outerLoop:
 				slog.Error("Error triangulated feeds info " + symT + " at " + path.Symbol[k])
 				continue outerLoop
 			}
-			if m.AssetType != d8xUtils.ACLASS_CRYPTO {
-				// dominant asset type for triangulations is
-				// the non-crypto asset
+			if k == 0 {
+				// asset type is determined by base asset which must be the first in
+				// triangulation path
 				assetType = m.AssetType
 			}
 
@@ -117,7 +120,7 @@ outerLoop:
 	}
 }
 
-func (p *PythClientApp) QueryPriceFeedInfo(sym string, id string) {
+func (p *PythClientApp) QueryPriceFeedInfo(sym, origin string, id string) error {
 	// example: https://benchmarks.pyth.network/v1/price_feeds/0xff61491a931112ddf1bd8147cd1b641375f79f5825126d665480874634fd0ace
 	const endpoint = "/v1/price_feeds/"
 	// we need the mainnet id
@@ -129,8 +132,7 @@ func (p *PythClientApp) QueryPriceFeedInfo(sym string, id string) {
 		if p.TokenBucket.Take() {
 			response, err = http.Get(url)
 			if err != nil {
-				slog.Error("Error making GET request:" + err.Error())
-				return
+				return fmt.Errorf("GET request: %v", err.Error())
 			}
 			break
 		}
@@ -140,28 +142,27 @@ func (p *PythClientApp) QueryPriceFeedInfo(sym string, id string) {
 	defer response.Body.Close()
 	// Check response status code
 	if response.StatusCode != http.StatusOK {
-		slog.Error("unexpected status code[PriceFeed]: " + fmt.Sprintf("%d for url %s", response.StatusCode, url))
-		return
+		return fmt.Errorf("unexpected status code[PriceFeed]: %d for url %s", response.StatusCode, url)
 	}
 	// Read the response body
 	var apiResponse PriceFeedApiResponse
 	err = json.NewDecoder(response.Body).Decode(&apiResponse)
 	if err != nil {
-		slog.Error("Error parsing GET request:" + err.Error())
-		return
+		return fmt.Errorf("parsing GET request: %v", err.Error())
 	}
 	// check whether id provided is indeed for the symbol we aim to store
 	symSource := strings.ToUpper(apiResponse.Attributes["generic_symbol"])
-	if symSource != strings.ReplaceAll(strings.ToUpper(sym), "-", "") {
-		slog.Error("Error: price_feeds GET id is for " + symSource +
-			" but symbol " + sym)
-		return
+	symSource2 := strings.ToUpper(apiResponse.Attributes["symbol"])
+	if symSource != strings.ReplaceAll(strings.ToUpper(sym), "-", "") &&
+		!strings.EqualFold(origin, symSource2) {
+		return fmt.Errorf("QueryPriceFeedInfo: price_feeds GET id is for %s/%s not in line with %s", symSource, symSource2, sym)
 	}
 	asset := d8xUtils.OriginToAssetClass(apiResponse.Attributes["symbol"]) //"Crypto.ETH/USD"
-	p.setMarketHours(sym, apiResponse.MarketHours, asset)
+	return p.setMarketHours(sym, apiResponse.MarketHours, asset)
 }
 
 func (p *PythClientApp) setMarketHours(ticker string, mh utils.MarketHours, assetType d8xUtils.AssetClass) error {
+	slog.Info("setMarketHours", "ticker", ticker, "isOpen", mh.IsOpen)
 	return utils.RedisSetMarketHours(p.RedisClient, ticker, mh, assetType)
 }
 

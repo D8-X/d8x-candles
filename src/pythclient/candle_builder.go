@@ -32,7 +32,11 @@ func (p *PythClientApp) BuildHistory(symbols []string) error {
 		}
 		var symP utils.SymbolPyth
 		origin := config.SymToPythOrigin[sym]
-		symP.New(origin, id, sym)
+		err := symP.New(origin, id, sym)
+		if err != nil {
+			slog.Error("unable to create symbol", "symbol", sym, "error", err)
+			continue
+		}
 		pythSyms = append(pythSyms, symP)
 	}
 	slog.Info("-- building history from Pyth candles...")
@@ -143,8 +147,9 @@ func (p *PythClientApp) ConstructPriceObsFromPythCandles(sym utils.SymbolPyth) (
 	if err != nil {
 		return utils.PriceObservations{}, err
 	}
-
-	candleRes.New(60, utils.MinuteCandle)
+	// 30min required for 1h candle because for equities, pyth starts at x:30 not x:00 -> this screws up high and low
+	// because those are placed artificially within the candle. This will be wrong if the start time shifts
+	candleRes.New(30, utils.MinuteCandle)
 	oneMonthResolution1h, err := p.RetrieveCandlesFromPyth(sym, candleRes, currentTimeSec-86400*30, currentTimeSec)
 	if err != nil {
 		return utils.PriceObservations{}, err
@@ -159,7 +164,7 @@ func (p *PythClientApp) ConstructPriceObsFromPythCandles(sym utils.SymbolPyth) (
 	var candles = []utils.PythHistoryAPIResponse{twoDayResolutionMinute, oneMonthResolution1h, allTimeResolution1D}
 	// concatenate candles into price observations
 	var obs utils.PriceObservations
-	obs, err = PythCandlesToPriceObs(candles)
+	obs, err = PythCandlesToPriceObs(candles, []int{60, 3600 / 2, 86400})
 	if err != nil {
 		return utils.PriceObservations{}, err
 	}

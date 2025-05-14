@@ -99,20 +99,20 @@ func (s *SymbolPyth) PairString() string {
 // and the id
 func (s *SymbolPyth) New(symbol, id, ourSymbol string) error {
 	parts := strings.Split(symbol, ".")
-	if len(parts) != 2 {
+	if len(parts) < 2 {
 		return fmt.Errorf("symbol must contain '.'. E.g. Crypto.ETH/USD")
 	}
 	parts[0] = strings.ToLower(parts[0])
 	switch parts[0] {
-	case `crypto`, `equity`, `fx`, `metal`, `rates`:
+	case `crypto`, `equity`, `fx`, `metal`, `rates`, `commodities`:
 	default:
-		return fmt.Errorf("invalid asset type. Possible values are `crypto`, `equity`, `fx`, `metal`, `rates`")
+		return fmt.Errorf("invalid asset type. Possible values are `crypto`, `equity`, `fx`, `metal`, `rates`, `commodities`")
 	}
 
 	s.AssetType = strings.ToLower(parts[0])
-	parts2 := strings.Split(parts[1], "/")
-	if len(parts2) != 2 {
-		return fmt.Errorf("symbol must contain '/'. E.g. Crypto.ETH/USD")
+	parts2 := strings.Split(symbol, "/")
+	if len(parts2) != 2 && parts[0] != "commodities" {
+		return fmt.Errorf("symbol must contain '/'. E.g. Crypto.ETH/USD unless commodity")
 	}
 	s.Symbol = ourSymbol
 	s.id = id

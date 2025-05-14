@@ -17,13 +17,13 @@ Process
 // (For example 2 months of 1 day candles and 2 weeks of 1h candles)
 // The function requires that the candles are sorted according to
 // decreasing resolution (e.g., 1 minute first, 5 minute next, 1h next, 1 day next)
-func PythCandlesToPriceObs(candles []utils.PythHistoryAPIResponse) (utils.PriceObservations, error) {
+func PythCandlesToPriceObs(candles []utils.PythHistoryAPIResponse, resolutionSec []int) (utils.PriceObservations, error) {
 	var px utils.PriceObservations
 	var stopAtTs = uint32(0)
 	var nextLow = float64(0)
 	var nextHigh = float64(0)
 	for i := 0; i < len(candles); i++ {
-		candleToPriceObs(&px, candles[i], stopAtTs, nextLow, nextHigh)
+		candleToPriceObs(&px, candles[i], stopAtTs, nextLow, nextHigh, resolutionSec[i])
 		if len(px.P) > 0 {
 			stopAtTs = px.T[0]
 			nextHigh = candles[i].H[0]
@@ -37,12 +37,17 @@ func PythCandlesToPriceObs(candles []utils.PythHistoryAPIResponse) (utils.PriceO
 // Process the candle data so that the last candle is the first to end after stopAtTs
 // nextLow and nextHigh are the LH values of the first candle that has a higher resolution and starts
 // at stopAtTs (seconds)
-func candleToPriceObs(px *utils.PriceObservations, candles utils.PythHistoryAPIResponse, stopAtTs uint32, nextLow float64, nextHigh float64) {
+func candleToPriceObs(
+	px *utils.PriceObservations,
+	candles utils.PythHistoryAPIResponse,
+	stopAtTs uint32,
+	nextLow float64,
+	nextHigh float64,
+	candleResolutionSec int,
+) {
 	if len(candles.T) < 2 {
 		return
 	}
-	// determine resolution (seconds)
-	candleResolution := candles.T[1] - candles.T[0]
 	// we place open to candles.T
 	//			low to candles.T+candleResolution*0.25
 	//          high to candles.T+candleResolution*0.75
@@ -52,7 +57,7 @@ func candleToPriceObs(px *utils.PriceObservations, candles utils.PythHistoryAPIR
 		px.T = append(px.T, candles.T[i])
 		px.P = append(px.P, candles.O[i])
 
-		if stopAtTs != 0 && candles.T[i]+candleResolution >= stopAtTs {
+		if stopAtTs != 0 && candles.T[i]+uint32(candleResolutionSec) >= stopAtTs {
 			// handle last element
 			modResolution := stopAtTs - candles.T[i]
 			if candles.H[i] > nextHigh {
@@ -69,13 +74,13 @@ func candleToPriceObs(px *utils.PriceObservations, candles utils.PythHistoryAPIR
 		}
 
 		//low
-		px.T = append(px.T, candles.T[i]+candleResolution/4)
+		px.T = append(px.T, candles.T[i]+uint32(candleResolutionSec)/4)
 		px.P = append(px.P, candles.L[i])
 		//high
-		px.T = append(px.T, candles.T[i]+candleResolution/4*3)
+		px.T = append(px.T, candles.T[i]+uint32(candleResolutionSec)/4*3)
 		px.P = append(px.P, candles.H[i])
 		//close
-		px.T = append(px.T, candles.T[i]+candleResolution-1)
+		px.T = append(px.T, candles.T[i]+uint32(candleResolutionSec)-1)
 		px.P = append(px.P, candles.C[i])
 	}
 }
