@@ -121,7 +121,7 @@ func (ws *WsCandle) subscribePriceUpdate(ctx context.Context, errChan chan error
 		func(msg rueidis.PubSubMessage) {
 			ws.Server.HandlePxUpdateFromRedis(msg, ws.CandlePeriodsMs)
 		})
-	if err != nil {
+	if err != nil && err != ctx.Err() {
 		slog.Warn("subscribePriceUpdate", "error", err)
 		errChan <- err
 	}
