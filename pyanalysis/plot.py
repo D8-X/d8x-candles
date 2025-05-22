@@ -28,7 +28,7 @@ def plot_candles(timestamps, opens, highs, lows, closes):
     plt.title('Candlestick Chart')
     plt.grid()
 
-    plt.show()
+    plt.savefig("tmp1.png")
 
 if __name__=="__main__":
     with open("./pyanalysis/data.json") as f:
@@ -45,7 +45,7 @@ if __name__=="__main__":
 
     plt.plot(timestamps)
     plt.title("timestamps")
-    plt.show()
+    plt.savefig("tmp0.png")
 
     boxplot_data = [highs, opens, lows, closes]
     # Plot the boxplot
@@ -60,8 +60,8 @@ if __name__=="__main__":
     ax.set_xticks([1, 2, 3, 4])
     ax.set_xticklabels(['Highs', 'Opens', 'Lows', 'Closes'])
     
-    plt.show()
 
 
+    plt.savefig("tmp.png")
     # Plot the candlestick chart
-    plot_candles(timestamps, opens, highs, lows, closes)
+    #plot_candles(timestamps, opens, highs, lows, closes)
