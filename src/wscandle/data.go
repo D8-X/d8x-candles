@@ -39,7 +39,7 @@ func GetInitialCandles(
 	resolSec := uint32(p.TimeMs / 1000)
 	data, err := utils.OhlcFromRedis(client, sym, pxtype, fromTsMs, tMs, resolSec)
 	if err != nil {
-		slog.Error("Error initial candles for sym " + sym)
+		slog.Error("Error initial candles", "symbol", sym, "error", err)
 		return []utils.OhlcData{}
 	}
 	return data
