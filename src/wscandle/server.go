@@ -282,7 +282,7 @@ func (srv *Server) SendMarketResponses() {
 // update market info for all symbols using Redis
 // and store in srv.MarketResponses
 func (srv *Server) UpdateMarketResponses() {
-	nowUTCms := time.Now().UTC().UnixNano() / int64(time.Millisecond)
+	nowUTCms := time.Now().UnixMilli()
 	// yesterday:
 	var anchorTime24hMs int64 = nowUTCms - 86400000
 	// symbols
@@ -301,6 +301,7 @@ func (srv *Server) UpdateMarketResponses() {
 			continue
 		}
 		for _, sym := range members {
+			slog.Info("UpdateMarketResponses", "symbol", sym)
 			srv.updtMarketForSym(sym, anchorTime24hMs)
 		}
 	}
