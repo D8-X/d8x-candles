@@ -212,7 +212,7 @@ func (srv *Server) ScheduleUpdateMarketAndBroadcast(ctx context.Context, waitTim
 		case <-tickerUpdate.C: // if no subscribers we update infrequently
 			if srv.numSubscribers(MARKETS_TOPIC) == 0 && rand.Float64() < 0.5 {
 				slog.Info("UpdateMarketAndBroadcast: no subscribers")
-				break
+				continue
 			}
 			srv.UpdateMarketAndBroadcast()
 			fmt.Println("Market info data updated.")
