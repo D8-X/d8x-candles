@@ -210,12 +210,19 @@ func (srv *Server) ScheduleUpdateMarketAndBroadcast(ctx context.Context, waitTim
 			slog.Info("stopping market update scheduler")
 			return
 		case <-tickerUpdate.C: // if no subscribers we update infrequently
-			if srv.numSubscribers(MARKETS_TOPIC) == 0 && rand.Float64() < 0.5 {
-				slog.Info("UpdateMarketAndBroadcast: no subscribers")
-				continue
-			}
-			srv.UpdateMarketAndBroadcast()
-			fmt.Println("Market info data updated.")
+			func() {
+				defer func() {
+					if r := recover(); r != nil {
+						slog.Error("panic in UpdateMarketAndBroadcast", "err", r)
+					}
+				}()
+				if srv.numSubscribers(MARKETS_TOPIC) == 0 && rand.Float64() < 0.5 {
+					slog.Info("UpdateMarketAndBroadcast: no subscribers")
+					return
+				}
+				srv.UpdateMarketAndBroadcast()
+				fmt.Println("Market info data updated.")
+			}()
 		}
 	}
 }
@@ -301,7 +308,6 @@ func (srv *Server) UpdateMarketResponses() {
 			continue
 		}
 		for _, sym := range members {
-			slog.Info("UpdateMarketResponses", "symbol", sym)
 			srv.updtMarketForSym(sym, anchorTime24hMs)
 		}
 	}
