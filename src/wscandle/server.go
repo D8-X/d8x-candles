@@ -2,7 +2,6 @@ package wscandle
 
 import (
 	"context"
-	"d8x-candles/src/utils"
 	"encoding/json"
 	"fmt"
 	"log/slog"
@@ -12,6 +11,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"d8x-candles/src/utils"
 
 	d8xUtils "github.com/D8-X/d8x-futures-go-sdk/utils"
 	"github.com/gorilla/websocket"
@@ -35,9 +36,9 @@ type Server struct {
 	SubMu             sync.RWMutex                  // Mutex to protect Subscriptions
 	LastCandles       map[string]*utils.OhlcData    //symbol:period->OHLC
 	CandleMu          sync.RWMutex                  // Mutex to protect OhlcData updates
-	MarketResponses   map[string]MarketResponse     //symbol->market response
+	MarketResponses   map[string]MarketResponse     // symbol->market response
 	MarketMu          sync.RWMutex                  // Mutex to protect Market updates
-	TickerToPriceType map[string]d8xUtils.PriceType //symbol->corresponding price type
+	TickerToPriceType map[string]d8xUtils.PriceType // symbol->corresponding price type
 	TickerMu          sync.RWMutex                  // Mutex to protect the ticker mapping
 	RedisTSClient     *rueidis.Client
 	MsgCount          int
@@ -50,6 +51,7 @@ func (srv *Server) SetLastPxUpdtTs() {
 	defer srv.LastPxUpdtTsMu.Unlock()
 	srv.LastPxUpdtTs = time.Now().Unix()
 }
+
 func (srv *Server) GetLastPxUpdtTs() int64 {
 	srv.LastPxUpdtTsMu.Lock()
 	defer srv.LastPxUpdtTsMu.Unlock()
@@ -84,7 +86,7 @@ type MarketResponse struct {
 const MARKETS_TOPIC = "MARKETS"
 
 func NewServer() *Server {
-	var s = Server{
+	s := Server{
 		Subscriptions:     make(Subscriptions),
 		LastCandles:       make(map[string]*utils.OhlcData),
 		MarketResponses:   make(map[string]MarketResponse),
@@ -131,7 +133,6 @@ func (srv *Server) RemoveClient(clientID string) {
 // Process incoming websocket message
 // https://github.com/madeindra/golang-websocket/
 func (srv *Server) HandleRequest(conn *ClientConn, cndlPeriods map[string]utils.CandlePeriod, clientID string, message []byte) {
-
 	var data ClientMessage
 	err := json.Unmarshal(message, &data)
 	if err != nil {
@@ -153,8 +154,7 @@ func (srv *Server) HandleRequest(conn *ClientConn, cndlPeriods map[string]utils.
 	} else if reqType == "UNSUBSCRIBE" {
 		// unsubscribe
 		srv.UnsubscribeTopic(clientID, reqTopic)
-
-	} //else: ignore
+	} // else: ignore
 }
 
 // Unsubscribe the client from a candle-topic (e.g. btc-usd:15m)
@@ -210,7 +210,7 @@ func (srv *Server) ScheduleUpdateMarketAndBroadcast(ctx context.Context, waitTim
 			slog.Info("stopping market update scheduler")
 			return
 		case <-tickerUpdate.C: // if no subscribers we update infrequently
-			if srv.numSubscribers(MARKETS_TOPIC) == 0 && rand.Float64() < 0.95 {
+			if srv.numSubscribers(MARKETS_TOPIC) == 0 && rand.Float64() < 0.5 {
 				slog.Info("UpdateMarketAndBroadcast: no subscribers")
 				break
 			}
@@ -218,7 +218,6 @@ func (srv *Server) ScheduleUpdateMarketAndBroadcast(ctx context.Context, waitTim
 			fmt.Println("Market info data updated.")
 		}
 	}
-
 }
 
 func (srv *Server) UpdateMarketAndBroadcast() {
@@ -229,7 +228,7 @@ func (srv *Server) UpdateMarketAndBroadcast() {
 func (srv *Server) buildMarketResponse(typeRes string) []byte {
 	// create array of MarketResponses
 	srv.MarketMu.RLock()
-	var m = make([]MarketResponse, len(srv.MarketResponses))
+	m := make([]MarketResponse, len(srv.MarketResponses))
 	k := 0
 	for _, el := range srv.MarketResponses {
 		m[k] = el
@@ -267,22 +266,24 @@ func (srv *Server) SendMarketResponses() {
 	clients := srv.copyClients(MARKETS_TOPIC)
 	if clients == nil {
 		// no subscribers
+		slog.Info("no clients for markets topic")
 		return
 	}
+	slog.Info("SendMarketResponse", "status", "start")
 	var wg sync.WaitGroup
 	for clientId, conn := range clients {
 		wg.Add(1)
 		go srv.SendWithWait(conn, clientId, jsonData, &wg)
 	}
 	wg.Wait()
+	slog.Info("SendMarketResponse", "status", "end")
 }
 
 // update market info for all symbols using Redis
 // and store in srv.MarketResponses
 func (srv *Server) UpdateMarketResponses() {
-
 	nowUTCms := time.Now().UTC().UnixNano() / int64(time.Millisecond)
-	//yesterday:
+	// yesterday:
 	var anchorTime24hMs int64 = nowUTCms - 86400000
 	// symbols
 	c := *srv.RedisTSClient
@@ -362,7 +363,7 @@ func (srv *Server) updtMarketForSym(sym string, anchorTime24hMs int64) error {
 		}
 	}
 
-	var mr = MarketResponse{
+	mr := MarketResponse{
 		Sym:           strings.ToLower(sym),
 		AssetType:     m.AssetType.String(),
 		Ret24hPerc:    ret * 100,
@@ -490,7 +491,6 @@ func (srv *Server) candleResponse(sym string, p utils.CandlePeriod) []byte {
 }
 
 func errorResponse(reqType string, reqTopic string, msg string) []byte {
-
 	e := ErrorResponse{Error: msg}
 	res := ServerResponse{Type: reqType, Topic: strings.ToLower(reqTopic), Data: e}
 	jsonData, err := json.Marshal(res)
@@ -523,7 +523,6 @@ func (srv *Server) HandlePxUpdateFromRedis(msg rueidis.PubSubMessage, candlePeri
 
 // process price updates triggered by redis pub message for candles
 func (srv *Server) candleUpdates(symbols []string, candlePeriodsMs map[string]utils.CandlePeriod) {
-
 	var wg sync.WaitGroup
 	for _, sym := range symbols {
 		pxtype, exists := srv.getTickerToPriceType(sym)
@@ -531,7 +530,6 @@ func (srv *Server) candleUpdates(symbols []string, candlePeriodsMs map[string]ut
 			continue
 		}
 		pxLast, err := utils.RedisTsGet(srv.RedisTSClient, sym, pxtype)
-
 		if err != nil {
 			slog.Error(fmt.Sprintf("Error parsing date:" + err.Error()))
 			return
