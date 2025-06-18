@@ -210,7 +210,7 @@ func (srv *Server) ScheduleUpdateMarketAndBroadcast(ctx context.Context, waitTim
 			slog.Info("stopping market update scheduler")
 			return
 		case <-tickerUpdate.C: // if no subscribers we update infrequently
-			func() {
+			go func() {
 				defer func() {
 					if r := recover(); r != nil {
 						slog.Error("panic in UpdateMarketAndBroadcast", "err", r)
@@ -220,8 +220,20 @@ func (srv *Server) ScheduleUpdateMarketAndBroadcast(ctx context.Context, waitTim
 					slog.Info("UpdateMarketAndBroadcast: no subscribers")
 					return
 				}
-				srv.UpdateMarketAndBroadcast()
-				fmt.Println("Market info data updated.")
+				ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+				defer cancel()
+				done := make(chan struct{})
+				go func() {
+					srv.UpdateMarketAndBroadcast()
+					close(done)
+				}()
+
+				select {
+				case <-done:
+					slog.Info("Market info data updated.")
+				case <-ctx.Done():
+					slog.Warn("UpdateMarketAndBroadcast timed out")
+				}
 			}()
 		}
 	}
@@ -229,6 +241,7 @@ func (srv *Server) ScheduleUpdateMarketAndBroadcast(ctx context.Context, waitTim
 
 func (srv *Server) UpdateMarketAndBroadcast() {
 	srv.UpdateMarketResponses()
+	slog.Info("UpdateMarketResponses", "status", "done")
 	srv.SendMarketResponses()
 }
 
