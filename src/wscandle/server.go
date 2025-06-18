@@ -308,7 +308,10 @@ func (srv *Server) UpdateMarketResponses() {
 			continue
 		}
 		for _, sym := range members {
-			srv.updtMarketForSym(sym, anchorTime24hMs)
+			err := srv.updtMarketForSym(sym, anchorTime24hMs)
+			if err != nil {
+				slog.Error("updtMarketForSym failed", "symbol", sym, "error", err)
+			}
 		}
 	}
 }
