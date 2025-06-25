@@ -16,10 +16,12 @@ import (
 )
 
 // REDIS set name
-const RDS_AVAIL_TICKER_SET string = "avail" // :d8xUtils.PriceType
-const RDS_AVAIL_CCY_SET string = "avail_ccy"
-const RDS_TICKER_REQUEST = "request"
-const RDS_PRICE_UPDATE_MSG = "px_update"
+const (
+	RDS_AVAIL_TICKER_SET string = "avail" // :d8xUtils.PriceType
+	RDS_AVAIL_CCY_SET    string = "avail_ccy"
+	RDS_TICKER_REQUEST          = "request"
+	RDS_PRICE_UPDATE_MSG        = "px_update"
+)
 
 type Aggr int
 
@@ -216,7 +218,6 @@ func RedisCalcTriangPrice(
 	pxtype d8xUtils.PriceType,
 	triang d8x_futures.Triangulation,
 ) (float64, int64, error) {
-
 	client := *redisClient
 	ctx := context.Background()
 	var px float64 = 1
@@ -385,23 +386,26 @@ func RedisGetMarketInfo(ctx context.Context, client *rueidis.Client, ticker stri
 				(isOpen && now > nxtClose))
 	}
 
-	var mh = MarketHours{
+	mh := MarketHours{
 		IsOpen:    !isClosed,
 		NextOpen:  nxtOpen,
 		NextClose: nxtClose,
 	}
-	var m = MarketInfo{MarketHours: mh, AssetType: asset}
+	m := MarketInfo{MarketHours: mh, AssetType: asset}
 	return m, nil
 }
 
+// RedisTsGet gets the requested time-series with a timeout
 func RedisTsGet(client *rueidis.Client, sym string, pxtype d8xUtils.PriceType) (DataPoint, error) {
 	key := pxtype.String() + ":" + sym
-	vlast, err := (*client).Do(context.Background(), (*client).B().TsGet().Key(key).Build()).ToArray()
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second) // or your preferred timeout
+	defer cancel()
+	vlast, err := (*client).Do(ctx, (*client).B().TsGet().Key(key).Build()).ToArray()
 	if err != nil {
 		return DataPoint{}, err
 	}
 	if len(vlast) < 2 {
-		return DataPoint{}, errors.New("Could not find ts for " + key)
+		return DataPoint{}, errors.New("could not find ts for " + key)
 	}
 	ts, _ := vlast[0].AsInt64()
 	v, _ := vlast[1].AsFloat64()
@@ -412,7 +416,6 @@ func RedisTsGet(client *rueidis.Client, sym string, pxtype d8xUtils.PriceType) (
 // OhlcFromRedis queries OHLC data from REDIS price cache, timestamps in ms
 // sym is of the form btc-usd
 func OhlcFromRedis(client *rueidis.Client, sym string, pxtype d8xUtils.PriceType, fromTs int64, toTs int64, resolSec uint32) ([]OhlcData, error) {
-
 	timeBucket := int64(resolSec) * 1000
 
 	ohlc, err := RangeAggr(client, sym, pxtype, fromTs, toTs, timeBucket)
