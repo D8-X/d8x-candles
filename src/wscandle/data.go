@@ -1,7 +1,6 @@
 package wscandle
 
 import (
-	"context"
 	"log/slog"
 	"time"
 
@@ -21,19 +20,8 @@ func GetInitialCandles(
 	t := time.Now().UTC()
 	tMs := t.UnixMilli()
 	var fromTsMs int64
-	key := pxtype.String() + ":" + sym
 	if p.DisplayRangeMs == 0 {
-		// all data
-		ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
-		defer cancel()
-		a, err := (*client).Do(ctx, (*client).B().
-			TsInfo().Key(key).Build()).AsMap()
-		if err != nil {
-			slog.Error("Error initial candles for sym " + sym)
-			return []utils.OhlcData{}
-		}
-		m := a["firstTimestamp"]
-		fromTsMs, _ = (&m).AsInt64()
+		fromTsMs = 0
 	} else {
 		fromTsMs = tMs - int64(p.DisplayRangeMs)
 	}
