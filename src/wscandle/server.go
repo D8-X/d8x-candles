@@ -528,6 +528,13 @@ func (srv *Server) candleResponse(sym string, p utils.CandlePeriod) []byte {
 		// return empty array [] instead of null
 		data = []utils.OhlcData{}
 	}
+	// last candle init (or update)
+	srv.CandleMu.Lock()
+	key := sym + ":" + p.Name
+	ohlc := data[len(data)-1]
+	srv.LastCandles[key] = &ohlc
+	srv.CandleMu.Unlock()
+
 	res := ServerResponse{Type: "subscribe", Topic: strings.ToLower(topic), Data: data}
 	jsonData, err := json.Marshal(res)
 	if err != nil {
@@ -591,7 +598,11 @@ func (srv *Server) candleUpdates(symbols []string, candlePeriodsMs map[string]ut
 			}
 			// updating the given candle with the new price (concurrency-safe) and
 			// using the copy to continue
-			candle := srv.updateOhlc(sym, &period, &pxLast)
+			candle, err := srv.updateOhlc(sym, &period, &pxLast)
+			if err != nil {
+				slog.Info("could not update candle", "sym", sym, "error", err)
+				continue
+			}
 			r := ServerResponse{Type: "update", Topic: strings.ToLower(key), Data: candle}
 			jsonData, err := json.Marshal(r)
 			if err != nil {
@@ -613,14 +624,14 @@ func (srv *Server) candleUpdates(symbols []string, candlePeriodsMs map[string]ut
 
 // updateOhlc updates the candle for the given key(=symbol:period) with the given
 // datapoint. Also recognizes if candle is outdated
-func (srv *Server) updateOhlc(sym string, period *utils.CandlePeriod, pxLast *utils.DataPoint) utils.OhlcData {
+func (srv *Server) updateOhlc(sym string, period *utils.CandlePeriod, pxLast *utils.DataPoint) (utils.OhlcData, error) {
 	srv.CandleMu.Lock()
 	defer srv.CandleMu.Unlock()
 	key := sym + ":" + period.Name
 	lastCandle := srv.LastCandles[key]
 	if lastCandle == nil {
-		srv.LastCandles[key] = &utils.OhlcData{}
-		lastCandle = srv.LastCandles[key]
+		// no data yet
+		return utils.OhlcData{}, fmt.Errorf("no data yet")
 	}
 	if pxLast.Timestamp > lastCandle.TsMs+int64(period.TimeMs) {
 		// new candle
@@ -639,5 +650,5 @@ func (srv *Server) updateOhlc(sym string, period *utils.CandlePeriod, pxLast *ut
 	}
 	// copy
 	candle := *lastCandle
-	return candle
+	return candle, nil
 }
