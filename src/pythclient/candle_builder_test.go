@@ -51,13 +51,13 @@ func formatTimestamp(ts int64) string {
 }
 
 func TestConcatCandles(t *testing.T) {
-	fromTs, _ := timestampFromTimeString("2025-03-25 08:00")
-	toTs, _ := timestampFromTimeString("2025-06-07 17:00")
+	toTs := uint32(time.Now().Unix())
+	fromTs := toTs - 3.15e7 // timestampFromTimeString("2025-03-25 08:00")
 	api := PythClientApp{BaseUrl: "https://benchmarks.pyth.network/"}
 	api.TokenBucket = utils.NewTokenBucket(10, 5)
 	var sym utils.SymbolPyth
-	// sym.New("Crypto.ETH/USD")
-	sym.New("Equity.US.NDAQ/USD", "", "NDAQ/USD")
+	sym.New("Crypto.BTC/USD", "0xe62df6c8b4a85fe1a67db44dc12de5db330f7ac66b72dc658afedf0f4a415b43", "BTC/USD")
+	// sym.New("Equity.US.NDAQ/USD", "", "NDAQ/USD")
 	var resol utils.PythCandleResolution
 	_ = resol.New(1, utils.MinuteCandle)
 	candles1min, err := api.RetrieveCandlesFromPyth(sym, resol, toTs-86400, toTs)
