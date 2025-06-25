@@ -2,11 +2,12 @@ package wscandle
 
 import (
 	"context"
-	"d8x-candles/src/utils"
 	"fmt"
 	"log/slog"
 	"net/http"
 	"time"
+
+	"d8x-candles/src/utils"
 
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
@@ -15,13 +16,13 @@ import (
 
 const (
 	// time to read the next client's pong message
-	pongWait = 60 * time.Second
+	PONG_WAIT = 30 * time.Second
 	// time period to send pings to client
-	pingPeriod = (pongWait * 9) / 10
+	PING_PERIOD_SEC = 30 * time.Second
 	// time allowed to write a message to client
-	writeWait = 10 * time.Second
+	WRITE_WAIT = 5 * time.Second
 	// max message size allowed
-	maxMessageSize = 512
+	MAX_MSG_SIZE = 1024
 )
 
 type WsCandle struct {
@@ -127,6 +128,20 @@ func (ws *WsCandle) subscribePriceUpdate(ctx context.Context, errChan chan error
 	}
 }
 
+// NewClient creates a client and adds the client to the Server-struct
+func (ws *WsCandle) NewClient(clientID string, wsConn *websocket.Conn) *ClientConn {
+	client := &ClientConn{
+		conn: wsConn,
+		send: make(chan []byte, 256), // note the buffer size
+		subs: make(map[string]struct{}),
+	}
+	client.removeFunc = func() {
+		ws.Server.RemoveClient(clientID, client)
+	}
+	ws.Server.AddClient(clientID, client)
+	return client
+}
+
 func (ws *WsCandle) HandleWs(w http.ResponseWriter, r *http.Request) {
 	ws.Upgrader.CheckOrigin = func(r *http.Request) bool { return true }
 	c, err := ws.Upgrader.Upgrade(w, r, nil)
@@ -134,69 +149,75 @@ func (ws *WsCandle) HandleWs(w http.ResponseWriter, r *http.Request) {
 		slog.Info("upgrade:" + err.Error())
 		return
 	}
-	defer c.Close()
 	// create new client id
 	clientID := uuid.New().String()
 
-	//log new client
+	// log new client
 	slog.Info("Server: new client connected, ID is " + clientID)
-	conn := ClientConn{Conn: c}
-	// create channel to signal client health
-	done := make(chan struct{})
-
-	go ws.writePump(c, clientID, done)
-	ws.readPump(&conn, clientID, done)
+	client := ws.NewClient(clientID, c)
+	go client.writePump()
+	go client.readPump(ws, clientID)
 }
 
 // readPump process incoming messages and set the settings
-func (ws *WsCandle) readPump(conn *ClientConn, clientID string, done chan<- struct{}) {
+func (c *ClientConn) readPump(ws *WsCandle, clientID string) {
+	defer func() {
+		c.conn.Close()
+		if c.removeFunc != nil {
+			c.removeFunc()
+		}
+	}()
 	// set limit, deadline to read & pong handler
-	conn.Conn.SetReadLimit(maxMessageSize)
-	conn.Conn.SetReadDeadline(time.Now().Add(pongWait))
-	conn.Conn.SetPongHandler(func(string) error {
-		conn.Conn.SetReadDeadline(time.Now().Add(pongWait))
+	c.conn.SetReadLimit(MAX_MSG_SIZE)
+	c.conn.SetReadDeadline(time.Now().Add(PONG_WAIT))
+	c.conn.SetPongHandler(func(string) error {
+		c.conn.SetReadDeadline(time.Now().Add(PONG_WAIT))
 		return nil
 	})
 
 	// message handling
 	for {
 		// read incoming message
-		_, msg, err := conn.Conn.ReadMessage()
+		_, msg, err := c.conn.ReadMessage()
 		// if error occured
 		if err != nil {
-			// remove from the client
-			ws.Server.RemoveClient(clientID)
-			// set health status to unhealthy by closing channel
-			close(done)
-			// stop process
+			slog.Info("readPump error", "clientId", clientID, "error", err)
 			break
 		}
-
 		// if no error, process incoming message
-		ws.Server.HandleRequest(conn, ws.CandlePeriodsMs, clientID, msg)
+		ws.Server.HandleRequest(c, ws.CandlePeriodsMs, clientID, msg)
 	}
 }
 
-// writePump sends ping to the client
-func (ws *WsCandle) writePump(conn *websocket.Conn, clientID string, done <-chan struct{}) {
+// writePump sends ping and messages in the send channel to the client
+func (c *ClientConn) writePump() {
 	// create ping ticker
-	ticker := time.NewTicker(pingPeriod)
-	defer ticker.Stop()
-
+	ticker := time.NewTicker(PING_PERIOD_SEC)
+	defer func() {
+		ticker.Stop()
+		c.conn.Close()
+		if c.removeFunc != nil {
+			c.removeFunc()
+		}
+	}()
 	for {
 		select {
-		case <-ticker.C:
-			// send ping message
-			err := conn.WriteControl(websocket.PingMessage, []byte{}, time.Now().Add(writeWait))
-			if err != nil {
-				// if error sending ping, remove this client from the server
-				ws.Server.RemoveClient(clientID)
-				// stop sending ping
+		case message, ok := <-c.send:
+			if !ok {
+				// Channel closed, close connection
+				c.conn.WriteMessage(websocket.CloseMessage, []byte{})
 				return
 			}
-		case <-done:
-			// if process is done, stop sending ping
-			return
+			c.conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
+			if err := c.conn.WriteMessage(websocket.TextMessage, message); err != nil {
+				return
+			}
+		case <-ticker.C:
+			// Send ping
+			c.conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
+			if err := c.conn.WriteMessage(websocket.PingMessage, nil); err != nil {
+				return
+			}
 		}
 	}
 }

@@ -19,27 +19,25 @@ import (
 	"github.com/redis/rueidis"
 )
 
-// Subscriptions is a type for each string of topic and the clients that subscribe to it
-type Subscriptions map[string]Clients
-
-// Clients is a type that describe the clients' ID and their connection
-type Clients map[string]*ClientConn
-
 type ClientConn struct {
-	Conn *websocket.Conn
-	Mu   sync.Mutex
+	conn       *websocket.Conn
+	send       chan []byte         // buffered channel for outgoing messages
+	subs       map[string]struct{} // subscriptions
+	removeFunc func()              // called to remove this client from the subscribers
 }
 
 // Server is the struct to handle the Server functions & manage the Subscriptions
 type Server struct {
-	Subscriptions     Subscriptions
-	SubMu             sync.RWMutex                  // Mutex to protect Subscriptions
-	LastCandles       map[string]*utils.OhlcData    //symbol:period->OHLC
-	CandleMu          sync.RWMutex                  // Mutex to protect OhlcData updates
-	MarketResponses   map[string]MarketResponse     // symbol->market response
-	MarketMu          sync.RWMutex                  // Mutex to protect Market updates
-	TickerToPriceType map[string]d8xUtils.PriceType // symbol->corresponding price type
-	TickerMu          sync.RWMutex                  // Mutex to protect the ticker mapping
+	Clients           map[string]*ClientConn // userId -> clientconn
+	ClientsMu         sync.RWMutex
+	Subscriptions     map[string]map[string]struct{} // topic -> clientIds
+	SubMu             sync.RWMutex                   // Mutex to protect Subscriptions
+	LastCandles       map[string]*utils.OhlcData     //symbol:period->OHLC
+	CandleMu          sync.RWMutex                   // Mutex to protect OhlcData updates
+	MarketResponses   map[string]MarketResponse      // symbol->market response
+	MarketMu          sync.RWMutex                   // Mutex to protect Market updates
+	TickerToPriceType map[string]d8xUtils.PriceType  // symbol->corresponding price type
+	TickerMu          sync.RWMutex                   // Mutex to protect the ticker mapping
 	RedisTSClient     *rueidis.Client
 	MsgCount          int
 	LastPxUpdtTs      int64
@@ -87,47 +85,41 @@ const MARKETS_TOPIC = "MARKETS"
 
 func NewServer() *Server {
 	s := Server{
-		Subscriptions:     make(Subscriptions),
+		Subscriptions:     make(map[string]map[string]struct{}),
+		Clients:           make(map[string]*ClientConn),
 		LastCandles:       make(map[string]*utils.OhlcData),
 		MarketResponses:   make(map[string]MarketResponse),
 		TickerToPriceType: make(map[string]d8xUtils.PriceType),
 	}
-	s.Subscriptions[MARKETS_TOPIC] = make(Clients)
 	return &s
 }
 
-// Send simply sends message to the websocket client
-func (srv *Server) Send(conn *ClientConn, message []byte) {
-	// send simple message
-	conn.Mu.Lock()
-	defer conn.Mu.Unlock()
-	conn.Conn.WriteMessage(websocket.TextMessage, message)
-}
-
-// SendWithWait sends message to the websocket client using wait group, allowing usage with goroutines
-func (srv *Server) SendWithWait(conn *ClientConn, clientId string, message []byte, wg *sync.WaitGroup) {
-	defer wg.Done()
-	conn.Mu.Lock()
-	err := conn.Conn.WriteMessage(websocket.TextMessage, message)
-	conn.Mu.Unlock()
-	if err != nil {
-		slog.Error("error sending message to client, removing client", "error", err.Error())
-		srv.RemoveClient(clientId)
-	}
-}
-
-// RemoveClient removes the clients from the server subscription map
-func (srv *Server) RemoveClient(clientID string) {
+// RemoveClient removes the clients. The removal is from the server subscription map
+// and clients map. Requires locking.
+func (srv *Server) RemoveClient(clientID string, c *ClientConn) {
 	// loop all topics
 	srv.SubMu.Lock()
-	defer srv.SubMu.Unlock()
-	num := 0
-	for _, clients := range srv.Subscriptions {
+	for topic := range c.subs {
 		// delete the client from all the topic's client map
-		delete(clients, clientID)
-		num = max(num, len(clients))
+		delete(srv.Subscriptions[topic], clientID)
+		slog.Info("removed client", "clientId", clientID, "topic", topic)
+		// clean up empty topics
+		if len(srv.Subscriptions[topic]) == 0 {
+			delete(srv.Subscriptions, topic)
+		}
 	}
-	slog.Info("removed client", "clientId", clientID, "max-num-subscr", num)
+	srv.SubMu.Unlock()
+	srv.ClientsMu.Lock()
+	delete(srv.Clients, clientID)
+	srv.ClientsMu.Unlock()
+	slog.Info("removed client", "clientId", clientID)
+}
+
+// AddClient adds a client to the server. No subscription yet
+func (srv *Server) AddClient(clientID string, c *ClientConn) {
+	srv.ClientsMu.Lock()
+	defer srv.ClientsMu.Unlock()
+	srv.Clients[clientID] = c
 }
 
 // Process incoming websocket message
@@ -146,10 +138,10 @@ func (srv *Server) HandleRequest(conn *ClientConn, cndlPeriods map[string]utils.
 	if reqType == "SUBSCRIBE" {
 		if reqTopic == MARKETS_TOPIC {
 			msg := srv.SubscribeMarkets(conn, clientID)
-			srv.Send(conn, msg)
+			srv.Send(clientID, conn, msg)
 		} else {
 			msg := srv.SubscribeCandles(conn, clientID, reqTopic, cndlPeriods)
-			srv.Send(conn, msg)
+			srv.Send(clientID, conn, msg)
 		}
 	} else if reqType == "UNSUBSCRIBE" {
 		// unsubscribe
@@ -157,16 +149,29 @@ func (srv *Server) HandleRequest(conn *ClientConn, cndlPeriods map[string]utils.
 	} // else: ignore
 }
 
-// Unsubscribe the client from a candle-topic (e.g. btc-usd:15m)
+// Unsubscribe the client from a topic (e.g. btc-usd:15m)
 func (srv *Server) UnsubscribeTopic(clientID string, topic string) {
 	srv.SubMu.Lock()
-	defer srv.SubMu.Unlock()
 	// if topic exists, check the client map
-	if _, exist := srv.Subscriptions[topic]; exist {
-		clients := srv.Subscriptions[topic]
-		// remove the client from the topic's client map
-		delete(clients, clientID)
+	if _, exist := srv.Subscriptions[topic]; !exist {
+		slog.Info("unsubscribeTopic: topic does not exist", "topic", topic)
+		srv.SubMu.Unlock()
+		return
 	}
+	delete(srv.Subscriptions[topic], clientID)
+	if len(srv.Subscriptions[topic]) == 0 {
+		delete(srv.Subscriptions, topic)
+	}
+	srv.SubMu.Unlock()
+
+	srv.ClientsMu.RLock()
+	defer srv.ClientsMu.RUnlock()
+	c, exists := srv.Clients[clientID]
+	if !exists || c == nil {
+		slog.Info("unsubscribeTopic: clientId does not exist", "clientId", clientID, "client nil", c == nil)
+		return
+	}
+	delete(c.subs, topic)
 }
 
 // Subscribe the client to market updates (markets)
@@ -177,21 +182,18 @@ func (srv *Server) SubscribeMarkets(conn *ClientConn, clientID string) []byte {
 }
 
 // subscribeTopic subscribes a client to a topic. Creates topic if not existent.
-// Returns true if the client is not subscribed yet
 func (srv *Server) subscribeTopic(conn *ClientConn, topic string, clientID string) {
 	srv.SubMu.Lock()
-	defer srv.SubMu.Unlock()
-	clients, exist := srv.Subscriptions[topic]
-	if !exist {
+	if _, exist := srv.Subscriptions[topic]; !exist {
 		// if topic does not exist, create a new topic
-		clients = make(Clients)
-		srv.Subscriptions[topic] = clients
+		srv.Subscriptions[topic] = make(map[string]struct{})
 	}
-	// if client not already subscribed, we add
-	if _, subbed := clients[clientID]; !subbed {
-		// not subscribed
-		clients[clientID] = conn
-	}
+	// not subscribed
+	srv.Subscriptions[topic][clientID] = struct{}{}
+	srv.SubMu.Unlock()
+	srv.ClientsMu.Lock()
+	defer srv.ClientsMu.Unlock()
+	conn.subs[topic] = struct{}{}
 }
 
 func (srv *Server) numSubscribers(topic string) int {
@@ -216,7 +218,7 @@ func (srv *Server) ScheduleUpdateMarketAndBroadcast(ctx context.Context, waitTim
 						slog.Error("panic in UpdateMarketAndBroadcast", "err", r)
 					}
 				}()
-				if srv.numSubscribers(MARKETS_TOPIC) == 0 && rand.Float64() < 0.5 {
+				if srv.numSubscribers(MARKETS_TOPIC) == 0 && rand.Float64() < 0.25 {
 					slog.Info("UpdateMarketAndBroadcast: no subscribers")
 					return
 				}
@@ -265,37 +267,52 @@ func (srv *Server) buildMarketResponse(typeRes string) []byte {
 	return jsonData
 }
 
-// copyClients copies the clients for a given topic,
-// so that we don't need to hold the lock for too long
-func (srv *Server) copyClients(topic string) Clients {
+// Send sends a message to the client via channel. Removes the client
+// if channel full. RemoveClient requires locks
+func (srv *Server) Send(clientId string, c *ClientConn, msg []byte) {
+	select {
+	case c.send <- msg:
+		// sent successfully
+	default:
+		// channel full or client stuck
+		slog.Warn("client send channel full, removing client", "clientId", clientId)
+		srv.RemoveClient(clientId, c)
+	}
+}
+
+func (srv *Server) copySubscribers(topic string) []string {
 	srv.SubMu.RLock()
-	defer srv.SubMu.RUnlock()
-	originalClients, exists := srv.Subscriptions[topic]
-	if !exists {
-		return nil // Return nil if the topic doesn't exist
+	subscribers, ok := srv.Subscriptions[topic]
+	if !ok {
+		srv.SubMu.RUnlock()
+		return nil
 	}
-	copiedClients := make(Clients, len(originalClients))
-	for id, conn := range originalClients {
-		copiedClients[id] = conn
+	clientIds := make([]string, 0, len(subscribers))
+	for clientId := range subscribers {
+		clientIds = append(clientIds, clientId)
 	}
-	return copiedClients
+	srv.SubMu.RUnlock()
+	return clientIds
 }
 
 func (srv *Server) SendMarketResponses() {
 	jsonData := srv.buildMarketResponse("update")
-	clients := srv.copyClients(MARKETS_TOPIC)
-	if clients == nil {
-		// no subscribers
-		slog.Info("no clients for markets topic")
+
+	slog.Info("SendMarketResponse", "status", "start")
+	clientIds := srv.copySubscribers(MARKETS_TOPIC)
+	if len(clientIds) == 0 {
+		slog.Info("SendMarketResponse", "status", "no subscribers")
 		return
 	}
-	slog.Info("SendMarketResponse", "status", "start")
-	var wg sync.WaitGroup
-	for clientId, conn := range clients {
-		wg.Add(1)
-		go srv.SendWithWait(conn, clientId, jsonData, &wg)
+	for _, clientId := range clientIds {
+		srv.ClientsMu.RLock()
+		conn, exists := srv.Clients[clientId]
+		srv.ClientsMu.RUnlock()
+		if !exists {
+			continue
+		}
+		srv.Send(clientId, conn, jsonData)
 	}
-	wg.Wait()
 	slog.Info("SendMarketResponse", "status", "end")
 }
 
@@ -546,7 +563,6 @@ func (srv *Server) HandlePxUpdateFromRedis(msg rueidis.PubSubMessage, candlePeri
 
 // process price updates triggered by redis pub message for candles
 func (srv *Server) candleUpdates(symbols []string, candlePeriodsMs map[string]utils.CandlePeriod) {
-	var wg sync.WaitGroup
 	for _, sym := range symbols {
 		pxtype, exists := srv.getTickerToPriceType(sym)
 		if !exists {
@@ -560,8 +576,8 @@ func (srv *Server) candleUpdates(symbols []string, candlePeriodsMs map[string]ut
 		for _, period := range candlePeriodsMs {
 			key := sym + ":" + period.Name
 			// update subscribers
-			clients := srv.copyClients(key)
-			if clients == nil {
+			clients := srv.copySubscribers(key)
+			if len(clients) == 0 {
 				// no need to update the candle if we have no subscribers
 				// but we need to ensure the candle is remove when
 				// we had no more subscribers and start again
@@ -575,14 +591,18 @@ func (srv *Server) candleUpdates(symbols []string, candlePeriodsMs map[string]ut
 			if err != nil {
 				slog.Error("forming lastCandle update:" + err.Error())
 			}
-			for clientId, conn := range clients {
-				wg.Add(1)
-				go srv.SendWithWait(conn, clientId, jsonData, &wg)
+			for _, clientId := range clients {
+				srv.ClientsMu.RLock()
+				conn, exists := srv.Clients[clientId]
+				srv.ClientsMu.RUnlock()
+				if !exists || conn == nil {
+					slog.Info("subscribed client not found", "clientId", clientId, "conn=nil", conn == nil)
+					continue
+				}
+				srv.Send(clientId, conn, jsonData)
 			}
 		}
 	}
-	// wait until all goroutines jobs done
-	wg.Wait()
 }
 
 // updateOhlc updates the candle for the given key(=symbol:period) with the given
