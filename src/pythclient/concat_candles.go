@@ -34,7 +34,7 @@ func PythCandlesToPriceObs(candles []utils.PythHistoryAPIResponse, resolutionSec
 			}
 		}
 	}
-	for i := 0; i < len(candles); i++ {
+	for i := len(candles) - 1; i >= 0; i-- {
 		candleToPriceObs(&px, candles[i], startTimes[i], stopTimes[i], resolutionSec[i])
 	}
 	return px, nil
