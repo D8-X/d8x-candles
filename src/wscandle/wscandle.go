@@ -16,7 +16,7 @@ import (
 
 const (
 	// time to read the next client's pong message
-	PONG_WAIT = 30 * time.Second
+	PONG_WAIT = 15 * time.Second
 	// time period to send pings to client
 	PING_PERIOD_SEC = 30 * time.Second
 	// time allowed to write a message to client
@@ -169,12 +169,16 @@ func (c *ClientConn) readPump(ws *WsCandle, clientID string) {
 	}()
 	// set limit, deadline to read & pong handler
 	c.conn.SetReadLimit(MAX_MSG_SIZE)
-	c.conn.SetReadDeadline(time.Now().Add(PONG_WAIT))
+	c.conn.SetReadDeadline(time.Now().Add(PING_PERIOD_SEC + PONG_WAIT))
 	c.conn.SetPongHandler(func(string) error {
-		c.conn.SetReadDeadline(time.Now().Add(PONG_WAIT))
+		c.conn.SetReadDeadline(time.Now().Add(PING_PERIOD_SEC + PONG_WAIT))
 		return nil
 	})
-
+	c.conn.SetPingHandler(func(appData string) error {
+		c.conn.SetReadDeadline(time.Now().Add(PING_PERIOD_SEC + PONG_WAIT))
+		// send pong
+		return c.conn.WriteControl(websocket.PongMessage, []byte(appData), time.Now().Add(WRITE_WAIT))
+	})
 	// message handling
 	for {
 		// read incoming message
