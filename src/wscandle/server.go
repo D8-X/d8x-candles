@@ -332,7 +332,9 @@ func (srv *Server) UpdateMarketResponses() {
 	}
 	for _, priceType := range relevTypes {
 		key := utils.RDS_AVAIL_TICKER_SET + ":" + priceType.String()
-		members, err := c.Do(context.Background(), c.B().Smembers().Key(key).Build()).AsStrSlice()
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+		members, err := c.Do(ctx, c.B().Smembers().Key(key).Build()).AsStrSlice()
 		if err != nil {
 			slog.Error("UpdateMarketResponses:", "key", key, "error", err)
 			continue
@@ -360,7 +362,9 @@ func (srv *Server) setTickerToPriceType(sym string, pxtype d8xUtils.PriceType) {
 }
 
 func (srv *Server) updtMarketForSym(sym string, anchorTime24hMs int64) error {
-	m, err := utils.RedisGetMarketInfo(context.Background(), srv.RedisTSClient, sym)
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	m, err := utils.RedisGetMarketInfo(ctx, srv.RedisTSClient, sym)
 	if err != nil {
 		return err
 	}
