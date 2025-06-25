@@ -16,7 +16,7 @@ import (
 
 const (
 	// time to read the next client's pong message
-	PONG_WAIT = 30 * time.Second
+	PONG_WAIT = 60 * time.Second
 	// time period to send pings to client
 	PING_PERIOD_SEC = 30 * time.Second
 	// time allowed to write a message to client
