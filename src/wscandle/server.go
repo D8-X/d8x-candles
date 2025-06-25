@@ -618,7 +618,7 @@ func (srv *Server) updateOhlc(sym string, period *utils.CandlePeriod, pxLast *ut
 	}
 	if pxLast.Timestamp > lastCandle.TsMs+int64(period.TimeMs) {
 		// new candle
-		lastCandle.O = pxLast.Value
+		lastCandle.O = lastCandle.C
 		lastCandle.H = pxLast.Value
 		lastCandle.L = pxLast.Value
 		lastCandle.C = pxLast.Value
