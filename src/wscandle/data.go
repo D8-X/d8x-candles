@@ -2,9 +2,10 @@ package wscandle
 
 import (
 	"context"
-	"d8x-candles/src/utils"
 	"log/slog"
 	"time"
+
+	"d8x-candles/src/utils"
 
 	d8xUtils "github.com/D8-X/d8x-futures-go-sdk/utils"
 	"github.com/redis/rueidis"
@@ -17,14 +18,15 @@ func GetInitialCandles(
 	pxtype d8xUtils.PriceType,
 	p utils.CandlePeriod,
 ) []utils.OhlcData {
-
 	t := time.Now().UTC()
 	tMs := t.UnixMilli()
 	var fromTsMs int64
 	key := pxtype.String() + ":" + sym
 	if p.DisplayRangeMs == 0 {
 		// all data
-		a, err := (*client).Do(context.Background(), (*client).B().
+		ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
+		defer cancel()
+		a, err := (*client).Do(ctx, (*client).B().
 			TsInfo().Key(key).Build()).AsMap()
 		if err != nil {
 			slog.Error("Error initial candles for sym " + sym)

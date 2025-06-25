@@ -309,7 +309,8 @@ func RedisSetCcyAvailable(client *rueidis.Client, pxtype d8xUtils.PriceType, ccy
 // RedisAreCcyAvailable checks which of the provided currencies are available in the AVAIL_CCY_SET
 // and returns a boolean array corresponding to ccys
 func RedisAreCcyAvailable(client *rueidis.Client, pxtype d8xUtils.PriceType, ccys []string) ([]bool, error) {
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
 	c := *client
 	setKey := RDS_AVAIL_CCY_SET + ":" + pxtype.String()
 	cmd := c.B().Smembers().Key(setKey).Build()
@@ -330,7 +331,8 @@ func RedisAreCcyAvailable(client *rueidis.Client, pxtype d8xUtils.PriceType, ccy
 }
 
 func RedisIsSymbolAvailable(client *rueidis.Client, pxtype d8xUtils.PriceType, sym string) bool {
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
 	key := RDS_AVAIL_TICKER_SET + ":" + pxtype.String()
 	c := *client
 	cmd := c.B().Sismember().Key(key).Member(sym).Build()
@@ -443,7 +445,9 @@ func RangeAggr(
 		strconv.FormatInt(fromTs, 10),
 		strconv.FormatInt(toTs, 10),
 		strconv.FormatInt(bucketDur, 10)).Build()
-	res, err := c.Do(context.Background(), vcmd).ToString()
+	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
+	defer cancel()
+	res, err := c.Do(ctx, vcmd).ToString()
 	if err != nil {
 		return nil, fmt.Errorf("unable to aggr %s %v", sym, err)
 	}

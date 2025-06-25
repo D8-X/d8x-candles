@@ -467,8 +467,10 @@ func redisSendTickerRequest(client *rueidis.Client, sym string) {
 	// if the symbol can be triangulated, this will be done now
 	slog.Info("sending ticker request", "symbol", sym)
 	c := *client
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
 	err := c.Do(
-		context.Background(),
+		ctx,
 		c.B().Publish().Channel(utils.RDS_TICKER_REQUEST).Message(sym).Build(),
 	).Error()
 	if err != nil {
