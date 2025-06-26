@@ -21,7 +21,7 @@ func GetInitialCandles(
 	tMs := t.UnixMilli()
 	var fromTsMs int64
 	if p.DisplayRangeMs == 0 {
-		fromTsMs = 0
+		fromTsMs = tMs - 86400*365*1000
 	} else {
 		fromTsMs = tMs - int64(p.DisplayRangeMs)
 	}

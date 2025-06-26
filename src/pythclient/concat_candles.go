@@ -26,13 +26,8 @@ func PythCandlesToPriceObs(candles []utils.PythHistoryAPIResponse, resolutionSec
 	stopTimes[0] = candles[0].T[len(candles[0].T)-1]
 	for i := len(candles) - 1; i > 0; i-- {
 		openTimeNext := candles[i-1].T[0]
-		for j := 1; j <= len(candles[i].T); j++ {
-			openTimeCurrent := candles[i].T[len(candles[i].T)-j]
-			if openTimeCurrent < openTimeNext {
-				stopTimes[i] = openTimeCurrent
-				startTimes[i-1] = openTimeCurrent + uint32(resolutionSec[i])
-			}
-		}
+		stopTimes[i] = openTimeNext - openTimeNext%uint32(resolutionSec[i])
+		startTimes[i-1] = stopTimes[i] + uint32(resolutionSec[i])
 	}
 	for i := len(candles) - 1; i >= 0; i-- {
 		candleToPriceObs(&px, candles[i], startTimes[i], stopTimes[i], resolutionSec[i])
