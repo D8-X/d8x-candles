@@ -2,10 +2,11 @@ package polyclient
 
 import (
 	"context"
-	"d8x-candles/src/utils"
 	"fmt"
 	"log/slog"
 	"sync"
+
+	"d8x-candles/src/utils"
 
 	d8xUtils "github.com/D8-X/d8x-futures-go-sdk/utils"
 	"github.com/redis/rueidis"
@@ -35,7 +36,7 @@ func (p *PolyClient) HistoryToRedis(sym string, obs []utils.PolyHistory) {
 		wg.Add(1)
 		go func(sym string, t int64, val float64) {
 			defer wg.Done()
-			err := utils.RedisAddPriceObs(p.RedisClient, d8xUtils.PXTYPE_POLYMARKET, sym, val, t)
+			err := utils.RedisAddPriceObs(*p.RedisClient, d8xUtils.PXTYPE_POLYMARKET, sym, val, t)
 			if err != nil {
 				slog.Error(err.Error())
 			}
@@ -51,7 +52,7 @@ func (p *PolyClient) HistoryToRedis(sym string, obs []utils.PolyHistory) {
 
 // OnNewPrice stores the new price in redis and informs subscribers
 func (p *PolyClient) OnNewPrice(sym string, px float64, tsMs int64) {
-	err := utils.RedisAddPriceObs(p.RedisClient, d8xUtils.PXTYPE_POLYMARKET, sym, px, tsMs)
+	err := utils.RedisAddPriceObs(*p.RedisClient, d8xUtils.PXTYPE_POLYMARKET, sym, px, tsMs)
 	if err != nil {
 		slog.Error(fmt.Sprintf("failed to update price for %s in redis: %v", sym, err))
 		return

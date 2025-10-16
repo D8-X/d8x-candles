@@ -1,10 +1,11 @@
 package uniutils
 
 import (
-	"d8x-candles/src/utils"
 	"fmt"
 	"log/slog"
 	"strings"
+
+	"d8x-candles/src/utils"
 
 	"github.com/redis/rueidis"
 )
@@ -48,7 +49,7 @@ func (fltr *Filter) combineWithPyth(pyth map[string]*utils.PythHistoryAPIRespons
 				}
 			}
 			price := px * o.Px * idx.ContractSize
-			err = utils.RedisAddPriceObs(client, fltr.UniType, idx.Symbol, price, o.TsMs)
+			err = utils.RedisAddPriceObs(*client, fltr.UniType, idx.Symbol, price, o.TsMs)
 			if err != nil {
 				slog.Error("unable to add index price to redis", "symbol", idxSym, "error", err)
 			}
@@ -77,7 +78,6 @@ func findOpen(tsMs int64, candles *utils.PythHistoryAPIResponse) (float64, error
 // pythHistory gets candles from the historical benchmark api
 // for the indices defined in uni_pyth
 func pythHistory(pythSyms []string, fromMs, toMs int64) (map[string]*utils.PythHistoryAPIResponse, error) {
-
 	baseUrl := "https://benchmarks.pyth.network/"
 	capacity := 20
 	refillRate := 5.0

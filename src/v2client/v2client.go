@@ -2,9 +2,6 @@ package v2client
 
 import (
 	"context"
-	"d8x-candles/src/globalrpc"
-	"d8x-candles/src/uniutils"
-	"d8x-candles/src/utils"
 	"fmt"
 	"log/slog"
 	"math/big"
@@ -12,6 +9,10 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"d8x-candles/src/globalrpc"
+	"d8x-candles/src/uniutils"
+	"d8x-candles/src/utils"
 
 	"github.com/D8-X/d8x-futures-go-sdk/pkg/d8x_futures"
 	d8xUtils "github.com/D8-X/d8x-futures-go-sdk/utils"
@@ -24,7 +25,7 @@ import (
 )
 
 type SyncEvent struct {
-	//event Sync(uint112 reserve0, uint112 reserve1);
+	// event Sync(uint112 reserve0, uint112 reserve1);
 	Reserve0 *big.Int
 	Reserve1 *big.Int
 }
@@ -35,11 +36,11 @@ type V2Client struct {
 	Ruedi             *rueidis.Client
 	RpcHndl           *globalrpc.GlobalRpc
 	RelevantPoolAddrs []common.Address
-	Triangulations    map[string]d8x_futures.Triangulation //map index symbol to its triangulation
+	Triangulations    map[string]d8x_futures.Triangulation // map index symbol to its triangulation
 	PoolAddrToIndices map[string][]int                     // map pool address to price index location in Config.indices
 	PoolAddrToInfo    map[string]UniswapV2Pool
 	SyncEventAbi      abi.ABI
-	LastUpdateTs      int64 //timestamp seconds
+	LastUpdateTs      int64 // timestamp seconds
 	MuLastUpdate      sync.RWMutex
 }
 
@@ -62,7 +63,6 @@ func NewV2Client(
 	chainId int,
 	optV2Config string,
 ) (*V2Client, error) {
-
 	var v2 V2Client
 	var err error
 	v2.Config, err = loadV2PoolConfig(chainId, optV2Config)
@@ -95,7 +95,7 @@ func NewV2Client(
 
 	v2.PoolAddrToIndices = make(map[string][]int)
 	v2.PoolAddrToInfo = make(map[string]UniswapV2Pool)
-	v2.ConfigPyth, err = utils.LoadUniPythConfig("") //load from remote
+	v2.ConfigPyth, err = utils.LoadUniPythConfig("") // load from remote
 	if err != nil {
 		return nil, err
 	}
@@ -131,8 +131,7 @@ func NewV2Client(
 	// triangulations
 	v2.Triangulations = make(map[string]d8x_futures.Triangulation)
 	for j := range v2.Config.Indices {
-		v2.Triangulations[v2.Config.Indices[j].Symbol] =
-			uniutils.TriangFromStringSlice(v2.Config.Indices[j].Triang)
+		v2.Triangulations[v2.Config.Indices[j].Symbol] = uniutils.TriangFromStringSlice(v2.Config.Indices[j].Triang)
 	}
 
 	return &v2, nil
@@ -183,7 +182,7 @@ func (v2 *V2Client) Run() error {
 
 func (v2 *V2Client) runWebsocket(client *ethclient.Client) error {
 	slog.Info("starting new websocket connection")
-	//Emitted each time reserves are updated via mint, burn, swap, or sync.
+	// Emitted each time reserves are updated via mint, burn, swap, or sync.
 	syncSig := uniutils.GetEventSignatureHash(SYNC_EVENT_SIGNATURE)
 
 	query := ethereum.FilterQuery{
@@ -203,7 +202,7 @@ func (v2 *V2Client) runWebsocket(client *ethclient.Client) error {
 	}
 
 	slog.Info("Listening for Uniswap V2 sync events...")
-	//closing connection
+	// closing connection
 	defer func() {
 		slog.Info("Closing websocket subscription")
 		sub.Unsubscribe()
@@ -261,7 +260,7 @@ func (v2 *V2Client) onSync(log types.Log) {
 	slog.Info("onSync v2", "symbol", info.Symbol, "price", px)
 	// store mid-price
 	utils.RedisAddPriceObs(
-		v2.Ruedi,
+		*v2.Ruedi,
 		d8xUtils.PXTYPE_V2,
 		info.Symbol,
 		px,
@@ -284,7 +283,7 @@ func (v2 *V2Client) refreshIdxWithPyth() {
 			continue
 		}
 		err = utils.RedisAddPriceObs(
-			v2.Ruedi,
+			*v2.Ruedi,
 			d8xUtils.PXTYPE_V2,
 			index.Symbol,
 			px,
@@ -321,7 +320,7 @@ func (v2 *V2Client) idxPriceUpdate(poolAddr string) error {
 		}
 		sym := v2.Config.Indices[j].Symbol
 		err = utils.RedisAddPriceObs(
-			v2.Ruedi,
+			*v2.Ruedi,
 			d8xUtils.PXTYPE_V2,
 			sym,
 			px,

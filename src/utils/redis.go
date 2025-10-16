@@ -34,7 +34,7 @@ const (
 )
 
 // RedisCreateIfNotExistsTs creates a time-series for the given symbol
-func RedisCreateIfNotExistsTs(rClient *rueidis.Client, pxtype d8xUtils.PriceType, symbol string) error {
+func RedisCreateIfNotExistsTs(rClient *rueidis.Client, pxtype d8xUtils.PriceType, symbol string, retentionMs int64) error {
 	ctx := context.Background()
 	key := pxtype.String() + ":" + symbol
 	client := *rClient
@@ -47,7 +47,7 @@ func RedisCreateIfNotExistsTs(rClient *rueidis.Client, pxtype d8xUtils.PriceType
 		// we keep the data for a long time. There can be compactions (e.g. Pyth)
 		slog.Info("adding time series", "symbol", symbol)
 		cmd := client.B().TsCreate().Key(key).
-			Retention(86400000 * 365 / 2). // Keep data for 6 months (in milliseconds)
+			Retention(retentionMs). // in milliseconds
 			DuplicatePolicyLast().
 			Build()
 		err = client.Do(ctx, cmd).Error()
@@ -58,9 +58,8 @@ func RedisCreateIfNotExistsTs(rClient *rueidis.Client, pxtype d8xUtils.PriceType
 	return nil
 }
 
-func RedisAddPriceObs(client *rueidis.Client, pxtype d8xUtils.PriceType, sym string, price float64, timestampMs int64) error {
+func RedisAddPriceObs(c rueidis.Client, pxtype d8xUtils.PriceType, sym string, price float64, timestampMs int64) error {
 	ctx := context.Background()
-	c := *client
 	ts := strconv.FormatInt(timestampMs, 10)
 	key := pxtype.String() + ":" + sym
 	resp := c.Do(ctx,
@@ -167,7 +166,7 @@ func PricesToRedis(client *rueidis.Client, sym string, pxtype d8xUtils.PriceType
 		// store prices in ms
 		val := obs.P[k]
 		t := int64(obs.T[k]) * 1000
-		err := RedisAddPriceObs(client, pxtype, sym, val, t)
+		err := RedisAddPriceObs(*client, pxtype, sym, val, t)
 		if err != nil {
 			return fmt.Errorf("PricesToRedis failed at %d: %v", k, err)
 		}
