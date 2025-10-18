@@ -104,7 +104,7 @@ func (sp *SportsClient) handleMessage(v *Envelope) {
 
 // OnNewPrice stores the new price in redis and informs subscribers
 func (sp *SportsClient) OnNewPrice(sym string, px, pxMark float64, tsMs int64) {
-	slog.Info("publishing new price", "sym", sym, "px", px)
+	slog.Info("publishing new price", "sym", sym, "px", px, "pxMark", pxMark)
 	err := utils.RedisAddPriceObs(sp.Ruedi, d8xUtils.PXTYPE_SPORT, sym, px, tsMs)
 	if err != nil {
 		slog.Error(fmt.Sprintf("failed to update price for %s in redis: %v", sym, err))
