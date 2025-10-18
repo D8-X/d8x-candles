@@ -4,8 +4,10 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"strconv"
 	"time"
 
+	"github.com/D8-X/d8x-futures-go-sdk/pkg/d8x_futures"
 	"github.com/gorilla/websocket"
 	"github.com/redis/rueidis"
 )
@@ -14,6 +16,7 @@ type SportsClient struct {
 	Ruedi        rueidis.Client
 	WsUrl        string
 	Conn         *websocket.Conn
+	SdkRO        *d8x_futures.SdkRO
 	KnownSymbols *Window
 }
 
@@ -27,6 +30,10 @@ func NewSports(WsUrl, RedisAddr, RedisPw string, chainId int) (*SportsClient, er
 		rueidis.ClientOption{InitAddress: []string{RedisAddr}, Password: RedisPw})
 	if err != nil {
 		return nil, fmt.Errorf("failed to init Redis: %w", err)
+	}
+	sp.SdkRO, err = d8x_futures.NewSdkRO(strconv.Itoa(chainId))
+	if err != nil {
+		return nil, err
 	}
 	return &sp, nil
 }

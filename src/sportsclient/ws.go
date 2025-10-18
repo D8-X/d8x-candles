@@ -90,21 +90,35 @@ func (sp *SportsClient) handleMessage(v *Envelope) {
 		sp.KnownSymbols.AddElement(sym)
 	}
 	slog.Info("price update", "contractId", v.Data.ContractID, "price", v.Data.IndexPrice, "event_status", v.Data.EventStatus)
-
-	sp.OnNewPrice(sym, px, time.Now().UnixMilli())
+	pxMark := px
+	if v.Data.EventStatus == 1 {
+		// contract live
+		// we need ema
+		prices, err := sp.SdkRO.FetchPricesForPerpetual(v.Data.ContractID, "")
+		if err == nil {
+			pxMark = prices.Ema - 1
+		}
+	}
+	sp.OnNewPrice(sym, px, pxMark, time.Now().UnixMilli())
 }
 
 // OnNewPrice stores the new price in redis and informs subscribers
-func (sp *SportsClient) OnNewPrice(sym string, px float64, tsMs int64) {
+func (sp *SportsClient) OnNewPrice(sym string, px, pxMark float64, tsMs int64) {
 	slog.Info("publishing new price", "sym", sym, "px", px)
 	err := utils.RedisAddPriceObs(sp.Ruedi, d8xUtils.PXTYPE_SPORT, sym, px, tsMs)
 	if err != nil {
 		slog.Error(fmt.Sprintf("failed to update price for %s in redis: %v", sym, err))
 		return
 	}
+	err = utils.RedisAddPriceObs(sp.Ruedi, d8xUtils.PXTYPE_SPORT, sym+"|mark", pxMark, tsMs)
+	if err != nil {
+		slog.Error(fmt.Sprintf("failed to update price for %s in redis: %v", sym, err))
+		return
+	}
 
-	// publish updates to listeners
+	// publish update
 	key := d8xUtils.PXTYPE_SPORT.String() + ":" + sym
+	key = key + ";" + d8xUtils.PXTYPE_SPORT.String() + ":" + sym + "|mark"
 	err = utils.RedisPublishIdxPriceChange(&sp.Ruedi, key)
 	if err != nil {
 		slog.Error("Redis Pub" + err.Error())
