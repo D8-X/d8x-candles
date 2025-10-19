@@ -16,6 +16,8 @@ jobs:
       fail-fast: false
       matrix:
         include:
+            - dockerfile: ./cmd/sports-client/Dockerfile
+              image: ghcr.io/d8-x/d8x-candles-sports-client
             - dockerfile: ./cmd/pyth-client/Dockerfile
               image: ghcr.io/d8-x/d8x-candles-pyth-client
             - dockerfile: ./cmd/ws-server/Dockerfile

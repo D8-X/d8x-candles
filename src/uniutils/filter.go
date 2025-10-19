@@ -2,14 +2,15 @@ package uniutils
 
 import (
 	"context"
-	"d8x-candles/src/globalrpc"
-	"d8x-candles/src/utils"
 	"fmt"
 	"log"
 	"math/big"
 	"slices"
 	"strings"
 	"time"
+
+	"d8x-candles/src/globalrpc"
+	"d8x-candles/src/utils"
 
 	d8xUtils "github.com/D8-X/d8x-futures-go-sdk/utils"
 	ethereum "github.com/ethereum/go-ethereum"
@@ -46,8 +47,7 @@ func NewFilter(
 	eventSigHash common.Hash,
 	handleFunc func(*Filter, types.Log),
 ) (*Filter, error) {
-
-	var f = Filter{
+	f := Filter{
 		Indices:     indices,
 		PythIndices: pythIndices,
 		UniType:     unitype,
@@ -144,10 +144,9 @@ func (fltr *Filter) runFilterer(
 	blockNow int64,
 	poolAddr []common.Address,
 ) error {
-
 	fromBlock := big.NewInt(startBlk)
 
-	//toBlock := nil
+	// toBlock := nil
 	// Create filter query
 	INC_BLOCK := int64(1000)
 	toBlock := big.NewInt(fromBlock.Int64() + INC_BLOCK)
@@ -208,7 +207,7 @@ func (fltr *Filter) findBlockTs() {
 		if blockNum-lastBlock > 1800 {
 			ts, err := BlockTs(int64(blockNum), fltr.RpcHndl)
 			if err != nil {
-				//skip
+				// skip
 				fmt.Println("error getting block timestamp, skipping")
 				time.Sleep(500 * time.Millisecond)
 				continue
@@ -250,7 +249,7 @@ func (fltr *Filter) fillTriangulatedHistory() {
 					lastPx[sym] = v
 				}
 			}
-			//triangulate
+			// triangulate
 			px := float64(1)
 			for k := 1; k < len(triang); k += 2 {
 				p := lastPx[triang[k]]
@@ -356,7 +355,7 @@ func (fltr *Filter) histPricesToRedis(symToAdd map[string]bool, client *rueidis.
 			if _, exists := symToAdd[sym]; !exists {
 				continue
 			}
-			err := utils.RedisAddPriceObs(client, fltr.UniType, sym, val, int64(obs.Ts*1000))
+			err := utils.RedisAddPriceObs(*client, fltr.UniType, sym, val, int64(obs.Ts*1000))
 			if err != nil {
 				return fmt.Errorf("insert triangulations to redis %s block=%d ts=%d: %v",
 					sym, block, obs.Ts, err)

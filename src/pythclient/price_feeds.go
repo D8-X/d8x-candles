@@ -2,7 +2,6 @@ package pythclient
 
 import (
 	"context"
-	"d8x-candles/src/utils"
 	"encoding/json"
 	"fmt"
 	"log/slog"
@@ -11,6 +10,8 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
+	"d8x-candles/src/utils"
 
 	d8xUtils "github.com/D8-X/d8x-futures-go-sdk/utils"
 )
@@ -115,7 +116,8 @@ outerLoop:
 		p.setMarketHours(symT, utils.MarketHours{
 			IsOpen:    isOpen,
 			NextOpen:  nxtOpen,
-			NextClose: nxtClose},
+			NextClose: nxtClose,
+		},
 			assetType)
 	}
 }
@@ -157,7 +159,7 @@ func (p *PythClientApp) QueryPriceFeedInfo(sym, origin string, id string) error 
 		!strings.EqualFold(origin, symSource2) {
 		return fmt.Errorf("QueryPriceFeedInfo: price_feeds GET id is for %s/%s not in line with %s", symSource, symSource2, sym)
 	}
-	asset := d8xUtils.OriginToAssetClass(apiResponse.Attributes["symbol"]) //"Crypto.ETH/USD"
+	asset := d8xUtils.OriginToAssetClass(apiResponse.Attributes["symbol"], d8xUtils.PXTYPE_PYTH) //"Crypto.ETH/USD"
 	return p.setMarketHours(sym, apiResponse.MarketHours, asset)
 }
 

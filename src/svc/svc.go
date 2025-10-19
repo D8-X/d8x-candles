@@ -1,17 +1,19 @@
 package svc
 
 import (
-	"d8x-candles/env"
-	"d8x-candles/src/polyclient"
-	"d8x-candles/src/pythclient"
-	"d8x-candles/src/utils"
-	"d8x-candles/src/v2client"
-	"d8x-candles/src/v3client"
-	"d8x-candles/src/wscandle"
 	"errors"
 	"fmt"
 	"log/slog"
 	"os"
+
+	"d8x-candles/env"
+	"d8x-candles/src/polyclient"
+	"d8x-candles/src/pythclient"
+	"d8x-candles/src/sportsclient"
+	"d8x-candles/src/utils"
+	"d8x-candles/src/v2client"
+	"d8x-candles/src/v3client"
+	"d8x-candles/src/wscandle"
 
 	d8xConf "github.com/D8-X/d8x-futures-go-sdk/config"
 	d8xUtils "github.com/D8-X/d8x-futures-go-sdk/utils"
@@ -37,7 +39,6 @@ func RunCandleCharts() {
 		return
 	}
 	c, err := createSymbolMngr(viper.GetString(env.CONFIG_PATH))
-
 	if err != nil {
 		fmt.Println("Error:", err.Error())
 		return
@@ -73,7 +74,7 @@ func RunV3Client() {
 		viper.GetString(env.REDIS_ADDR),
 		viper.GetString(env.REDIS_PW),
 		viper.GetInt(env.CHAIN_ID),
-		"", //we load config from remote
+		"", // we load config from remote
 	)
 	if err != nil {
 		fmt.Println("error:", err.Error())
@@ -108,7 +109,7 @@ func RunV2Client() {
 		viper.GetString(env.REDIS_ADDR),
 		viper.GetString(env.REDIS_PW),
 		viper.GetInt(env.CHAIN_ID),
-		"", //we load config from remote
+		"", // we load config from remote
 	)
 	if err != nil {
 		fmt.Println("error:", err.Error())
@@ -134,7 +135,7 @@ func StreamPolyMarkets() {
 		fmt.Println("Error:", err.Error())
 		return
 	}
-	config, err := d8xConf.GetDefaultPriceConfig(42161) //chain-id irrellevant since same config
+	config, err := d8xConf.GetDefaultPriceConfig(42161) // chain-id irrellevant since same config
 	if err != nil {
 		fmt.Println("Error:", err.Error())
 		return
@@ -163,7 +164,6 @@ func StreamPolyMarkets() {
 		viper.GetString(env.STORK_ENDPOINT),
 		viper.GetString(env.STORK_CREDENTIALS),
 		config.PriceFeedIds)
-
 	if err != nil {
 		fmt.Println("Error:", err.Error())
 		panic(err)
@@ -173,6 +173,26 @@ func StreamPolyMarkets() {
 		fmt.Println(err.Error())
 	}
 	panic(fmt.Errorf("terminated"))
+}
+
+func StreamSport() error {
+	err := loadEnv([]string{
+		env.CHAIN_ID,
+		env.WS_SPORTSLINEINDEX,
+		env.REDIS_ADDR,
+		env.REDIS_PW,
+	})
+	if err != nil {
+		return err
+	}
+	sp, err := sportsclient.NewSports(viper.GetString(env.WS_SPORTSLINEINDEX),
+		viper.GetString(env.REDIS_ADDR), viper.GetString(env.REDIS_PW),
+		viper.GetInt(env.CHAIN_ID),
+	)
+	if err != nil {
+		return err
+	}
+	return sp.Run()
 }
 
 func StreamPyth() {

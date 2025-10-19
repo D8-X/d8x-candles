@@ -2,15 +2,16 @@ package v3client
 
 import (
 	"context"
-	"d8x-candles/src/globalrpc"
-	"d8x-candles/src/uniutils"
-	"d8x-candles/src/utils"
 	"fmt"
 	"log/slog"
 	"slices"
 	"strings"
 	"sync"
 	"time"
+
+	"d8x-candles/src/globalrpc"
+	"d8x-candles/src/uniutils"
+	"d8x-candles/src/utils"
 
 	"github.com/D8-X/d8x-futures-go-sdk/pkg/d8x_futures"
 	d8xUtils "github.com/D8-X/d8x-futures-go-sdk/utils"
@@ -28,11 +29,11 @@ type V3Client struct {
 	Ruedi              *rueidis.Client
 	RpcHndl            *globalrpc.GlobalRpc
 	RelevantPoolAddrs  []common.Address                     // contains all pool addresses that are used for indices
-	Triangulations     map[string]d8x_futures.Triangulation //map index symbol to its triangulation
+	Triangulations     map[string]d8x_futures.Triangulation // map index symbol to its triangulation
 	PoolAddrToIndices  map[string][]int                     // map pool address to price index location in Config.indices
-	PoolAddrToPoolInfo map[string]ConfigPool                //map pool address to its symbol and dec
+	PoolAddrToPoolInfo map[string]ConfigPool                // map pool address to its symbol and dec
 	SwapEventAbi       abi.ABI
-	LastUpdateTs       int64 //timestamp seconds
+	LastUpdateTs       int64 // timestamp seconds
 	MuLastUpdate       sync.RWMutex
 }
 
@@ -73,7 +74,7 @@ func NewV3Client(configRpc string, redisAddr, redisPw string, chainId int, optV3
 	}
 	v3.PoolAddrToIndices = make(map[string][]int)
 	v3.PoolAddrToPoolInfo = make(map[string]ConfigPool)
-	v3.ConfigPyth, err = utils.LoadUniPythConfig("") //load from remote
+	v3.ConfigPyth, err = utils.LoadUniPythConfig("") // load from remote
 	if err != nil {
 		return nil, err
 	}
@@ -110,8 +111,7 @@ func NewV3Client(configRpc string, redisAddr, redisPw string, chainId int, optV3
 	// triangulations
 	v3.Triangulations = make(map[string]d8x_futures.Triangulation)
 	for j := range v3.Config.Indices {
-		v3.Triangulations[v3.Config.Indices[j].Symbol] =
-			uniutils.TriangFromStringSlice(v3.Config.Indices[j].Triang)
+		v3.Triangulations[v3.Config.Indices[j].Symbol] = uniutils.TriangFromStringSlice(v3.Config.Indices[j].Triang)
 	}
 	return &v3, nil
 }
@@ -171,7 +171,7 @@ func (v3 *V3Client) runWebsocket(client *ethclient.Client) error {
 		return fmt.Errorf("subscribing to event logs: %v", err)
 	}
 	slog.Info("Listening for Uniswap V3 swap events...")
-	//closing connection
+	// closing connection
 	defer func() {
 		slog.Info("Closing websocket subscription")
 		sub.Unsubscribe()
@@ -225,7 +225,7 @@ func (v3 *V3Client) refreshIdxWithPyth() {
 			continue
 		}
 		err = utils.RedisAddPriceObs(
-			v3.Ruedi,
+			*v3.Ruedi,
 			d8xUtils.PXTYPE_V2,
 			index.Symbol,
 			px,
@@ -262,7 +262,7 @@ func (v3 *V3Client) onSwap(poolAddr string, log types.Log) {
 	}
 	price := SqrtPriceX96ToPrice(event.SqrtPriceX96, info.TokenDec)
 	nowTs := time.Now().UnixMilli()
-	err = utils.RedisAddPriceObs(v3.Ruedi, d8xUtils.PXTYPE_V3, info.Symbol, price, nowTs)
+	err = utils.RedisAddPriceObs(*v3.Ruedi, d8xUtils.PXTYPE_V3, info.Symbol, price, nowTs)
 	if err != nil {
 		slog.Error("onSwap: failed to insert new obs", "error", err)
 		return
@@ -282,7 +282,7 @@ func (v3 *V3Client) onSwap(poolAddr string, log types.Log) {
 			continue
 		}
 		err = utils.RedisAddPriceObs(
-			v3.Ruedi,
+			*v3.Ruedi,
 			d8xUtils.PXTYPE_V3,
 			pxIdx.Symbol,
 			px,

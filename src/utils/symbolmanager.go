@@ -1,13 +1,14 @@
 package utils
 
 import (
-	"d8x-candles/config"
 	"encoding/json"
 	"fmt"
 	"log/slog"
 	"os"
 	"strings"
 	"sync"
+
+	"d8x-candles/config"
 
 	embed "github.com/D8-X/d8x-futures-go-sdk/config"
 	d8xUtils "github.com/D8-X/d8x-futures-go-sdk/utils"
@@ -16,10 +17,10 @@ import (
 type SymbolManager struct {
 	ConfigFile          ConfigFile
 	PriceFeedIds        []d8xUtils.PriceFeedId
-	PythIdToSym         map[string]string       //pyth id (0xabc..) to symbol (btc-usd)
-	SymToPythOrigin     map[string]string       //symbol (btc-usd) to pyth origin ("Crypto.BTC/USD")
-	CandlePeriodsMs     map[string]CandlePeriod //period 1m,5m,... to timeMs and displayRangeMs
-	SymConstructionMutx *sync.Mutex             //mutex when data for a symbol is being constructed
+	PythIdToSym         map[string]string       // pyth id (0xabc..) to symbol (btc-usd)
+	SymToPythOrigin     map[string]string       // symbol (btc-usd) to pyth origin ("Crypto.BTC/USD")
+	CandlePeriodsMs     map[string]CandlePeriod // period 1m,5m,... to timeMs and displayRangeMs
+	SymConstructionMutx *sync.Mutex             // mutex when data for a symbol is being constructed
 }
 
 // New initializes a new SymbolManager
@@ -57,7 +58,7 @@ func NewSymbolManager(fileName string) (*SymbolManager, error) {
 }
 
 func (c *SymbolManager) ExtractCCY(pxType d8xUtils.PriceType) ([]string, error) {
-	config, err := embed.GetDefaultPriceConfigByName("PythEVMStable")
+	config, err := embed.GetDefaultPriceConfigByName("PythEVMStable", 0)
 	if err != nil {
 		return nil, err
 	}
@@ -83,7 +84,7 @@ func (c *SymbolManager) ExtractCCY(pxType d8xUtils.PriceType) ([]string, error) 
 // creates a map from ids "0x32121..." to symbols "xau-usd"
 func (c *SymbolManager) extractPythIdToSymbolMap() error {
 	slog.Info("Loading VAA ids for network PythEVMStable")
-	config, err := embed.GetDefaultPriceConfigByName("PythEVMStable")
+	config, err := embed.GetDefaultPriceConfigByName("PythEVMStable", 0)
 	if err != nil {
 		return err
 	}
@@ -113,7 +114,6 @@ func (c *SymbolManager) extractPythIdToSymbolMap() error {
 }
 
 func (c *SymbolManager) extractCandlePeriods() error {
-
 	periods, err := config.GetCandlePeriodsConfig()
 	if err != nil {
 		return err

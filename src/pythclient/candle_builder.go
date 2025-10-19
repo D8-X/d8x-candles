@@ -2,13 +2,14 @@ package pythclient
 
 import (
 	"context"
-	"d8x-candles/src/utils"
 	"errors"
 	"fmt"
 	"log/slog"
 	"math/rand"
 	"sync"
 	"time"
+
+	"d8x-candles/src/utils"
 
 	"github.com/D8-X/d8x-futures-go-sdk/pkg/d8x_futures"
 	d8xUtils "github.com/D8-X/d8x-futures-go-sdk/utils"
@@ -161,7 +162,7 @@ func (p *PythClientApp) ConstructPriceObsFromPythCandles(sym utils.SymbolPyth) (
 	if err != nil {
 		return utils.PriceObservations{}, err
 	}
-	var candles = []utils.PythHistoryAPIResponse{twoDayResolutionMinute, oneMonthResolution1h, allTimeResolution1D}
+	candles := []utils.PythHistoryAPIResponse{twoDayResolutionMinute, oneMonthResolution1h, allTimeResolution1D}
 	// concatenate candles into price observations
 	var obs utils.PriceObservations
 	obs, err = PythCandlesToPriceObs(candles, []int{60, 3600 / 2, 86400})
@@ -181,7 +182,6 @@ func (p *PythClientApp) ConstructPriceObsForTriang(client *rueidis.Client, symT 
 		key := d8xUtils.PXTYPE_PYTH.String() + ":" + path.Symbol[k]
 		info, err := (*client).Do(context.Background(), (*client).B().
 			TsInfo().Key(key).Build()).AsMap()
-
 		if err != nil {
 			// key does not exist
 			return utils.PriceObservations{}, errors.New(err.Error() + " symbol:" + key)
@@ -301,7 +301,7 @@ func (p *PythClientApp) OnPriceUpdate(pxData utils.PriceData, id string) {
 	p.StreamMngr.lastPx[sym] = px
 	p.StreamMngr.lastPxRWMu.Unlock()
 
-	utils.RedisAddPriceObs(p.RedisClient, d8xUtils.PXTYPE_PYTH, sym, px, pxData.PublishTime*1000)
+	utils.RedisAddPriceObs(*p.RedisClient, d8xUtils.PXTYPE_PYTH, sym, px, pxData.PublishTime*1000)
 
 	p.MsgCount["px"] = (p.MsgCount["px"] + 1) % 500
 	if p.MsgCount["px"] == 0 {
@@ -344,7 +344,7 @@ func (p *PythClientApp) OnPriceUpdate(pxData utils.PriceData, id string) {
 		p.StreamMngr.lastPxRWMu.Unlock()
 
 		pubMsg += ";" + d8xUtils.PXTYPE_PYTH.String() + ":" + tsym
-		utils.RedisAddPriceObs(p.RedisClient, d8xUtils.PXTYPE_PYTH, tsym, pxTriang, pxData.PublishTime*1000)
+		utils.RedisAddPriceObs(*p.RedisClient, d8xUtils.PXTYPE_PYTH, tsym, pxTriang, pxData.PublishTime*1000)
 		p.MsgCount["t"] = (p.MsgCount["t"] + 1) % 500
 		if p.MsgCount["t"] == 0 {
 			slog.Info("-- 500 triangulation price updates, now: " + tsym + " price=" + fmt.Sprint(pxTriang))

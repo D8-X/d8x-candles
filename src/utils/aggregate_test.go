@@ -2,9 +2,10 @@ package utils
 
 import (
 	"context"
-	"d8x-candles/env"
 	"fmt"
 	"testing"
+
+	"d8x-candles/env"
 
 	d8xUtils "github.com/D8-X/d8x-futures-go-sdk/utils"
 	"github.com/redis/rueidis"
@@ -96,7 +97,7 @@ func TestRedisAggr(t *testing.T) {
 	sym := "rds-tst"
 	for k := 0; k < 50; k++ {
 		var timestampMs int64 = 1 + int64(k)*1000
-		RedisAddPriceObs(&client, d8xUtils.PXTYPE_PYTH, sym, float64(k), timestampMs)
+		RedisAddPriceObs(client, d8xUtils.PXTYPE_PYTH, sym, float64(k), timestampMs)
 	}
 	obs, err := RangeAggr(&client, sym, d8xUtils.PXTYPE_PYTH, 0, 50000, 0)
 	if err != nil {
@@ -117,5 +118,4 @@ func TestRedisAggr(t *testing.T) {
 	// if aL[0].Value != float64(9) {
 	// 	t.Errorf("want 9, got %f", aL[0].Value)
 	// }
-
 }

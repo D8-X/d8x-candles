@@ -1,9 +1,10 @@
 package uniutils
 
 import (
-	"d8x-candles/src/utils"
 	"log/slog"
 	"math/big"
+
+	"d8x-candles/src/utils"
 
 	"github.com/D8-X/d8x-futures-go-sdk/pkg/d8x_futures"
 	d8xUtils "github.com/D8-X/d8x-futures-go-sdk/utils"
@@ -32,14 +33,14 @@ func InitRedisIndices(indices []ConfigIndex, pxtype d8xUtils.PriceType, client *
 	newSyms := make(map[string]bool)
 	for j := range indices {
 		// final price index symbol
-		err := utils.RedisCreateIfNotExistsTs(client, pxtype, indices[j].Symbol)
+		err := utils.RedisCreateIfNotExistsTs(client, pxtype, indices[j].Symbol, 86400000*365/2)
 		if err != nil {
 			return err
 		}
 		newSyms[indices[j].Symbol] = true
 		// triangulated index
 		if indices[j].Symbol != indices[j].FromPools {
-			err = utils.RedisCreateIfNotExistsTs(client, pxtype, indices[j].FromPools)
+			err = utils.RedisCreateIfNotExistsTs(client, pxtype, indices[j].FromPools, 86400000*365/2)
 			if err != nil {
 				return err
 			}
@@ -47,7 +48,7 @@ func InitRedisIndices(indices []ConfigIndex, pxtype d8xUtils.PriceType, client *
 		}
 		// triangulation components
 		for k := 1; k < len(indices[j].Triang); k += 2 {
-			err := utils.RedisCreateIfNotExistsTs(client, pxtype, indices[j].Triang[k])
+			err := utils.RedisCreateIfNotExistsTs(client, pxtype, indices[j].Triang[k], 86400000*365/2)
 			if err != nil {
 				return err
 			}
