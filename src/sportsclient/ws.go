@@ -16,6 +16,7 @@ import (
 
 type Envelope struct {
 	Channel string    `json:"channel"`
+	Type    string    `json:"type"`
 	Data    GameEvent `json:"data"`
 }
 
@@ -73,6 +74,9 @@ func (sp *SportsClient) listenWs(ctx context.Context) error {
 }
 
 func (sp *SportsClient) handleMessage(v *Envelope) {
+	if v.Type != "odds" {
+		return
+	}
 	if v.Data.IndexPrice == "nil" {
 		slog.Info("index price nil", "id", v.Data.ContractID)
 	}
