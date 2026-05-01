@@ -80,7 +80,16 @@ func (sp *SportsClient) handleMessage(v *Envelope) {
 	if err != nil {
 		slog.Error("invalid price", "price", v.Data.IndexPrice)
 	}
-	sym := v.Data.ContractID + "-USD"
+	slotName, isLive := sp.SdkRO.SportSlot(v.Data.ContractID)
+	if !isLive {
+		slog.Info("contract not live, skipping", "contractId", v.Data.ContractID)
+		return
+	}
+	sym, ok := sp.SdkRO.SportSlotAssignment(slotName)
+	if !ok {
+		slog.Error("failed to resolve symbol for slot", "slot", slotName)
+		return
+	}
 	if !sp.KnownSymbols.Exists(sym) {
 		const retentionMs = 86400000
 		if err := utils.RedisCreateIfNotExistsTs(&sp.Ruedi, d8xUtils.PXTYPE_SPORT, sym, retentionMs); err != nil {
@@ -91,14 +100,6 @@ func (sp *SportsClient) handleMessage(v *Envelope) {
 	}
 	slog.Info("price update", "contractId", v.Data.ContractID, "price", v.Data.IndexPrice, "event_status", v.Data.EventStatus)
 	pxMark := px
-	if v.Data.EventStatus == 1 {
-		// contract live
-		// we need ema
-		prices, err := sp.SdkRO.FetchPricesForPerpetual(v.Data.ContractID, "")
-		if err == nil {
-			pxMark = prices.Ema - 1
-		}
-	}
 	sp.OnNewPrice(sym, px, pxMark, time.Now().UnixMilli())
 }
 
