@@ -3,7 +3,7 @@ module d8x-candles
 go 1.25.1
 
 require (
-	github.com/D8-X/d8x-futures-go-sdk v1.6.11
+	github.com/D8-X/d8x-futures-go-sdk v1.6.12
 	github.com/ethereum/go-ethereum v1.17.2
 	github.com/google/uuid v1.6.0
 	github.com/gorilla/websocket v1.5.3
