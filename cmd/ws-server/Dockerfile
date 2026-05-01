@@ -1,4 +1,4 @@
-FROM golang:1.25.1
+FROM golang:1.25.7
 
 ARG BUILD_VERSION
 
