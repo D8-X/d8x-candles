@@ -77,12 +77,20 @@ func (sp *SportsClient) handleMessage(v *Envelope) {
 	if v.Type != "odds" {
 		return
 	}
-	if v.Data.IndexPrice == "nil" {
-		slog.Info("index price nil", "id", v.Data.ContractID)
-	}
 	px, err := strconv.ParseFloat(v.Data.IndexPrice, 64)
 	if err != nil {
-		slog.Error("invalid price", "price", v.Data.IndexPrice)
+		if v.Data.IndexPrice == "" || v.Data.IndexPrice == "nil" {
+			slog.Info("empty price, skipping",
+				"price", v.Data.IndexPrice,
+				"contractId", v.Data.ContractID,
+				"event_status", v.Data.EventStatus)
+		} else {
+			slog.Error("unparseable price from broker",
+				"price", v.Data.IndexPrice,
+				"contractId", v.Data.ContractID,
+				"event_status", v.Data.EventStatus)
+		}
+		return
 	}
 	slotName, isLive := sp.SdkRO.SportSlot(v.Data.ContractID)
 	if !isLive {
